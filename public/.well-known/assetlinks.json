@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "dev.workers.vladimir_carlan.proconect_b2b.twa",
+      "sha256_cert_fingerprints": [
+        "B3:47:E7:07:2A:61:E8:32:73:FC:3A:60:48:4F:9A:B3:C2:C5:5C:8B:56:99:F0:1B:34:4A:1B:60:71:94:45:65"
+      ]
+    }
+  }
+]
