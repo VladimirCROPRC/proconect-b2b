@@ -11,7 +11,7 @@ import { initialCpeCatalog, initialFieldDocumentation, initialProjects, type Pro
 import type { ClientFieldSummary, ProjectFieldDocumentation, RouteFieldSummary, SiteFieldSummary, SpliceFieldSummary } from "./field-documentation";
 
 type View = "projects" | "team" | "cpe" | "drive" | "documents" | "client" | "route" | "splices" | "site";
-type Modal = "project" | "edit-project" | "account" | "cpe" | "edit-cpe" | null;
+type Modal = "project" | "edit-project" | "delete-project" | "account" | "cpe" | "edit-cpe" | null;
 type ServiceType = "Internet" | "VPN" | "Internet+OL" | "OL";
 type ClientPhotoKey = "report" | "speed" | "olTest" | "overview" | "detail" | "labels";
 
@@ -76,6 +76,25 @@ const initialAccounts: Account[] = [
   { username: "vlad", name: "Vlad", role: "Tehnician", active: true, jobs: 4 },
 ];
 
+const emptyProject: Project = {
+  id: "",
+  client: "",
+  address: "",
+  contact: "",
+  phone: "",
+  email: "",
+  requirements: "",
+  technician: "",
+  cpe: "",
+  sfp: false,
+  mc: false,
+  terminalBox: false,
+  status: "Planificat",
+  date: "",
+  ipwo: "",
+  splice: "",
+};
+
 const statusClass: Record<Project["status"], string> = {
   Planificat: "status status-blue",
   "În desfășurare": "status status-violet",
@@ -100,6 +119,9 @@ export default function Home() {
   const [view, setView] = useState<View>("projects");
   const [modal, setModal] = useState<Modal>(null);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [deletingProject, setDeletingProject] = useState<Project | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [projectDeleting, setProjectDeleting] = useState(false);
   const [editingCpe, setEditingCpe] = useState("");
   const [projects, setProjects] = useState(initialProjects);
   const [accounts, setAccounts] = useState(initialAccounts);
@@ -212,7 +234,7 @@ export default function Home() {
         setFieldDocumentation(payload.fieldDocumentation ?? {});
         setCpeList(payload.cpe ?? []);
         setClientService(payload.fieldDocumentation?.[payload.projects[0]?.id ?? ""]?.client?.service ?? "Internet");
-        setActiveProjectId((current) => payload.projects!.some((project) => project.id === current) ? current : payload.projects![0]?.id ?? current);
+        setActiveProjectId((current) => payload.projects!.some((project) => project.id === current) ? current : payload.projects![0]?.id ?? "");
         setProjectDataReady(true);
       } catch (error) {
         if (mounted) showToast(error instanceof Error ? error.message : "Proiectele nu au putut fi încărcate.");
@@ -253,7 +275,7 @@ export default function Home() {
   const technicians = accounts.filter((account) => account.role === "Tehnician" && account.active);
   const currentAccount = authenticatedAccount ?? accounts[0];
   const canManageDocuments = currentAccount?.role === "Admin" || currentAccount?.role === "Manager" || currentAccount?.role === "Coordonator";
-  const activeProject = projects.find((project) => project.id === activeProjectId) ?? projects[0];
+  const activeProject = projects.find((project) => project.id === activeProjectId) ?? projects[0] ?? emptyProject;
   const isDocumentationView = view === "client" || view === "route" || view === "splices" || view === "site";
   const isProjectView = isDocumentationView || view === "documents";
   const displayedAccountName = currentAccount.name;
@@ -357,6 +379,8 @@ export default function Home() {
   function closeModal() {
     setModal(null);
     setEditingProject(null);
+    setDeletingProject(null);
+    setDeleteConfirmation("");
     setEditingCpe("");
     setIpwoName("");
     setSpliceName("");
@@ -372,6 +396,13 @@ export default function Home() {
     setIpwoFile(null);
     setSpliceFile(null);
     setModal("edit-project");
+  }
+
+  function openProjectDeletion(project: Project) {
+    setSelected(null);
+    setDeletingProject(project);
+    setDeleteConfirmation("");
+    setModal("delete-project");
   }
 
   async function createProject(event: FormEvent<HTMLFormElement>) {
@@ -417,6 +448,7 @@ export default function Home() {
         ...(spliceFile ? [uploadProjectFile({ projectId: id, section: "project", category: "splice-diagram", file: spliceFile })] : []),
       ]);
       setProjects((current) => [payload.project!, ...current]);
+      setActiveProjectId((current) => current || payload.project!.id);
       setAccounts((current) => current.map((account) => account.name === payload.project!.technician ? { ...account, jobs: account.jobs + 1 } : account));
       closeModal();
       const failedUploads = uploadResults.filter((result) => result.status === "rejected").length;
@@ -481,6 +513,62 @@ export default function Home() {
       showToast(error instanceof Error ? error.message : "Proiectul nu a putut fi actualizat.");
     } finally {
       setProjectSaving(false);
+    }
+  }
+
+  async function removeProject(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!deletingProject || deleteConfirmation.trim() !== deletingProject.id || projectDeleting) return;
+
+    setProjectDeleting(true);
+    try {
+      const response = await fetch("/api/projects", {
+        method: "DELETE",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId: deletingProject.id }),
+      });
+      const payload = (await response.json()) as { projectId?: string; cleanupFailures?: number; error?: string };
+      if (!response.ok || !payload.projectId) throw new Error(payload.error || "Proiectul nu a putut fi șters.");
+
+      const deletedId = payload.projectId;
+      const remainingProjects = projects.filter((project) => project.id !== deletedId);
+      setProjects(remainingProjects);
+      setFieldDocumentation((current) => {
+        const next = { ...current };
+        delete next[deletedId];
+        return next;
+      });
+      setAccounts((current) => current.map((account) => account.name === deletingProject.technician
+        ? { ...account, jobs: Math.max(0, account.jobs - 1) }
+        : account));
+      if (activeProjectId === deletedId || !remainingProjects.length) {
+        const nextProject = remainingProjects[0];
+        setActiveProjectId(nextProject?.id ?? "");
+        setClientService(nextProject ? fieldDocumentation[nextProject.id]?.client?.service ?? "Internet" : "Internet");
+        setClientPhotos({});
+      }
+      setSelected(null);
+      setView("projects");
+      closeModal();
+
+      if (driveStatus) {
+        void fetch("/api/google-drive", { cache: "no-store", credentials: "same-origin" })
+          .then(async (statusResponse) => {
+            if (statusResponse.ok) setDriveStatus(await statusResponse.json() as GoogleDriveStatus);
+          })
+          .catch(() => {
+            // Project deletion remains successful if the Drive status refresh is temporarily unavailable.
+          });
+      }
+
+      showToast(payload.cleanupFailures
+        ? `${deletedId} a fost șters; unele fișiere necesită curățare tehnică.`
+        : `${deletedId} și documentația sa au fost șterse definitiv.`);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Proiectul nu a putut fi șters.");
+    } finally {
+      setProjectDeleting(false);
     }
   }
 
@@ -725,6 +813,11 @@ export default function Home() {
       showToast("Nu ai permisiunea de a accesa această secțiune administrativă.");
       return;
     }
+    if ((next === "client" || next === "route" || next === "splices" || next === "site" || next === "documents") && projects.length === 0) {
+      showToast("Creează mai întâi un proiect pentru a completa documentația.");
+      setView("projects");
+      return;
+    }
     setView(next);
     setSelected(null);
   }
@@ -909,12 +1002,12 @@ export default function Home() {
                         <td><div className="technician"><span className="avatar">{initials(project.technician)}</span><strong>{project.technician}</strong></div></td>
                         <td><span className={statusClass[project.status]}><i />{project.status}</span></td>
                         <td><strong>{project.date}</strong></td>
-                        <td>{canManageDocuments && <button className="more" aria-label={`Editează ${project.id}`} title={`Editează ${project.id}`} onClick={(event) => { event.stopPropagation(); openProjectEditor(project); }}>Editează</button>}</td>
+                        <td>{canManageDocuments && <div style={{ display: "flex", alignItems: "center", gap: "4px" }}><button className="more" aria-label={`Editează ${project.id}`} title={`Editează ${project.id}`} onClick={(event) => { event.stopPropagation(); openProjectEditor(project); }}>Editează</button><button className="more" style={{ color: "#b42336" }} aria-label={`Șterge ${project.id}`} title={`Șterge ${project.id}`} onClick={(event) => { event.stopPropagation(); openProjectDeletion(project); }}>Șterge</button></div>}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-                {filteredProjects.length === 0 && <div className="empty-state"><strong>Nicio lucrare găsită</strong><p>Modifică termenul de căutare sau filtrele.</p></div>}
+                {filteredProjects.length === 0 && <div className="empty-state"><strong>{projects.length ? "Nicio lucrare găsită" : "Nu există proiecte"}</strong><p>{projects.length ? "Modifică termenul de căutare sau filtrele." : canManageDocuments ? "Adaugă un proiect nou pentru a începe." : "Nu există proiecte alocate contului tău."}</p></div>}
               </div>
               <div className="card-footer"><span>Se afișează {filteredProjects.length} din {projects.length} proiecte</span><div><button disabled>‹</button><button className="current">1</button><button>2</button><button>3</button><button>›</button></div></div>
             </section>
@@ -1125,6 +1218,17 @@ export default function Home() {
             <div className="modal-actions"><button type="button" className="secondary-button" onClick={closeModal}>Anulează</button><button className="primary-button" type="submit" disabled={projectSaving}>{projectSaving ? "Se salvează..." : editingProject ? "Salvează modificările" : "Generează proiectul"} <span>→</span></button></div>
           </form>
         )}
+        {modal === "delete-project" && deletingProject && (
+          <form className="modal small-modal" onSubmit={removeProject}>
+            <div className="modal-head"><div><span className="modal-kicker">ȘTERGERE DEFINITIVĂ</span><h2>Șterge {deletingProject.id}</h2><p>{deletingProject.client} · {deletingProject.address}</p></div><button type="button" onClick={closeModal} aria-label="Închide" disabled={projectDeleting}>×</button></div>
+            <div className="modal-body stacked-form">
+              <div className="info-note" style={{ borderColor: "#ecc8cc", background: "#fff5f5" }}><b style={{ color: "#b42336" }}>!</b><p>Proiectul, documentația din teren, rapoartele și fotografiile salvate în aplicație vor fi șterse definitiv.</p></div>
+              <label><span>Scrie {deletingProject.id} pentru confirmare *</span><input value={deleteConfirmation} onChange={(event) => setDeleteConfirmation(event.target.value)} required autoComplete="off" placeholder={deletingProject.id} autoFocus disabled={projectDeleting} /></label>
+              <small>Dosarul existent în Google Drive este păstrat ca arhivă.</small>
+            </div>
+            <div className="modal-actions"><button type="button" className="secondary-button" onClick={closeModal} disabled={projectDeleting}>Anulează</button><button className="primary-button" style={{ background: "#b42336", borderColor: "#b42336" }} type="submit" disabled={projectDeleting || deleteConfirmation.trim() !== deletingProject.id}>{projectDeleting ? "Se șterge..." : "Șterge definitiv"}</button></div>
+          </form>
+        )}
         {modal === "account" && (
           <form className="modal small-modal" onSubmit={createAccount}>
             <div className="modal-head"><div><span className="modal-kicker">CONT NOU</span><h2>Adaugă utilizator</h2><p>Acces simplu cu username și parolă.</p></div><button type="button" onClick={() => setModal(null)}>×</button></div>
@@ -1158,6 +1262,7 @@ export default function Home() {
           <button className="primary-button" onClick={() => openProject(selected)}>Deschide proiectul <span>→</span></button>
           {canManageDocuments && <button className="secondary-button" onClick={() => openProjectEditor(selected)}>Editează proiectul</button>}
           {canManageDocuments && <button className="secondary-button" onClick={() => openProjectDocuments(selected)}>Documente administrative</button>}
+          {canManageDocuments && <button className="secondary-button" style={{ color: "#b42336", borderColor: "#ecc8cc" }} onClick={() => openProjectDeletion(selected)}>Șterge proiectul</button>}
           <small>Client, traseu, suduri, operațiuni site și închiderea proiectului</small>
         </div>
       </aside></div>}

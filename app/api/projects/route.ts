@@ -1,4 +1,4 @@
-import { createProject, ensureProjectData, isManagementRole, listProjectData, updateProject } from "../../project-server";
+import { createProject, deleteProject, ensureProjectData, isManagementRole, listProjectData, updateProject } from "../../project-server";
 import { syncProjectIfConnected } from "../../google-drive-server";
 import type { ProjectRecord } from "../../project-data";
 import { currentSession, sameOrigin } from "../../server-auth";
@@ -45,7 +45,7 @@ export async function PATCH(request: Request) {
     if (!sameOrigin(request)) return Response.json({ error: "Cerere neautorizată." }, { status: 403 });
     const session = await currentSession(request);
     if (!session || session.account.passwordResetRequired) return Response.json({ error: "Autentificare necesară." }, { status: 401 });
-    if (!isManagementRole(session.account)) return Response.json({ error: "Numai administratorii pot modifica proiecte.", status: 403 });
+    if (!isManagementRole(session.account)) return Response.json({ error: "Nu ai permisiunea de a modifica proiecte." }, { status: 403 });
     const body = (await request.json()) as { project?: ProjectRecord };
     if (!body.project || typeof body.project !== "object") return Response.json({ error: "Datele proiectului lipsesc." }, { status: 400 });
     const result = await updateProject(body.project);
@@ -59,5 +59,24 @@ export async function PATCH(request: Request) {
   } catch (error) {
     console.error("Proconect project update error:", error instanceof Error ? error.message : "Unknown project update failure");
     return Response.json({ error: "Proiectul nu a putut fi actualizat." }, { status: 503 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    if (!sameOrigin(request)) return Response.json({ error: "Cerere neautorizată." }, { status: 403 });
+    const session = await currentSession(request);
+    if (!session || session.account.passwordResetRequired) return Response.json({ error: "Autentificare necesară." }, { status: 401 });
+    if (!isManagementRole(session.account)) return Response.json({ error: "Nu ai permisiunea de a șterge proiecte." }, { status: 403 });
+
+    const body = (await request.json()) as { projectId?: unknown };
+    if (typeof body.projectId !== "string") return Response.json({ error: "Identificatorul proiectului lipsește." }, { status: 400 });
+
+    const result = await deleteProject(body.projectId);
+    if ("error" in result) return Response.json({ error: result.error }, { status: result.status });
+    return Response.json(result);
+  } catch (error) {
+    console.error("Proconect project deletion error:", error instanceof Error ? error.message : "Unknown project deletion failure");
+    return Response.json({ error: "Proiectul nu a putut fi șters." }, { status: 503 });
   }
 }

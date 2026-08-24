@@ -106,8 +106,11 @@ function insertProjectStatement(project: ProjectRecord, technicianUsername: stri
 }
 
 export async function ensureProjectData() {
-  const existing = await getRawDb().prepare("SELECT COUNT(*) AS count FROM projects").first<{ count: number }>();
-  if ((existing?.count ?? 0) > 0) return;
+  const [existingProjects, existingEquipment] = await Promise.all([
+    getRawDb().prepare("SELECT COUNT(*) AS count FROM projects").first<{ count: number }>(),
+    getRawDb().prepare("SELECT COUNT(*) AS count FROM cpe_catalog").first<{ count: number }>(),
+  ]);
+  if ((existingProjects?.count ?? 0) > 0 || (existingEquipment?.count ?? 0) > 0) return;
 
   const now = Date.now();
   const statements = initialProjects.map((project, index) => insertProjectStatement(project, "vlad", "vladimir.carlan", now - index));
@@ -268,6 +271,42 @@ export async function updateProject(input: ProjectRecord) {
 
   await getRawDb().batch(statements);
   return { project };
+}
+
+export async function deleteProject(projectId: string) {
+  if (!/^RID\d{1,24}$/i.test(projectId)) return { error: "Request ID-ul proiectului nu este valid.", status: 400 as const };
+
+  const project = await getRawDb()
+    .prepare("SELECT id, technician_username FROM projects WHERE id = ? LIMIT 1")
+    .bind(projectId.toUpperCase())
+    .first<{ id: string; technician_username: string }>();
+  if (!project) return { error: "Proiectul selectat nu există sau a fost deja șters.", status: 404 as const };
+
+  const files = await getRawDb()
+    .prepare("SELECT storage_key FROM project_files WHERE project_id = ?")
+    .bind(project.id)
+    .all<{ storage_key: string }>();
+  const storageKeys = (files.results ?? []).map((file) => file.storage_key);
+
+  await getRawDb().batch([
+    getRawDb().prepare("DELETE FROM projects WHERE id = ?").bind(project.id),
+    getRawDb()
+      .prepare("UPDATE app_users SET jobs = CASE WHEN jobs > 0 THEN jobs - 1 ELSE 0 END, updated_at = ? WHERE username = ?")
+      .bind(Date.now(), project.technician_username),
+  ]);
+
+  let cleanupFailures = 0;
+  if (storageKeys.length) {
+    try {
+      const cleanup = await Promise.allSettled(storageKeys.map((key) => bucket().delete(key)));
+      cleanupFailures = cleanup.filter((result) => result.status === "rejected").length;
+    } catch {
+      cleanupFailures = storageKeys.length;
+    }
+    if (cleanupFailures) console.error(`Proconect project cleanup: ${cleanupFailures} fișiere necesită curățare pentru ${project.id}.`);
+  }
+
+  return { projectId: project.id, cleanupFailures };
 }
 
 export async function saveFieldDocumentation(projectId: string, section: string, content: unknown, account: AuthenticatedAccount) {
