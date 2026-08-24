@@ -7,7 +7,7 @@ import { SiteOperationsSection } from "./site-operations";
 import { ProjectDocumentsSection } from "./project-documents";
 import { GoogleDriveSettings, type GoogleDriveStatus } from "./google-drive-settings";
 import { fetchProjectFiles, formatCapturedAt, uploadProjectFile } from "./client-storage";
-import { initialCpeCatalog, initialFieldDocumentation, initialProjects, type ProjectRecord } from "./project-data";
+import { initialCpeCatalog, type ProjectRecord } from "./project-data";
 import type { ClientFieldSummary, ProjectFieldDocumentation, RouteFieldSummary, SiteFieldSummary, SpliceFieldSummary } from "./field-documentation";
 
 type View = "projects" | "team" | "cpe" | "drive" | "documents" | "client" | "route" | "splices" | "site";
@@ -123,7 +123,7 @@ export default function Home() {
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [projectDeleting, setProjectDeleting] = useState(false);
   const [editingCpe, setEditingCpe] = useState("");
-  const [projects, setProjects] = useState(initialProjects);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [accounts, setAccounts] = useState(initialAccounts);
   const [cpeList, setCpeList] = useState(initialCpeCatalog);
   const [cpeSearch, setCpeSearch] = useState("");
@@ -137,10 +137,10 @@ export default function Home() {
   const [spliceFile, setSpliceFile] = useState<File | null>(null);
   const [projectSaving, setProjectSaving] = useState(false);
   const [projectDataReady, setProjectDataReady] = useState(false);
-  const [activeProjectId, setActiveProjectId] = useState(initialProjects[0].id);
+  const [activeProjectId, setActiveProjectId] = useState("");
   const [clientService, setClientService] = useState<ServiceType>("Internet");
   const [clientPhotos, setClientPhotos] = useState<Partial<Record<ClientPhotoKey, ClientPhoto[]>>>({});
-  const [fieldDocumentation, setFieldDocumentation] = useState<Record<string, ProjectFieldDocumentation>>(initialFieldDocumentation);
+  const [fieldDocumentation, setFieldDocumentation] = useState<Record<string, ProjectFieldDocumentation>>({});
   const [driveStatus, setDriveStatus] = useState<GoogleDriveStatus | null>(null);
 
   useEffect(() => {
@@ -303,6 +303,50 @@ export default function Home() {
       return matchesSearch && matchesTechnician && (filter === "Toate statusurile" || project.status === filter);
     });
   }, [currentAccount.name, currentAccount.role, filter, projects, search]);
+  const projectMetrics = useMemo(() => {
+    const today = new Date();
+    const day = String(today.getDate());
+    const paddedDay = day.padStart(2, "0");
+    const month = String(today.getMonth() + 1).padStart(2, "0");
+    const year = String(today.getFullYear());
+    const shortMonth = new Intl.DateTimeFormat("ro-RO", { month: "short" }).format(today).replace(/\./g, "").toLocaleLowerCase("ro-RO");
+    const longMonth = new Intl.DateTimeFormat("ro-RO", { month: "long" }).format(today).toLocaleLowerCase("ro-RO");
+
+    function normalizedDate(label: string) {
+      return label.trim().toLocaleLowerCase("ro-RO").replace(/\./g, "").replace(/\s+/g, " ");
+    }
+
+    function scheduledToday(label: string) {
+      const normalized = normalizedDate(label);
+      if (/^(astăzi|azi)\b/u.test(normalized)) return true;
+      if ([`${day} ${shortMonth}`, `${paddedDay} ${shortMonth}`, `${day} ${longMonth}`, `${paddedDay} ${longMonth}`].some((value) => normalized.startsWith(value))) return true;
+      return label.includes(`${year}-${month}-${paddedDay}`) || new RegExp(`(?:^|\\D)${paddedDay}[./-]${month}[./-]${year}(?:\\D|$)`).test(label);
+    }
+
+    function scheduledThisMonth(label: string) {
+      if (scheduledToday(label)) return true;
+      const normalized = normalizedDate(label);
+      const explicitYear = normalized.match(/\b(20\d{2})\b/u)?.[1];
+      if (explicitYear && explicitYear !== year) return false;
+      if (new RegExp(`\\b(?:${shortMonth}|${longMonth})\\b`, "u").test(normalized)) return true;
+      return label.includes(`${year}-${month}-`) || new RegExp(`(?:^|\\D)\\d{1,2}[./-]${month}[./-]${year}(?:\\D|$)`).test(label);
+    }
+
+    const plannedToday = projects.filter((project) => project.status === "Planificat" && scheduledToday(project.date));
+    const scheduledHours = plannedToday
+      .map((project) => project.date.match(/\b(?:[01]?\d|2[0-3]):[0-5]\d\b/u)?.[0] ?? "")
+      .filter(Boolean)
+      .map((hour) => hour.padStart(5, "0"))
+      .sort();
+
+    return {
+      active: projects.filter((project) => project.status !== "Finalizat").length,
+      plannedToday: plannedToday.length,
+      firstScheduledHour: scheduledHours[0] ?? "",
+      awaitingReview: projects.filter((project) => project.status === "De verificat").length,
+      completedThisMonth: projects.filter((project) => project.status === "Finalizat" && scheduledThisMonth(project.date)).length,
+    };
+  }, [projects]);
 
   async function handleSignIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -964,16 +1008,16 @@ export default function Home() {
               <div>
                 <p className="eyebrow">CENTRU OPERAȚIONAL</p>
                 <h1>Bună dimineața, {currentAccount.name}.</h1>
-                <p>Ai <strong>3 lucrări active</strong> și o documentație care necesită verificare.</p>
+                <p>{projects.length ? <>Ai <strong>{projectMetrics.active} {projectMetrics.active === 1 ? "lucrare activă" : "lucrări active"}</strong>{projectMetrics.awaitingReview ? ` și ${projectMetrics.awaitingReview === 1 ? "o documentație care necesită verificare" : `${projectMetrics.awaitingReview} documentații care necesită verificare`}.` : "."}</> : "Nu există proiecte înregistrate momentan."}</p>
               </div>
               {canManageDocuments && <button className="primary-button" onClick={() => { setEditingProject(null); setModal("project"); }}><span>＋</span> Proiect nou</button>}
             </section>
 
             <section className="metrics" aria-label="Rezumat proiecte">
-              <article><div className="metric-icon blue">↗</div><div><small>LUCRĂRI ACTIVE</small><strong>12</strong><p><b>+3</b> față de săptămâna trecută</p></div></article>
-              <article><div className="metric-icon violet">◷</div><div><small>PLANIFICATE AZI</small><strong>4</strong><p>Prima lucrare la <b>09:30</b></p></div></article>
-              <article><div className="metric-icon amber">!</div><div><small>DE VERIFICAT</small><strong>3</strong><p>Documentații în așteptare</p></div></article>
-              <article><div className="metric-icon green">✓</div><div><small>FINALIZATE LUNA ACEASTA</small><strong>28</strong><p><b>87%</b> în termen</p></div></article>
+              <article><div className="metric-icon blue">↗</div><div><small>LUCRĂRI ACTIVE</small><strong>{projectMetrics.active}</strong><p>{projects.length ? `${projects.length} ${projects.length === 1 ? "proiect înregistrat" : "proiecte înregistrate"}` : "Niciun proiect înregistrat"}</p></div></article>
+              <article><div className="metric-icon violet">◷</div><div><small>PLANIFICATE AZI</small><strong>{projectMetrics.plannedToday}</strong><p>{projectMetrics.firstScheduledHour ? <>Prima lucrare la <b>{projectMetrics.firstScheduledHour}</b></> : projectMetrics.plannedToday ? "Lucrări programate astăzi" : "Nicio lucrare planificată"}</p></div></article>
+              <article><div className="metric-icon amber">!</div><div><small>DE VERIFICAT</small><strong>{projectMetrics.awaitingReview}</strong><p>{projectMetrics.awaitingReview ? "Documentații în așteptare" : "Nimic de verificat"}</p></div></article>
+              <article><div className="metric-icon green">✓</div><div><small>FINALIZATE LUNA ACEASTA</small><strong>{projectMetrics.completedThisMonth}</strong><p>{projectMetrics.completedThisMonth ? "Lucrări încheiate luna curentă" : "Nicio lucrare finalizată"}</p></div></article>
             </section>
 
             <section className="project-card">
