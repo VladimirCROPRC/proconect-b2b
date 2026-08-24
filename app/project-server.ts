@@ -196,6 +196,80 @@ export async function createProject(input: ProjectRecord, createdBy: Authenticat
   return { project };
 }
 
+export async function updateProject(input: ProjectRecord) {
+  if (!/^RID\d{1,24}$/i.test(input.id)) return { error: "Request ID-ul proiectului nu este valid.", status: 400 as const };
+  const required = [input.client, input.address, input.contact, input.phone, input.requirements, input.technician, input.cpe];
+  if (required.some((value) => typeof value !== "string" || !value.trim())) {
+    return { error: "Completează toate informațiile obligatorii ale proiectului.", status: 400 as const };
+  }
+  if (!["Planificat", "În desfășurare", "De verificat", "Finalizat"].includes(input.status)) {
+    return { error: "Statusul proiectului nu este valid.", status: 400 as const };
+  }
+
+  const existing = await getRawDb().prepare("SELECT * FROM projects WHERE id = ? LIMIT 1").bind(input.id.toUpperCase()).first<ProjectRow>();
+  if (!existing) return { error: "Proiectul selectat nu există.", status: 404 as const };
+
+  const technician = await getRawDb()
+    .prepare("SELECT username, name FROM app_users WHERE name = ? AND role = 'Tehnician' AND active = 1 LIMIT 1")
+    .bind(input.technician.trim())
+    .first<{ username: string; name: string }>();
+  if (!technician) return { error: "Tehnicianul selectat nu este disponibil.", status: 400 as const };
+
+  const project: ProjectRecord = {
+    ...input,
+    id: existing.id,
+    client: input.client.trim(),
+    address: input.address.trim(),
+    contact: input.contact.trim(),
+    phone: input.phone.trim(),
+    email: typeof input.email === "string" ? input.email.trim() : "",
+    requirements: input.requirements.trim(),
+    technician: technician.name,
+    cpe: input.cpe.trim(),
+    sfp: Boolean(input.sfp),
+    mc: Boolean(input.mc),
+    terminalBox: Boolean(input.terminalBox),
+    date: typeof input.date === "string" && input.date.trim() ? input.date.trim() : existing.scheduled_label,
+    ipwo: typeof input.ipwo === "string" && input.ipwo.trim() ? input.ipwo.trim() : existing.ipwo,
+    splice: typeof input.splice === "string" && input.splice.trim() ? input.splice.trim() : existing.splice,
+  };
+  const now = Date.now();
+  const statements = [
+    getRawDb().prepare(
+      "UPDATE projects SET client = ?, address = ?, contact = ?, phone = ?, email = ?, requirements = ?, technician = ?, technician_username = ?, cpe = ?, sfp = ?, mc = ?, terminal_box = ?, status = ?, scheduled_label = ?, ipwo = ?, splice = ?, updated_at = ? WHERE id = ?",
+    ).bind(
+      project.client,
+      project.address,
+      project.contact,
+      project.phone,
+      project.email,
+      project.requirements,
+      project.technician,
+      technician.username,
+      project.cpe,
+      project.sfp ? 1 : 0,
+      project.mc ? 1 : 0,
+      project.terminalBox ? 1 : 0,
+      project.status,
+      project.date,
+      project.ipwo,
+      project.splice,
+      now,
+      project.id,
+    ),
+  ];
+
+  if (existing.technician_username !== technician.username) {
+    statements.push(
+      getRawDb().prepare("UPDATE app_users SET jobs = CASE WHEN jobs > 0 THEN jobs - 1 ELSE 0 END, updated_at = ? WHERE username = ?").bind(now, existing.technician_username),
+      getRawDb().prepare("UPDATE app_users SET jobs = jobs + 1, updated_at = ? WHERE username = ?").bind(now, technician.username),
+    );
+  }
+
+  await getRawDb().batch(statements);
+  return { project };
+}
+
 export async function saveFieldDocumentation(projectId: string, section: string, content: unknown, account: AuthenticatedAccount) {
   if (!["client", "route", "splices", "site"].includes(section)) {
     return { error: "Secțiunea de documentație nu este validă.", status: 400 as const };
@@ -235,6 +309,25 @@ export async function addCpe(name: string) {
   if (existing) return { error: "Echipamentul există deja în catalog.", status: 409 as const };
   await getRawDb().prepare("INSERT INTO cpe_catalog (id, name, created_at) VALUES (?, ?, ?)").bind(crypto.randomUUID(), normalized, Date.now()).run();
   return { name: normalized };
+}
+
+export async function renameCpe(previousName: string, name: string) {
+  const originalName = previousName.trim();
+  const normalized = name.trim();
+  if (normalized.length < 2 || normalized.length > 120) return { error: "Denumirea echipamentului nu este validă.", status: 400 as const };
+
+  const existing = await getRawDb().prepare("SELECT id, name FROM cpe_catalog WHERE name = ? LIMIT 1").bind(originalName).first<{ id: string; name: string }>();
+  if (!existing) return { error: "Echipamentul selectat nu există în catalog.", status: 404 as const };
+  if (existing.name === normalized) return { previousName: existing.name, name: normalized };
+
+  const duplicate = await getRawDb().prepare("SELECT id FROM cpe_catalog WHERE name = ? AND id != ? LIMIT 1").bind(normalized, existing.id).first();
+  if (duplicate) return { error: "Echipamentul există deja în catalog.", status: 409 as const };
+
+  await getRawDb().batch([
+    getRawDb().prepare("UPDATE cpe_catalog SET name = ? WHERE id = ?").bind(normalized, existing.id),
+    getRawDb().prepare("UPDATE projects SET cpe = ?, updated_at = ? WHERE cpe = ?").bind(normalized, Date.now(), existing.name),
+  ]);
+  return { previousName: existing.name, name: normalized };
 }
 
 export function bucket() {

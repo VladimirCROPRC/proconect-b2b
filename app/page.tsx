@@ -11,7 +11,7 @@ import { initialCpeCatalog, initialFieldDocumentation, initialProjects, type Pro
 import type { ClientFieldSummary, ProjectFieldDocumentation, RouteFieldSummary, SiteFieldSummary, SpliceFieldSummary } from "./field-documentation";
 
 type View = "projects" | "team" | "cpe" | "drive" | "documents" | "client" | "route" | "splices" | "site";
-type Modal = "project" | "account" | "cpe" | null;
+type Modal = "project" | "edit-project" | "account" | "cpe" | "edit-cpe" | null;
 type ServiceType = "Internet" | "VPN" | "Internet+OL" | "OL";
 type ClientPhotoKey = "report" | "speed" | "olTest" | "overview" | "detail" | "labels";
 
@@ -99,9 +99,12 @@ export default function Home() {
   const [authenticationError, setAuthenticationError] = useState("");
   const [view, setView] = useState<View>("projects");
   const [modal, setModal] = useState<Modal>(null);
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [editingCpe, setEditingCpe] = useState("");
   const [projects, setProjects] = useState(initialProjects);
   const [accounts, setAccounts] = useState(initialAccounts);
   const [cpeList, setCpeList] = useState(initialCpeCatalog);
+  const [cpeSearch, setCpeSearch] = useState("");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("Toate statusurile");
   const [selected, setSelected] = useState<Project | null>(null);
@@ -351,6 +354,26 @@ export default function Home() {
     window.setTimeout(() => setToast(""), 3600);
   }
 
+  function closeModal() {
+    setModal(null);
+    setEditingProject(null);
+    setEditingCpe("");
+    setIpwoName("");
+    setSpliceName("");
+    setIpwoFile(null);
+    setSpliceFile(null);
+  }
+
+  function openProjectEditor(project: Project) {
+    setSelected(null);
+    setEditingProject(project);
+    setIpwoName(project.ipwo === "Fișier neîncărcat" ? "" : project.ipwo);
+    setSpliceName(project.splice === "Fișier neîncărcat" ? "" : project.splice);
+    setIpwoFile(null);
+    setSpliceFile(null);
+    setModal("edit-project");
+  }
+
   async function createProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -395,15 +418,67 @@ export default function Home() {
       ]);
       setProjects((current) => [payload.project!, ...current]);
       setAccounts((current) => current.map((account) => account.name === payload.project!.technician ? { ...account, jobs: account.jobs + 1 } : account));
-      setModal(null);
-      setIpwoName("");
-      setSpliceName("");
-      setIpwoFile(null);
-      setSpliceFile(null);
+      closeModal();
       const failedUploads = uploadResults.filter((result) => result.status === "rejected").length;
       showToast(failedUploads ? `${id} a fost salvat, dar ${failedUploads} fișier nu a putut fi încărcat.` : `${id} a fost salvat permanent și alocat tehnicianului.`);
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Proiectul nu a putut fi creat.");
+    } finally {
+      setProjectSaving(false);
+    }
+  }
+
+  async function saveProjectChanges(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingProject) return;
+    const form = new FormData(event.currentTarget);
+    const project: Project = {
+      ...editingProject,
+      client: String(form.get("client") || ""),
+      address: String(form.get("address") || ""),
+      contact: String(form.get("contact") || ""),
+      phone: String(form.get("phone") || ""),
+      email: String(form.get("email") || ""),
+      requirements: String(form.get("requirements") || ""),
+      technician: String(form.get("technician") || ""),
+      cpe: String(form.get("cpe") || ""),
+      sfp: form.get("sfp") === "on",
+      mc: form.get("mc") === "on",
+      terminalBox: form.get("terminalBox") === "on",
+      status: String(form.get("status") || editingProject.status) as Project["status"],
+      date: String(form.get("date") || editingProject.date),
+      ipwo: ipwoFile ? ipwoName : editingProject.ipwo,
+      splice: spliceFile ? spliceName : editingProject.splice,
+    };
+
+    setProjectSaving(true);
+    try {
+      const response = await fetch("/api/projects", {
+        method: "PATCH",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ project }),
+      });
+      const payload = (await response.json()) as { project?: Project; error?: string };
+      if (!response.ok || !payload.project) throw new Error(payload.error || "Proiectul nu a putut fi actualizat.");
+
+      const uploadResults = await Promise.allSettled([
+        ...(ipwoFile ? [uploadProjectFile({ projectId: project.id, section: "project", category: "ipwo", file: ipwoFile })] : []),
+        ...(spliceFile ? [uploadProjectFile({ projectId: project.id, section: "project", category: "splice-diagram", file: spliceFile })] : []),
+      ]);
+      setProjects((current) => current.map((item) => item.id === project.id ? payload.project! : item));
+      if (editingProject.technician !== payload.project.technician) {
+        setAccounts((current) => current.map((account) => {
+          if (account.name === editingProject.technician) return { ...account, jobs: Math.max(0, account.jobs - 1) };
+          if (account.name === payload.project!.technician) return { ...account, jobs: account.jobs + 1 };
+          return account;
+        }));
+      }
+      closeModal();
+      const failedUploads = uploadResults.filter((result) => result.status === "rejected").length;
+      showToast(failedUploads ? `${project.id} a fost actualizat, dar ${failedUploads} fișier nu a putut fi încărcat.` : `${project.id} a fost actualizat și salvat permanent.`);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Proiectul nu a putut fi actualizat.");
     } finally {
       setProjectSaving(false);
     }
@@ -465,7 +540,31 @@ export default function Home() {
   async function createCpe(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    if (await addCpeByName(String(form.get("cpeName")).trim())) setModal(null);
+    if (await addCpeByName(String(form.get("cpeName")).trim())) closeModal();
+  }
+
+  async function saveCpeChanges(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingCpe) return;
+    const form = new FormData(event.currentTarget);
+    const name = String(form.get("cpeName") || "").trim();
+    try {
+      const response = await fetch("/api/catalog", {
+        method: "PATCH",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ previousName: editingCpe, name }),
+      });
+      const payload = (await response.json()) as { previousName?: string; name?: string; error?: string };
+      if (!response.ok || !payload.name || !payload.previousName) throw new Error(payload.error || "Echipamentul nu a putut fi actualizat.");
+      setCpeList((current) => current.map((item) => item === payload.previousName ? payload.name! : item));
+      setProjects((current) => current.map((project) => project.cpe === payload.previousName ? { ...project, cpe: payload.name! } : project));
+      setSelected((current) => current && current.cpe === payload.previousName ? { ...current, cpe: payload.name! } : current);
+      closeModal();
+      showToast(`${payload.name} a fost actualizat în catalog și în proiectele asociate.`);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Echipamentul nu a putut fi actualizat.");
+    }
   }
 
   async function openProjectFile(projectId: string, category: "ipwo" | "splice-diagram") {
@@ -774,7 +873,7 @@ export default function Home() {
                 <h1>Bună dimineața, {currentAccount.name}.</h1>
                 <p>Ai <strong>3 lucrări active</strong> și o documentație care necesită verificare.</p>
               </div>
-              {canManageDocuments && <button className="primary-button" onClick={() => setModal("project")}><span>＋</span> Proiect nou</button>}
+              {canManageDocuments && <button className="primary-button" onClick={() => { setEditingProject(null); setModal("project"); }}><span>＋</span> Proiect nou</button>}
             </section>
 
             <section className="metrics" aria-label="Rezumat proiecte">
@@ -810,7 +909,7 @@ export default function Home() {
                         <td><div className="technician"><span className="avatar">{initials(project.technician)}</span><strong>{project.technician}</strong></div></td>
                         <td><span className={statusClass[project.status]}><i />{project.status}</span></td>
                         <td><strong>{project.date}</strong></td>
-                        <td><button className="more" aria-label={`Opțiuni ${project.id}`} onClick={(event) => event.stopPropagation()}>•••</button></td>
+                        <td>{canManageDocuments && <button className="more" aria-label={`Editează ${project.id}`} title={`Editează ${project.id}`} onClick={(event) => { event.stopPropagation(); openProjectEditor(project); }}>Editează</button>}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -856,10 +955,10 @@ export default function Home() {
               <button className="primary-button" onClick={() => setModal("cpe")}><span>＋</span> Echipament nou</button>
             </section>
             <section className="project-card cpe-section">
-              <div className="card-heading"><div><h2>Catalog CPE</h2><p>{cpeList.length} echipamente configurate</p></div><label className="search-box small"><span>⌕</span><input placeholder="Caută echipament..." /></label></div>
+              <div className="card-heading"><div><h2>Catalog CPE</h2><p>{cpeList.length} echipamente configurate</p></div><label className="search-box small"><span>⌕</span><input value={cpeSearch} onChange={(event) => setCpeSearch(event.target.value)} placeholder="Caută echipament..." /></label></div>
               <div className="cpe-grid">
-                {cpeList.map((cpe) => (
-                  <article className="cpe-card" key={cpe}><div className="device-icon"><i /><i /><i /></div><div><strong>{cpe}</strong><small>Disponibil pentru proiecte</small></div><span>{projects.filter((project) => project.cpe === cpe).length} utilizări</span><button className="more" aria-label={`Opțiuni ${cpe}`}>•••</button></article>
+                {cpeList.filter((cpe) => cpe.toLowerCase().includes(cpeSearch.trim().toLowerCase())).map((cpe) => (
+                  <article className="cpe-card" key={cpe}><div className="device-icon"><i /><i /><i /></div><div><strong>{cpe}</strong><small>Disponibil pentru proiecte</small></div><span>{projects.filter((project) => project.cpe === cpe).length} utilizări</span><button className="more" aria-label={`Editează ${cpe}`} title={`Editează ${cpe}`} onClick={() => { setEditingCpe(cpe); setModal("edit-cpe"); }}>Editează</button></article>
                 ))}
               </div>
             </section>
@@ -993,36 +1092,37 @@ export default function Home() {
         {canManageDocuments && <button className={view === "documents" ? "active" : ""} onClick={() => goTo("documents")}><span>DOC</span>Documente</button>}
       </nav>
 
-      {modal && <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setModal(null)}>
-        {modal === "project" && (
-          <form className="modal project-modal" onSubmit={createProject}>
-            <div className="modal-head"><div><span className="modal-kicker">PROIECT NOU</span><h2>Generează o lucrare</h2><p>Datele inițiale pentru instalarea B2B.</p></div><button type="button" onClick={() => setModal(null)} aria-label="Închide">×</button></div>
+      {modal && <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && closeModal()}>
+        {(modal === "project" || modal === "edit-project") && (
+          <form className="modal project-modal" onSubmit={modal === "edit-project" ? saveProjectChanges : createProject}>
+            <div className="modal-head"><div><span className="modal-kicker">{editingProject ? "EDITARE PROIECT" : "PROIECT NOU"}</span><h2>{editingProject ? `Actualizează ${editingProject.id}` : "Generează o lucrare"}</h2><p>{editingProject ? "Modificările se salvează permanent pentru proiectul selectat." : "Datele inițiale pentru instalarea B2B."}</p></div><button type="button" onClick={closeModal} aria-label="Închide">×</button></div>
             <div className="modal-body">
               <div className="form-section"><h3><span>1</span> Date proiect și client</h3><div className="form-grid">
-                <label><span>Request ID *</span><div className="prefix-input"><b>RID</b><input name="requestId" required inputMode="numeric" placeholder="ex. 10483" /></div></label>
-                <label><span>Nume client *</span><input name="client" required placeholder="Denumirea companiei" /></label>
-                <label className="wide"><span>Adresă instalare *</span><input name="address" required placeholder="Stradă, număr, localitate" /></label>
-                <label><span>Persoană de contact *</span><input name="contact" required placeholder="Nume și prenume" /></label>
-                <label><span>Telefon *</span><input name="phone" required placeholder="+40 7xx xxx xxx" /></label>
-                <label className="wide"><span>E-mail</span><input name="email" type="email" placeholder="contact@companie.ro" /></label>
-                <label className="wide work-requirements"><span>Cerințele lucrării *</span><textarea name="requirements" required rows={5} placeholder="Descrie lucrările solicitate, condițiile de instalare, echipamentele sau configurațiile speciale și orice alte informații utile tehnicianului..." /></label>
+                <label><span>Request ID *</span><div className="prefix-input"><b>RID</b><input name="requestId" required readOnly={Boolean(editingProject)} defaultValue={editingProject?.id.replace(/^RID/i, "")} inputMode="numeric" placeholder="ex. 10483" /></div></label>
+                <label><span>Nume client *</span><input name="client" required defaultValue={editingProject?.client} placeholder="Denumirea companiei" /></label>
+                <label className="wide"><span>Adresă instalare *</span><input name="address" required defaultValue={editingProject?.address} placeholder="Stradă, număr, localitate" /></label>
+                <label><span>Persoană de contact *</span><input name="contact" required defaultValue={editingProject?.contact} placeholder="Nume și prenume" /></label>
+                <label><span>Telefon *</span><input name="phone" required defaultValue={editingProject?.phone} placeholder="+40 7xx xxx xxx" /></label>
+                <label className="wide"><span>E-mail</span><input name="email" type="email" defaultValue={editingProject?.email} placeholder="contact@companie.ro" /></label>
+                <label className="wide work-requirements"><span>Cerințele lucrării *</span><textarea name="requirements" required defaultValue={editingProject?.requirements} rows={5} placeholder="Descrie lucrările solicitate, condițiile de instalare, echipamentele sau configurațiile speciale și orice alte informații utile tehnicianului..." /></label>
               </div></div>
               <div className="form-section"><h3><span>2</span> Alocare și echipamente</h3><div className="form-grid">
-                <label><span>Tehnician alocat *</span><select name="technician" required defaultValue=""><option value="" disabled>Selectează tehnicianul</option>{technicians.map((tech) => <option key={tech.username}>{tech.name}</option>)}</select></label>
-                <label><span>Tip CPE *</span><div className="select-plus"><select name="cpe" required defaultValue=""><option value="" disabled>Selectează echipamentul</option>{cpeList.map((cpe) => <option key={cpe}>{cpe}</option>)}</select><button type="button" onClick={() => { const value = window.prompt("Denumirea echipamentului CPE"); if (value?.trim()) void addCpeByName(value.trim()); }} aria-label="Adaugă CPE">＋</button></div></label>
+                <label><span>Tehnician alocat *</span><select name="technician" required defaultValue={editingProject?.technician || ""}><option value="" disabled>Selectează tehnicianul</option>{technicians.map((tech) => <option key={tech.username}>{tech.name}</option>)}</select></label>
+                <label><span>Tip CPE *</span><div className="select-plus"><select name="cpe" required defaultValue={editingProject?.cpe || ""}><option value="" disabled>Selectează echipamentul</option>{cpeList.map((cpe) => <option key={cpe}>{cpe}</option>)}</select><button type="button" onClick={() => { const value = window.prompt("Denumirea echipamentului CPE"); if (value?.trim()) void addCpeByName(value.trim()); }} aria-label="Adaugă CPE">＋</button></div></label>
+                {editingProject && <><label><span>Status proiect *</span><select name="status" required defaultValue={editingProject.status}><option>Planificat</option><option>În desfășurare</option><option>De verificat</option><option>Finalizat</option></select></label><label><span>Programare *</span><input name="date" required defaultValue={editingProject.date} placeholder="ex. 26 aug, 09:30" /></label></>}
                 <div className="wide"><span className="field-label">Echipamente suplimentare</span><div className="switch-row">
-                  <label className="switch-card"><span><b>SFP</b><small>Modul optic</small></span><input type="checkbox" name="sfp" defaultChecked /><i /></label>
-                  <label className="switch-card"><span><b>MC</b><small>Media converter</small></span><input type="checkbox" name="mc" /><i /></label>
-                  <label className="switch-card"><span><b>Terminal Box</b><small>Cutie terminală</small></span><input type="checkbox" name="terminalBox" defaultChecked /><i /></label>
+                  <label className="switch-card"><span><b>SFP</b><small>Modul optic</small></span><input type="checkbox" name="sfp" defaultChecked={editingProject ? editingProject.sfp : true} /><i /></label>
+                  <label className="switch-card"><span><b>MC</b><small>Media converter</small></span><input type="checkbox" name="mc" defaultChecked={editingProject?.mc} /><i /></label>
+                  <label className="switch-card"><span><b>Terminal Box</b><small>Cutie terminală</small></span><input type="checkbox" name="terminalBox" defaultChecked={editingProject ? editingProject.terminalBox : true} /><i /></label>
                 </div></div>
               </div></div>
               <div className="form-section"><h3><span>3</span> Documente</h3><div className="upload-grid">
-                <label className={ipwoName ? "upload-box has-file" : "upload-box"}><input type="file" accept=".pdf,.doc,.docx" onChange={(event) => { const file = event.target.files?.[0] ?? null; setIpwoFile(file); setIpwoName(file?.name ?? ""); }} /><b>{ipwoName ? "✓" : "↑"}</b><strong>{ipwoName || "Încarcă IPWO"}</strong><small>{ipwoName ? "Fișier selectat" : "PDF sau DOC, max. 20 MB"}</small></label>
-                <label className={spliceName ? "upload-box has-file" : "upload-box"}><input type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={(event) => { const file = event.target.files?.[0] ?? null; setSpliceFile(file); setSpliceName(file?.name ?? ""); }} /><b>{spliceName ? "✓" : "↑"}</b><strong>{spliceName || "Diagrama de suduri"}</strong><small>{spliceName ? "Fișier selectat" : "PDF, PNG sau JPG, max. 20 MB"}</small></label>
+                <label className={ipwoName ? "upload-box has-file" : "upload-box"}><input type="file" accept=".pdf,.doc,.docx" onChange={(event) => { const file = event.target.files?.[0] ?? null; setIpwoFile(file); setIpwoName(file?.name ?? editingProject?.ipwo ?? ""); }} /><b>{ipwoName ? "✓" : "↑"}</b><strong>{ipwoName || "Încarcă IPWO"}</strong><small>{ipwoFile ? "Fișier nou selectat" : editingProject && ipwoName ? "Document existent · selectează pentru înlocuire" : "PDF sau DOC, max. 20 MB"}</small></label>
+                <label className={spliceName ? "upload-box has-file" : "upload-box"}><input type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={(event) => { const file = event.target.files?.[0] ?? null; setSpliceFile(file); setSpliceName(file?.name ?? editingProject?.splice ?? ""); }} /><b>{spliceName ? "✓" : "↑"}</b><strong>{spliceName || "Diagrama de suduri"}</strong><small>{spliceFile ? "Fișier nou selectat" : editingProject && spliceName ? "Document existent · selectează pentru înlocuire" : "PDF, PNG sau JPG, max. 20 MB"}</small></label>
               </div></div>
               <div className="drive-note"><span className="drive-mark"><i /><i /><i /></span><div><strong>{driveStatus?.connected ? "Google Drive conectat" : "Stocare securizată proiect"}</strong><p>{driveStatus?.connected ? <>Dosarul <b>RID + Request ID</b> și subdosarele documentației se creează automat în Google Drive.</> : <>Documentele sunt salvate permanent. Configurează <b>Google Drive</b> din secțiunea administrativă pentru sincronizare automată.</>}</p></div></div>
             </div>
-            <div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setModal(null)}>Anulează</button><button className="primary-button" type="submit" disabled={projectSaving}>{projectSaving ? "Se salvează..." : "Generează proiectul"} <span>→</span></button></div>
+            <div className="modal-actions"><button type="button" className="secondary-button" onClick={closeModal}>Anulează</button><button className="primary-button" type="submit" disabled={projectSaving}>{projectSaving ? "Se salvează..." : editingProject ? "Salvează modificările" : "Generează proiectul"} <span>→</span></button></div>
           </form>
         )}
         {modal === "account" && (
@@ -1037,11 +1137,11 @@ export default function Home() {
             <div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setModal(null)}>Anulează</button><button className="primary-button" type="submit">Creează contul</button></div>
           </form>
         )}
-        {modal === "cpe" && (
-          <form className="modal small-modal" onSubmit={createCpe}>
-            <div className="modal-head"><div><span className="modal-kicker">CATALOG CPE</span><h2>Echipament nou</h2><p>Va apărea imediat în formularul de proiect.</p></div><button type="button" onClick={() => setModal(null)}>×</button></div>
-            <div className="modal-body stacked-form"><label><span>Producător și model *</span><input name="cpeName" required placeholder="ex. Cisco C1111-8P" autoFocus /></label><div className="info-note"><b>i</b><p>Folosește denumirea comercială completă pentru identificare rapidă în teren.</p></div></div>
-            <div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setModal(null)}>Anulează</button><button className="primary-button" type="submit">Adaugă echipamentul</button></div>
+        {(modal === "cpe" || modal === "edit-cpe") && (
+          <form className="modal small-modal" onSubmit={modal === "edit-cpe" ? saveCpeChanges : createCpe}>
+            <div className="modal-head"><div><span className="modal-kicker">CATALOG CPE</span><h2>{editingCpe ? "Editează echipamentul" : "Echipament nou"}</h2><p>{editingCpe ? "Modificarea se aplică și proiectelor care folosesc acest echipament." : "Va apărea imediat în formularul de proiect."}</p></div><button type="button" onClick={closeModal}>×</button></div>
+            <div className="modal-body stacked-form"><label><span>Producător și model *</span><input name="cpeName" required defaultValue={editingCpe} placeholder="ex. Cisco C1111-8P" autoFocus /></label><div className="info-note"><b>i</b><p>Folosește denumirea comercială completă pentru identificare rapidă în teren.</p></div></div>
+            <div className="modal-actions"><button type="button" className="secondary-button" onClick={closeModal}>Anulează</button><button className="primary-button" type="submit">{editingCpe ? "Salvează modificările" : "Adaugă echipamentul"}</button></div>
           </form>
         )}
       </div>}
@@ -1056,6 +1156,7 @@ export default function Home() {
         <div className="drive-folder"><span className="folder-icon">▰</span><div><small>{driveStatus?.folders[selected.id] ? "GOOGLE DRIVE" : "STOCARE SECURIZATĂ"}</small><strong>Dosar {selected.id}</strong></div>{driveStatus?.folders[selected.id] ? <a className="drive-folder-open" href={driveStatus.folders[selected.id]} target="_blank" rel="noreferrer" aria-label={`Deschide dosarul Google Drive ${selected.id}`}>↗</a> : <span>✓</span>}</div>
         <div className="drawer-project-actions">
           <button className="primary-button" onClick={() => openProject(selected)}>Deschide proiectul <span>→</span></button>
+          {canManageDocuments && <button className="secondary-button" onClick={() => openProjectEditor(selected)}>Editează proiectul</button>}
           {canManageDocuments && <button className="secondary-button" onClick={() => openProjectDocuments(selected)}>Documente administrative</button>}
           <small>Client, traseu, suduri, operațiuni site și închiderea proiectului</small>
         </div>
