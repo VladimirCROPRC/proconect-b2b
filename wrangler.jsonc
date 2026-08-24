@@ -17,7 +17,7 @@
     {
       "binding": "DB",
       "database_name": "proconect-b2b-db",
-      "database_id": "YOUR_D1_DATABASE_ID",
+      "database_id": "6624aba0-1008-423d-8599-1e840a60cadc",
       "migrations_dir": "drizzle"
     }
   ],
