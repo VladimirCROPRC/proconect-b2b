@@ -496,15 +496,16 @@ export default function Home() {
   async function createProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    const rawId = String(form.get("requestId") || "").replace(/^RID/i, "").trim();
-    const id = `RID${rawId}`;
+    const activityType = String(form.get("activityType") || "Instalare") as ProjectActivityType;
+    const rawId = String(form.get("requestId") || "").trim();
+    const id = activityType === "Intervenție" ? rawId.toUpperCase() : `RID${rawId.replace(/^RID/i, "")}`.toUpperCase();
     if (projects.some((project) => project.id === id)) {
-      showToast("Request ID există deja. Verifică numărul introdus.");
+      showToast(activityType === "Intervenție" ? "Numărul tichetului există deja. Verifică valoarea introdusă." : "Request ID există deja. Verifică numărul introdus.");
       return;
     }
     const project: Project = {
       id,
-      activityType: String(form.get("activityType") || "Instalare") as ProjectActivityType,
+      activityType,
       client: String(form.get("client")),
       address: String(form.get("address")),
       contact: String(form.get("contact")),
@@ -1060,7 +1061,7 @@ export default function Home() {
         {isProjectView && (
           <section className="active-project-context" aria-label="Proiect activ și operațiuni">
             <label className="active-project-picker">
-              <span>PROIECT ACTIV</span>
+              <span>{activeProject.activityType === "Intervenție" ? "TICHET ACTIV" : "PROIECT ACTIV"}</span>
               <select value={activeProjectId} onChange={(event) => changeActiveProject(event.target.value)}>
                 {projects.filter((project) => project.activityType === activeProject.activityType).map((project) => <option key={project.id} value={project.id}>{project.id} · {project.client}</option>)}
               </select>
@@ -1110,7 +1111,7 @@ export default function Home() {
                 <div className="view-controls"><button className="icon-toggle active" aria-label="Vizualizare listă">☷</button><button className="icon-toggle" aria-label="Vizualizare grilă">▦</button></div>
               </div>
               <div className="toolbar">
-                <label className="search-box"><span>⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Caută după RID, client, adresă..." /></label>
+                <label className="search-box"><span>⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={currentListView === "interventions" ? "Caută după tichet, client, adresă..." : "Caută după RID, client, adresă..."} /></label>
                 <div className="filters">
                   <select value={filter} onChange={(event) => setFilter(event.target.value)} aria-label="Filtru status">
                     <option>Toate statusurile</option><option>Planificat</option><option>În desfășurare</option><option>De verificat</option><option>Finalizat</option>
@@ -1121,11 +1122,11 @@ export default function Home() {
 
               <div className="table-wrap">
                 <table>
-                  <thead><tr><th>REQUEST ID</th><th>CLIENT / ADRESĂ</th><th>TEHNICIAN</th><th>STATUS</th><th>PROGRAMARE</th><th /></tr></thead>
+                  <thead><tr><th>{currentListView === "interventions" ? "NUMĂR TICHET" : "REQUEST ID"}</th><th>CLIENT / ADRESĂ</th><th>TEHNICIAN</th><th>STATUS</th><th>PROGRAMARE</th><th /></tr></thead>
                   <tbody>
                     {filteredProjects.map((project) => (
                       <tr className={project.id === activeProject.id ? "active-project-row" : ""} key={project.id} onClick={() => setSelected(project)} tabIndex={0} onKeyDown={(event) => event.key === "Enter" && setSelected(project)}>
-                        <td><strong className="rid">{project.id}</strong><small>{project.id === activeProject.id ? "Proiect activ" : "Salvat permanent"}</small></td>
+                        <td><strong className="rid">{project.id}</strong><small>{project.id === activeProject.id ? project.activityType === "Intervenție" ? "Tichet activ" : "Proiect activ" : "Salvat permanent"}</small></td>
                         <td><strong>{project.client}</strong><small>{project.address}</small></td>
                         <td><div className="technician"><span className="avatar">{initials(project.technician)}</span><strong>{project.technician}</strong></div></td>
                         <td><span className={statusClass[project.status]}><i />{project.status}</span></td>
@@ -1372,9 +1373,13 @@ export default function Home() {
           <form className="modal project-modal" onSubmit={modal === "edit-project" ? saveProjectChanges : createProject}>
             <div className="modal-head"><div><span className="modal-kicker">{editingProject ? "EDITARE LUCRARE" : currentActivitySection.title.toUpperCase()}</span><h2>{editingProject ? `Actualizează ${editingProject.id}` : currentActivitySection.createLabel}</h2><p>{editingProject ? "Modificările se salvează permanent pentru lucrarea selectată." : isInstallationForm ? "Datele inițiale pentru instalarea B2B." : formActivityType === "Intervenție" ? "Datele și cerințele specifice intervenției." : "Datele și obiectivele vizitei de survey."}</p></div><button type="button" onClick={closeModal} aria-label="Închide">×</button></div>
             <div className="modal-body">
-              <div className="form-section"><h3><span>1</span> Date proiect și client</h3><div className="form-grid">
+              <div className="form-section"><h3><span>1</span> {formActivityType === "Intervenție" ? "Date tichet și client" : "Date proiect și client"}</h3><div className="form-grid">
                 <input type="hidden" name="activityType" value={formActivityType} />
-                <label><span>Request ID *</span><div className="prefix-input"><b>RID</b><input name="requestId" required readOnly={Boolean(editingProject)} defaultValue={editingProject?.id.replace(/^RID/i, "")} inputMode="numeric" placeholder="ex. 10483" /></div></label>
+                {formActivityType === "Intervenție" ? (
+                  <label><span>Număr tichet *</span><input name="requestId" required readOnly={Boolean(editingProject)} defaultValue={editingProject?.id} maxLength={40} pattern="[A-Za-z0-9][A-Za-z0-9._-]{0,39}" title="Folosește litere, cifre, punct, cratimă sau underscore." placeholder="ex. INC-10483" /></label>
+                ) : (
+                  <label><span>Request ID *</span><div className="prefix-input"><b>RID</b><input name="requestId" required readOnly={Boolean(editingProject)} defaultValue={editingProject?.id.replace(/^RID/i, "")} inputMode="numeric" placeholder="ex. 10483" /></div></label>
+                )}
                 <label><span>Nume client *</span><input name="client" required defaultValue={editingProject?.client} placeholder="Denumirea companiei" /></label>
                 <label className="wide"><span>{isInstallationForm ? "Adresă instalare" : "Adresă lucrare"} *</span><input name="address" required defaultValue={editingProject?.address} placeholder="Stradă, număr, localitate" /></label>
                 <label><span>Persoană de contact *</span><input name="contact" required defaultValue={editingProject?.contact} placeholder="Nume și prenume" /></label>
@@ -1398,7 +1403,7 @@ export default function Home() {
               </div></div>}
               <div className="drive-note"><span className="drive-mark"><i /><i /><i /></span><div><strong>{driveStatus?.connected ? "Google Drive conectat" : "Stocare securizată proiect"}</strong><p>{driveStatus?.connected ? <>Dosarul lucrării se creează automat în <b>{formActivityType === "Intervenție" ? "Interventii" : formActivityType === "Survey" ? "Survey" : "Instalari"}</b>.</> : <>Documentele sunt salvate permanent. Configurează <b>Google Drive</b> din secțiunea administrativă pentru sincronizare automată.</>}</p></div></div>
             </div>
-            <div className="modal-actions"><button type="button" className="secondary-button" onClick={closeModal}>Anulează</button><button className="primary-button" type="submit" disabled={projectSaving}>{projectSaving ? "Se salvează..." : editingProject ? "Salvează modificările" : "Generează proiectul"} <span>→</span></button></div>
+            <div className="modal-actions"><button type="button" className="secondary-button" onClick={closeModal}>Anulează</button><button className="primary-button" type="submit" disabled={projectSaving}>{projectSaving ? "Se salvează..." : editingProject ? "Salvează modificările" : formActivityType === "Intervenție" ? "Creează intervenția" : "Generează proiectul"} <span>→</span></button></div>
           </form>
         )}
         {modal === "delete-project" && deletingProject && (
@@ -1442,11 +1447,11 @@ export default function Home() {
         {selected.activityType === "Instalare" && <div className="drawer-section"><small>DOCUMENTE</small><button className="file-row" onClick={() => void openProjectFile(selected.id, "ipwo")}><span>PDF</span><div><strong>{selected.ipwo}</strong><small>IPWO</small></div><b>↗</b></button><button className="file-row" onClick={() => void openProjectFile(selected.id, "splice-diagram")}><span>FO</span><div><strong>{selected.splice}</strong><small>Diagramă suduri</small></div><b>↗</b></button></div>}
         <div className="drive-folder"><span className="folder-icon">▰</span><div><small>{driveStatus?.folders[selected.id] ? "GOOGLE DRIVE" : "STOCARE SECURIZATĂ"}</small><strong>Dosar {selected.id}</strong></div>{driveStatus?.folders[selected.id] ? <a className="drive-folder-open" href={driveStatus.folders[selected.id]} target="_blank" rel="noreferrer" aria-label={`Deschide dosarul Google Drive ${selected.id}`}>↗</a> : <span>✓</span>}</div>
         <div className="drawer-project-actions">
-          <button className="primary-button" onClick={() => openProject(selected)}>Deschide proiectul <span>→</span></button>
-          {canManageDocuments && <button className="secondary-button" onClick={() => openProjectEditor(selected)}>Editează proiectul</button>}
+          <button className="primary-button" onClick={() => openProject(selected)}>{selected.activityType === "Intervenție" ? "Deschide intervenția" : "Deschide proiectul"} <span>→</span></button>
+          {canManageDocuments && <button className="secondary-button" onClick={() => openProjectEditor(selected)}>{selected.activityType === "Intervenție" ? "Editează intervenția" : "Editează proiectul"}</button>}
           {canManageDocuments && selected.activityType === "Instalare" && <button className="secondary-button" onClick={() => openProjectDocuments(selected)}>Documente administrative</button>}
-          {canManageDocuments && <button className="secondary-button" style={{ color: "#b42336", borderColor: "#ecc8cc" }} onClick={() => openProjectDeletion(selected)}>Șterge proiectul</button>}
-          <small>{selected.activityType === "Instalare" ? "Client, traseu, suduri, operațiuni site și închiderea proiectului" : selected.activityType === "Intervenție" ? "Fișă și cerințe dedicate intervenției" : "Fișă și obiective dedicate survey-ului"}</small>
+          {canManageDocuments && <button className="secondary-button" style={{ color: "#b42336", borderColor: "#ecc8cc" }} onClick={() => openProjectDeletion(selected)}>{selected.activityType === "Intervenție" ? "Șterge intervenția" : "Șterge proiectul"}</button>}
+          <small>{selected.activityType === "Instalare" ? "Client, traseu, suduri, operațiuni site și închiderea proiectului" : selected.activityType === "Intervenție" ? "Constatare, execuție și documentarea intervenției" : "Fișă și obiective dedicate survey-ului"}</small>
         </div>
       </aside></div>}
 

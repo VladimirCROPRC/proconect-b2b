@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { getRawDb } from "../db";
-import type { ProjectFieldDocumentation } from "./field-documentation";
+import { requiredInterventionCablePhotos, type InterventionExecutionActivity, type InterventionExecutionSummary, type InterventionJunction, type ProjectFieldDocumentation } from "./field-documentation";
 import { initialCpeCatalog, initialFieldDocumentation, initialProjects, type ProjectActivityType, type ProjectRecord } from "./project-data";
 import type { AuthenticatedAccount } from "./server-auth";
 
@@ -49,8 +49,14 @@ type StorageEnvironment = {
 };
 
 const storageEnvironment = env as unknown as StorageEnvironment;
-const fileSections = new Set(["project", "client", "route", "splices", "site", "documents", "intervention-assessment"]);
+const fileSections = new Set(["project", "client", "route", "splices", "site", "documents", "intervention-assessment", "intervention-execution"]);
 const maximumUploadBytes = 20 * 1024 * 1024;
+
+function validWorkIdentifier(value: string, activityType: ProjectActivityType) {
+  return activityType === "Intervenție"
+    ? /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,39}$/.test(value)
+    : /^RID\d{1,24}$/i.test(value);
+}
 
 export function hasValidPhotoCoordinates(value: string) {
   const coordinates = /^(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)(?:\s|$)/.exec(value.trim());
@@ -58,6 +64,12 @@ export function hasValidPhotoCoordinates(value: string) {
   const latitude = Number(coordinates[1]);
   const longitude = Number(coordinates[2]);
   return Number.isFinite(latitude) && Number.isFinite(longitude) && Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180;
+}
+
+function validInterventionJunction(value: InterventionJunction | undefined) {
+  if (!value || !Number.isFinite(value.lat) || !Number.isFinite(value.lon) || Math.abs(value.lat) > 90 || Math.abs(value.lon) > 180) return false;
+  if (value.documented) return value.kind === "documented" && typeof value.code === "string" && Boolean(value.code.trim());
+  return (value.kind === "existing" || value.kind === "new") && (value.network === "mobile" || value.network === "fixed");
 }
 
 export function isManagementRole(account: AuthenticatedAccount) {
@@ -173,14 +185,22 @@ export async function getAuthorizedProject(projectId: string, account: Authentic
 }
 
 export async function createProject(input: ProjectRecord, createdBy: AuthenticatedAccount) {
-  if (!/^RID\d{1,24}$/i.test(input.id)) return { error: "Request ID trebuie să conțină doar prefixul RID și cifre.", status: 400 as const };
   const activityType: ProjectActivityType = ["Instalare", "Intervenție", "Survey"].includes(input.activityType) ? input.activityType : "Instalare";
+  const workId = typeof input.id === "string" ? input.id.trim().toUpperCase() : "";
+  if (!validWorkIdentifier(workId, activityType)) {
+    return {
+      error: activityType === "Intervenție"
+        ? "Numărul tichetului trebuie să conțină litere, cifre, punct, cratimă sau underscore."
+        : "Request ID trebuie să conțină doar prefixul RID și cifre.",
+      status: 400 as const,
+    };
+  }
   const required = [input.client, input.address, input.contact, input.phone, input.requirements, input.technician, ...(activityType === "Instalare" ? [input.cpe] : [])];
   if (required.some((value) => typeof value !== "string" || !value.trim())) {
     return { error: "Completează toate informațiile obligatorii ale proiectului.", status: 400 as const };
   }
-  const existing = await getRawDb().prepare("SELECT id FROM projects WHERE id = ? LIMIT 1").bind(input.id).first();
-  if (existing) return { error: "Request ID există deja. Verifică numărul introdus.", status: 409 as const };
+  const existing = await getRawDb().prepare("SELECT id FROM projects WHERE id = ? LIMIT 1").bind(workId).first();
+  if (existing) return { error: activityType === "Intervenție" ? "Numărul tichetului există deja. Verifică valoarea introdusă." : "Request ID există deja. Verifică numărul introdus.", status: 409 as const };
 
   const technician = await getRawDb()
     .prepare("SELECT username, name FROM app_users WHERE name = ? AND role = 'Tehnician' AND active = 1 LIMIT 1")
@@ -190,7 +210,7 @@ export async function createProject(input: ProjectRecord, createdBy: Authenticat
 
   const project: ProjectRecord = {
     ...input,
-    id: input.id.toUpperCase(),
+    id: workId,
     activityType,
     client: input.client.trim(),
     address: input.address.trim(),
@@ -213,8 +233,10 @@ export async function createProject(input: ProjectRecord, createdBy: Authenticat
 }
 
 export async function updateProject(input: ProjectRecord) {
-  if (!/^RID\d{1,24}$/i.test(input.id)) return { error: "Request ID-ul proiectului nu este valid.", status: 400 as const };
   const activityType: ProjectActivityType = ["Instalare", "Intervenție", "Survey"].includes(input.activityType) ? input.activityType : "Instalare";
+  if (!validWorkIdentifier(input.id, activityType)) {
+    return { error: activityType === "Intervenție" ? "Numărul tichetului nu este valid." : "Request ID-ul proiectului nu este valid.", status: 400 as const };
+  }
   const required = [input.client, input.address, input.contact, input.phone, input.requirements, input.technician, ...(activityType === "Instalare" ? [input.cpe] : [])];
   if (required.some((value) => typeof value !== "string" || !value.trim())) {
     return { error: "Completează toate informațiile obligatorii ale proiectului.", status: 400 as const };
@@ -290,7 +312,9 @@ export async function updateProject(input: ProjectRecord) {
 }
 
 export async function deleteProject(projectId: string) {
-  if (!/^RID\d{1,24}$/i.test(projectId)) return { error: "Request ID-ul proiectului nu este valid.", status: 400 as const };
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,39}$/.test(projectId)) {
+    return { error: "Identificatorul lucrării sau numărul tichetului nu este valid.", status: 400 as const };
+  }
 
   const project = await getRawDb()
     .prepare("SELECT id, technician_username FROM projects WHERE id = ? LIMIT 1")
@@ -337,7 +361,8 @@ export async function saveFieldDocumentation(projectId: string, section: string,
       return { error: "Constatarea este disponibilă numai pentru intervenții.", status: 400 as const };
     }
 
-    const assessment = (content as { assessment?: { damageType?: unknown } })?.assessment;
+    const intervention = content as { assessment?: { damageType?: unknown }; execution?: Partial<InterventionExecutionSummary> };
+    const assessment = intervention?.assessment;
     if (!assessment || !["FO cut", "Atenuare", "Echipament"].includes(String(assessment.damageType))) {
       return { error: "Selectează tipul avariei înainte de salvarea constatării.", status: 400 as const };
     }
@@ -349,6 +374,63 @@ export async function saveFieldDocumentation(projectId: string, section: string,
 
     if (!(photos.results ?? []).some((photo) => hasValidPhotoCoordinates(photo.geolocation))) {
       return { error: "Încarcă cel puțin o fotografie a avariei cu coordonate GPS valide.", status: 400 as const };
+    }
+
+    if (intervention.execution) {
+      const execution = intervention.execution;
+      if (!Array.isArray(execution.activities) || execution.activities.length < 1 || execution.activities.length > 100) {
+        return { error: "Adaugă cel puțin o activitate validă pentru execuția intervenției.", status: 400 as const };
+      }
+
+      const executionPhotos = await getRawDb()
+        .prepare("SELECT category, geolocation FROM project_files WHERE project_id = ? AND section = ?")
+        .bind(projectId, "intervention-execution")
+        .all<{ category: string; geolocation: string }>();
+      const geotaggedExecutionPhotos = (executionPhotos.results ?? []).filter((photo) => hasValidPhotoCoordinates(photo.geolocation));
+      const identifiers = new Set<string>();
+
+      for (const item of execution.activities as InterventionExecutionActivity[]) {
+        if (!item || typeof item.id !== "string" || !/^[a-f0-9-]{36}$/i.test(item.id) || identifiers.has(item.id)) {
+          return { error: "Activitățile intervenției nu sunt identificate corect.", status: 400 as const };
+        }
+        identifiers.add(item.id);
+        if (!["fo-installation", "junction-installation", "diagnostics", "splice-repair"].includes(item.type)) {
+          return { error: "Tipul activității intervenției nu este valid.", status: 400 as const };
+        }
+
+        let requiredPhotos = 1;
+        if (item.type === "fo-installation") {
+          if (!validInterventionJunction(item.endpointA) || !validInterventionJunction(item.endpointB)) {
+            return { error: "Completează ambele joncțiuni ale traseului FO și rețeaua punctelor nedocumentate.", status: 400 as const };
+          }
+          if (!Array.isArray(item.routePoints) || item.routePoints.length < 2 || item.routePoints.length > 500 || item.routePoints.some((point) => !Number.isFinite(point.lat) || !Number.isFinite(point.lon))) {
+            return { error: "Trasează cablul FO între cele două joncțiuni pe hartă.", status: 400 as const };
+          }
+          const cableType = typeof item.cableType === "string" ? item.cableType.trim() : "";
+          const cableLength = typeof item.cableLengthMeters === "number" ? item.cableLengthMeters : 0;
+          if (cableType.length < 2 || cableType.length > 120) {
+            return { error: "Completează tipul cablului FO instalat.", status: 400 as const };
+          }
+          if (!Number.isFinite(cableLength) || cableLength <= 0 || cableLength > 1_000_000) {
+            return { error: "Introdu o lungime validă pentru cablul FO instalat.", status: 400 as const };
+          }
+          requiredPhotos = requiredInterventionCablePhotos(cableLength);
+        } else {
+          if (!validInterventionJunction(item.junction)) {
+            return { error: "Selectează sau plasează joncțiunea și completează rețeaua Vodafone.", status: 400 as const };
+          }
+          if (item.type === "junction-installation" && (item.junction?.documented || item.junction?.kind !== "new")) {
+            return { error: "Joncțiunea nouă trebuie plasată pe hartă și asociată unei rețele Vodafone.", status: 400 as const };
+          }
+        }
+
+        const activityPhotos = geotaggedExecutionPhotos.filter((photo) => photo.category === `${item.id}:photo`).length;
+        if (activityPhotos < requiredPhotos) {
+          return { error: item.type === "fo-installation"
+            ? `Pentru ${item.cableLengthMeters} m sunt obligatorii ${requiredPhotos} fotografii GPS ale instalării FO.`
+            : "Încarcă cel puțin o fotografie cu GPS din care să reiasă remedierea.", status: 400 as const };
+        }
+      }
     }
   }
 

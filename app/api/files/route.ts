@@ -41,12 +41,15 @@ export async function POST(request: Request) {
     }
     const project = await getAuthorizedProject(projectId, session.account);
     if (!project) return Response.json({ error: "Proiect indisponibil." }, { status: 404 });
-    if (section === "intervention-assessment") {
+    if (section === "intervention-assessment" || section === "intervention-execution") {
       if (project.activity_type !== "Intervenție") {
-        return Response.json({ error: "Fotografiile constatării sunt disponibile numai pentru intervenții." }, { status: 400 });
+        return Response.json({ error: "Aceste fotografii sunt disponibile numai pentru intervenții." }, { status: 400 });
       }
       if (typeof geo !== "string" || !hasValidPhotoCoordinates(geo)) {
-        return Response.json({ error: "Fotografiile constatării necesită coordonate GPS valide." }, { status: 400 });
+        return Response.json({ error: "Fotografiile intervenției necesită coordonate GPS valide." }, { status: 400 });
+      }
+      if ((section === "intervention-assessment" && category !== "damage") || (section === "intervention-execution" && !/^[a-f0-9-]{36}:photo$/i.test(category))) {
+        return Response.json({ error: "Categoria fotografiei intervenției nu este validă." }, { status: 400 });
       }
     }
     const validation = validateUpload(section, category, file);

@@ -8303,15 +8303,479 @@ td > small {
   text-align: center;
 }
 
+.intervention-execution-shell {
+  display: grid;
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.intervention-activities-heading {
+  display: flex;
+  min-height: 90px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  padding: 17px 20px;
+}
+
+.intervention-activities-heading h2 {
+  margin: 0;
+  color: #263248;
+  font-size: 15px;
+}
+
+.intervention-activities-heading p {
+  margin: 6px 0 0;
+  color: #74808c;
+  font-size: 12px;
+}
+
+.intervention-execution-notice {
+  padding: 13px 15px;
+  border: 1px solid #f1ddaf;
+  border-radius: 8px;
+  color: #825b19;
+  background: #fffaf0;
+  font-size: 13px;
+}
+
+.intervention-type-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 11px;
+  padding: 17px 19px 20px;
+}
+
+.intervention-type-grid > button {
+  display: grid;
+  min-height: 123px;
+  align-content: start;
+  gap: 8px;
+  padding: 13px;
+  border: 1px solid #dfe4ee;
+  border-radius: 8px;
+  background: #fbfcff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.intervention-type-grid > button.active {
+  border-color: #55639a;
+  background: #f0f3fd;
+  box-shadow: 0 0 0 2px rgba(85, 99, 154, .12);
+}
+
+.intervention-type-grid > button:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+.intervention-type-grid > button > span,
+.intervention-records-list > article > span {
+  display: grid;
+  width: 33px;
+  height: 33px;
+  place-items: center;
+  border-radius: 7px;
+  color: #455492;
+  background: #e9edfa;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.intervention-type-grid > button > strong {
+  color: #344054;
+  font-size: 12px;
+}
+
+.intervention-type-grid > button > small {
+  color: #747f8b;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.intervention-map-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(320px, .9fr);
+  align-items: start;
+  gap: 16px;
+}
+
+.intervention-map-head {
+  min-height: 77px;
+}
+
+.intervention-map-head small {
+  font-size: 9px;
+}
+
+.intervention-map-head strong {
+  font-size: 12px;
+}
+
+.intervention-map-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.intervention-map-actions > button,
+.intervention-route-toolbar > button {
+  min-height: 33px;
+  padding: 0 9px;
+  border: 1px solid #dce1eb;
+  border-radius: 5px;
+  color: #59647c;
+  background: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.intervention-map-actions > button.active {
+  border-color: #3b4984;
+  color: #fff;
+  background: #3b4984;
+}
+
+.intervention-map-actions > button:disabled,
+.intervention-route-toolbar > button:disabled {
+  opacity: .48;
+  cursor: not-allowed;
+}
+
+.fo-map.intervention-execution-map {
+  min-height: 440px;
+}
+
+.intervention-field-marker > i {
+  background: #cd7b25;
+}
+
+.intervention-saved-route {
+  fill: none;
+  stroke: #8892a8;
+  stroke-dasharray: 8 6;
+  stroke-linecap: round;
+  stroke-width: 4;
+}
+
+.intervention-empty-card {
+  min-height: 303px;
+}
+
+.intervention-activity-form-body {
+  display: grid;
+  gap: 15px;
+  padding: 17px 15px 19px;
+}
+
+.intervention-junction-panel {
+  overflow: hidden;
+  border: 1px solid #e1e5ee;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.intervention-junction-panel.selected {
+  border-color: #6572a3;
+  box-shadow: 0 0 0 2px rgba(85, 99, 154, .1);
+}
+
+.intervention-junction-select {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 11px;
+  border: 0;
+  background: #fbfcfe;
+  text-align: left;
+  cursor: pointer;
+}
+
+.intervention-junction-select > span {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 7px;
+  color: #fff;
+  background: #4d5b91;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.intervention-junction-select > div {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.intervention-junction-select small {
+  color: #738092;
+  font-size: 9px;
+  font-weight: 750;
+}
+
+.intervention-junction-select strong {
+  overflow: hidden;
+  color: #364257;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.intervention-junction-select > b {
+  color: #347768;
+  font-size: 14px;
+}
+
+.intervention-junction-coordinates {
+  margin: 0;
+  padding: 0 11px 10px;
+  color: #667387;
+  font-size: 11px;
+}
+
+.intervention-junction-options {
+  display: grid;
+  gap: 12px;
+  padding: 11px;
+  border-top: 1px solid #e8ebf1;
+}
+
+.intervention-junction-options fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.intervention-junction-options legend {
+  margin-bottom: 7px;
+  color: #637085;
+  font-size: 9px;
+  font-weight: 750;
+}
+
+.intervention-junction-options fieldset > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.intervention-junction-options fieldset button {
+  min-height: 34px;
+  padding: 0 5px;
+  border: 1px solid #dce1eb;
+  border-radius: 5px;
+  color: #596477;
+  background: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.intervention-junction-options fieldset button.active {
+  border-color: #58669a;
+  color: #3b4984;
+  background: #eef1fb;
+}
+
+.intervention-route-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.intervention-route-distance {
+  margin: 0;
+  color: #657084;
+  font-size: 11px;
+}
+
+.intervention-route-distance > strong {
+  color: #394978;
+}
+
+.intervention-damage-field > input {
+  width: 100%;
+  min-height: 43px;
+  padding: 0 11px;
+  border: 1px solid #d9dfeb;
+  border-radius: 7px;
+  color: #273449;
+  background: #fff;
+  font-size: 13px;
+}
+
+.intervention-photo-thresholds {
+  margin-top: 0;
+}
+
+.intervention-photo-thresholds b,
+.intervention-photo-thresholds small {
+  font-size: 9px;
+}
+
+.intervention-activity-photo-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.intervention-activity-photo-title > strong {
+  color: #344054;
+  font-size: 12px;
+}
+
+.intervention-activity-photo-title > span {
+  padding: 5px 8px;
+  border-radius: 5px;
+  color: #465591;
+  background: #edf0fb;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.intervention-activity-upload {
+  min-height: 118px;
+  padding: 13px;
+}
+
+.intervention-photo-upload.is-disabled {
+  opacity: .6;
+  cursor: not-allowed;
+}
+
+.intervention-activity-photo-list {
+  display: grid;
+  gap: 7px;
+}
+
+.intervention-activity-photo-list > article {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) 24px;
+  align-items: center;
+  gap: 7px;
+  padding: 8px;
+  border: 1px solid #e1e6ee;
+  border-radius: 7px;
+  background: #fbfcfe;
+}
+
+.intervention-activity-photo-list > article > span {
+  color: #25836e;
+  text-align: center;
+}
+
+.intervention-activity-photo-list > article > div {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.intervention-activity-photo-list strong {
+  overflow: hidden;
+  color: #384357;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.intervention-activity-photo-list small {
+  color: #718093;
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.intervention-activity-photo-list > article > button {
+  border: 0;
+  color: #b53546;
+  background: transparent;
+  font-size: 19px;
+  cursor: pointer;
+}
+
+.intervention-activity-actions {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+}
+
+.intervention-activity-actions .primary-button {
+  min-width: 0;
+  padding: 0 11px;
+  font-size: 11px;
+}
+
+.intervention-activity-actions .primary-button:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+.intervention-records-list {
+  display: grid;
+  gap: 1px;
+  padding: 8px 13px 13px;
+}
+
+.intervention-records-list > article {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 7px;
+  border-bottom: 1px solid #edf0f4;
+}
+
+.intervention-records-list > article:last-child {
+  border-bottom: 0;
+}
+
+.intervention-records-list > article > div {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.intervention-records-list > article > div > strong {
+  color: #344054;
+  font-size: 12px;
+}
+
+.intervention-records-list > article > div > small {
+  overflow: hidden;
+  color: #74808c;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.intervention-records-list > article > b {
+  color: #347768;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 @media (max-width: 850px) {
   .drive-settings-layout,
   .activity-workspace-grid,
-  .intervention-section-layout {
+  .intervention-section-layout,
+  .intervention-map-layout {
     grid-template-columns: 1fr;
   }
 
   .intervention-summary {
     position: static;
+  }
+
+  .intervention-type-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -8405,7 +8869,8 @@ td > small {
     padding: 17px 16px 19px;
   }
 
-  .intervention-damage-field > select {
+  .intervention-damage-field > select,
+  .intervention-damage-field > input {
     min-height: 47px;
     font-size: 16px;
   }
@@ -8426,5 +8891,48 @@ td > small {
 
   .intervention-photo-grid {
     grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  }
+
+  .intervention-activities-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 16px;
+  }
+
+  .intervention-activities-heading .primary-button {
+    width: 100%;
+  }
+
+  .intervention-type-grid {
+    gap: 9px;
+    padding: 13px 12px 15px;
+  }
+
+  .intervention-type-grid > button > small,
+  .intervention-junction-options fieldset button,
+  .intervention-map-actions > button,
+  .intervention-activity-photo-list small {
+    font-size: 11px;
+  }
+
+  .intervention-map-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .intervention-map-actions {
+    justify-content: flex-start;
+  }
+
+  .fo-map.intervention-execution-map {
+    min-height: 390px;
+  }
+
+  .intervention-records-list > article {
+    grid-template-columns: 35px minmax(0, 1fr);
+  }
+
+  .intervention-records-list > article > b {
+    grid-column: 2;
   }
 }

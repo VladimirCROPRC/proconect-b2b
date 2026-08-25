@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { deleteProjectFile, fetchProjectFiles, formatCapturedAt, uploadProjectFile, type StoredProjectFile } from "./client-storage";
+import { InterventionExecutionSection } from "./intervention-execution";
 import type { InterventionDamageType, InterventionFieldSummary } from "./field-documentation";
 import type { ProjectRecord } from "./project-data";
 
@@ -34,7 +35,7 @@ function validPhotoCoordinates(value: string) {
 
 async function currentPhotoLocation() {
   if (!window.isSecureContext || !navigator.geolocation) {
-    throw new Error("Fotografiile constatării necesită un dispozitiv și o conexiune cu acces GPS.");
+    throw new Error("Fotografiile intervenției necesită un dispozitiv și o conexiune cu acces GPS.");
   }
 
   return new Promise<string>((resolve, reject) => {
@@ -45,7 +46,7 @@ async function currentPhotoLocation() {
       (failure) => {
         reject(new Error(
           failure.code === failure.PERMISSION_DENIED
-            ? "Permite accesul la locație pentru a încărca fotografiile constatării."
+            ? "Permite accesul la locație pentru a încărca fotografiile intervenției."
             : failure.code === failure.TIMEOUT
               ? "Localizarea GPS a durat prea mult. Activează locația și încearcă din nou."
               : "Poziția GPS nu a putut fi determinată. Verifică localizarea dispozitivului.",
@@ -85,11 +86,11 @@ export function InterventionOperationsSection({
     });
 
     fetchProjectFiles(project.id, "intervention-assessment")
-      .then((storedPhotos) => {
-        if (mounted) setPhotos(storedPhotos);
+      .then((assessmentPhotos) => {
+        if (mounted) setPhotos(assessmentPhotos);
       })
       .catch((failure) => {
-        if (mounted) setError(failure instanceof Error ? failure.message : "Fotografiile constatării nu au putut fi încărcate.");
+        if (mounted) setError(failure instanceof Error ? failure.message : "Fotografiile intervenției nu au putut fi încărcate.");
       })
       .finally(() => {
         if (mounted) setLoadingPhotos(false);
@@ -126,7 +127,7 @@ export function InterventionOperationsSection({
         ? "Fotografia avariei a fost salvată cu poziția GPS."
         : `${selectedFiles.length} fotografii ale avariei au fost salvate cu poziția GPS.`);
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : "Fotografiile constatării nu au putut fi încărcate.");
+      setError(failure instanceof Error ? failure.message : "Fotografiile intervenției nu au putut fi încărcate.");
     } finally {
       setUploading(false);
     }
@@ -138,7 +139,7 @@ export function InterventionOperationsSection({
     try {
       await deleteProjectFile(photo.id);
       setPhotos((current) => current.filter((item) => item.id !== photo.id));
-      onNotify("Fotografia constatării a fost ștearsă.");
+      onNotify("Fotografia intervenției a fost ștearsă.");
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : "Fotografia nu a putut fi ștearsă.");
     } finally {
@@ -273,10 +274,12 @@ export function InterventionOperationsSection({
             <button className="primary-button submit-documentation" type="submit" disabled={!ready || saving || uploading || loadingPhotos}>{saving ? "Se salvează..." : "Salvează constatarea"} <span>→</span></button>
           </aside>
         </form>
+      ) : section === "execution" ? (
+        <InterventionExecutionSection project={project} initialSummary={initialSummary} onNotify={onNotify} onSaved={onSaved} />
       ) : (
         <section className="project-card activity-workflow-card intervention-pending-card">
-          <div className="card-heading"><div><h2>{section === "execution" ? "Execuția intervenției" : "Documentarea intervenției"}</h2><p>Secțiune separată, dedicată intervențiilor.</p></div></div>
-          <p>{section === "execution" ? "Operațiunile și materialele necesare remedierii vor fi configurate separat." : "Documentele și fotografiile finale ale intervenției vor fi configurate separat."}</p>
+          <div className="card-heading"><div><h2>Documentarea intervenției</h2><p>Secțiune separată, dedicată intervențiilor.</p></div></div>
+          <p>Documentele și fotografiile finale ale intervenției vor fi configurate separat.</p>
         </section>
       )}
     </div>

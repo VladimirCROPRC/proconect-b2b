@@ -72,8 +72,50 @@ export type InterventionAssessmentSummary = {
   documentedAt: number;
 };
 
+export type InterventionActivityType = "fo-installation" | "junction-installation" | "diagnostics" | "splice-repair";
+
+export type InterventionJunction = {
+  id: string;
+  code: string;
+  name: string;
+  region: string;
+  lat: number;
+  lon: number;
+  documented: boolean;
+  kind: "documented" | "existing" | "new";
+  network?: "mobile" | "fixed";
+};
+
+export type InterventionExecutionActivity = {
+  id: string;
+  type: InterventionActivityType;
+  junction?: InterventionJunction;
+  endpointA?: InterventionJunction;
+  endpointB?: InterventionJunction;
+  routePoints?: Array<{ lat: number; lon: number }>;
+  cableType?: string;
+  cableLengthMeters?: number;
+  photoCount: number;
+  requiredPhotoCount: number;
+  documentedAt: number;
+};
+
+export type InterventionExecutionSummary = {
+  activities: InterventionExecutionActivity[];
+  documentedAt: number;
+};
+
+export function requiredInterventionCablePhotos(lengthMeters: number) {
+  if (!Number.isFinite(lengthMeters) || lengthMeters <= 0) return 0;
+  if (lengthMeters <= 100) return 3;
+  if (lengthMeters <= 200) return 5;
+  if (lengthMeters <= 300) return 10;
+  return 15;
+}
+
 export type InterventionFieldSummary = {
   assessment?: InterventionAssessmentSummary;
+  execution?: InterventionExecutionSummary;
 };
 
 export type ProjectFieldDocumentation = {

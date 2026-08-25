@@ -227,7 +227,7 @@ export function GoogleDriveSettings({ initialStatus, onStatusChange, onNotify }:
       {error && <div className="drive-inline-error" role="alert"><strong>Conectarea necesită atenție</strong><span>{error}</span></div>}
 
       <section className="drive-sync-metrics" aria-label="Starea sincronizării Google Drive">
-        <article><small>PROIECTE CU DOSAR DRIVE</small><strong>{status?.projectsSynced ?? 0}<span> / {status?.projectsTotal ?? 0}</span></strong><p>Structuri RID create</p></article>
+        <article><small>LUCRĂRI CU DOSAR DRIVE</small><strong>{status?.projectsSynced ?? 0}<span> / {status?.projectsTotal ?? 0}</span></strong><p>Dosare RID și tichete create</p></article>
         <article><small>FIȘIERE SINCRONIZATE</small><strong>{status?.filesSynced ?? 0}<span> / {status?.filesTotal ?? 0}</span></strong><p>Documente și fotografii</p></article>
         <article><small>ACCES ȘI SECURITATE</small><strong>{status?.connected ? "Activ" : "Protejat"}</strong><p>Date criptate, acces administrativ</p></article>
       </section>
@@ -260,7 +260,7 @@ export function GoogleDriveSettings({ initialStatus, onStatusChange, onNotify }:
             <div className="drive-tree-root"><span>▰</span><strong>Proconect B2B</strong></div>
             {Object.entries(activityFolders).map(([activity, folder]) => <div className="drive-activity-tree" key={activity}>
               <div className="drive-tree-project"><span>▰</span><strong>{folder}</strong><small>{activity === "Instalare" ? "Instalări B2B" : activity === "Intervenție" ? "Intervenții tehnice" : "Vizite și evaluări"}</small></div>
-              <div className="drive-tree-section"><span>▰</span><div><strong>{activity === "Instalare" ? "RID10482" : "RID + Request ID"}</strong><small>Dosarul lucrării</small></div></div>
+              <div className="drive-tree-section"><span>▰</span><div><strong>{activity === "Instalare" ? "RID10482" : activity === "Intervenție" ? "INC-10483 · Număr tichet" : "RID + Request ID"}</strong><small>{activity === "Intervenție" ? "Dosarul tichetului" : "Dosarul lucrării"}</small></div></div>
               {Object.entries(activitySections[activity] ?? {}).map(([section, name]) => <div className="drive-tree-section drive-tree-nested" key={section}><span>▰</span><div><strong>{name}</strong><small>{sectionLabels[section] ?? "Documentele lucrării"}</small></div></div>)}
             </div>)}
           </div>
