@@ -166,7 +166,8 @@ export async function getAuthorizedProject(projectId: string, account: Authentic
 
 export async function createProject(input: ProjectRecord, createdBy: AuthenticatedAccount) {
   if (!/^RID\d{1,24}$/i.test(input.id)) return { error: "Request ID trebuie să conțină doar prefixul RID și cifre.", status: 400 as const };
-  const required = [input.client, input.address, input.contact, input.phone, input.requirements, input.technician, input.cpe];
+  const activityType: ProjectActivityType = ["Instalare", "Intervenție", "Survey"].includes(input.activityType) ? input.activityType : "Instalare";
+  const required = [input.client, input.address, input.contact, input.phone, input.requirements, input.technician, ...(activityType === "Instalare" ? [input.cpe] : [])];
   if (required.some((value) => typeof value !== "string" || !value.trim())) {
     return { error: "Completează toate informațiile obligatorii ale proiectului.", status: 400 as const };
   }
@@ -182,7 +183,7 @@ export async function createProject(input: ProjectRecord, createdBy: Authenticat
   const project: ProjectRecord = {
     ...input,
     id: input.id.toUpperCase(),
-    activityType: ["Instalare", "Intervenție", "Survey"].includes(input.activityType) ? input.activityType : "Instalare",
+    activityType,
     client: input.client.trim(),
     address: input.address.trim(),
     contact: input.contact.trim(),
@@ -190,7 +191,7 @@ export async function createProject(input: ProjectRecord, createdBy: Authenticat
     email: input.email.trim(),
     requirements: input.requirements.trim(),
     technician: technician.name,
-    cpe: input.cpe.trim(),
+    cpe: typeof input.cpe === "string" ? input.cpe.trim() : "",
     status: "Planificat",
     date: input.date || "Astăzi",
     ipwo: input.ipwo || "Fișier neîncărcat",
@@ -205,7 +206,8 @@ export async function createProject(input: ProjectRecord, createdBy: Authenticat
 
 export async function updateProject(input: ProjectRecord) {
   if (!/^RID\d{1,24}$/i.test(input.id)) return { error: "Request ID-ul proiectului nu este valid.", status: 400 as const };
-  const required = [input.client, input.address, input.contact, input.phone, input.requirements, input.technician, input.cpe];
+  const activityType: ProjectActivityType = ["Instalare", "Intervenție", "Survey"].includes(input.activityType) ? input.activityType : "Instalare";
+  const required = [input.client, input.address, input.contact, input.phone, input.requirements, input.technician, ...(activityType === "Instalare" ? [input.cpe] : [])];
   if (required.some((value) => typeof value !== "string" || !value.trim())) {
     return { error: "Completează toate informațiile obligatorii ale proiectului.", status: 400 as const };
   }
@@ -233,7 +235,7 @@ export async function updateProject(input: ProjectRecord) {
     email: typeof input.email === "string" ? input.email.trim() : "",
     requirements: input.requirements.trim(),
     technician: technician.name,
-    cpe: input.cpe.trim(),
+    cpe: typeof input.cpe === "string" ? input.cpe.trim() : "",
     sfp: Boolean(input.sfp),
     mc: Boolean(input.mc),
     terminalBox: Boolean(input.terminalBox),

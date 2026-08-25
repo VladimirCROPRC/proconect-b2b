@@ -1,5 +1,6 @@
 import { env } from "cloudflare:workers";
 import { getRawDb } from "../db";
+import type { ProjectActivityType } from "./project-data";
 import { bucket, getFileRow, readReport } from "./project-server";
 
 type DriveEnvironment = { PROCONECT_DRIVE_ENCRYPTION_KEY?: string };
@@ -22,13 +23,20 @@ type FolderRow = {
   report_file_id: string;
 };
 type GoogleTokenResponse = { access_token?: string; refresh_token?: string; expires_in?: number };
-type GoogleFileResponse = { id?: string; webViewLink?: string; files?: Array<{ id: string; webViewLink?: string }> };
+type GoogleFileResponse = { id?: string; webViewLink?: string; parents?: string[]; files?: Array<{ id: string; webViewLink?: string }> };
 
 const driveEnvironment = env as unknown as DriveEnvironment;
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 const settingsId = "proconect-google-drive";
 const oauthScope = "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email";
+const activityFolderMarker = "__activityFolder";
+
+export const driveActivityFolders: Record<ProjectActivityType, string> = {
+  Instalare: "Instalari",
+  "Intervenție": "Interventii",
+  Survey: "Survey",
+};
 
 export const driveSectionFolders: Record<string, string> = {
   project: "01_Documente proiect",
@@ -37,6 +45,18 @@ export const driveSectionFolders: Record<string, string> = {
   splices: "04_Suduri FO",
   site: "05_Operatiuni site",
   documents: "06_Documente administrative",
+};
+
+const activitySectionFolders: Record<ProjectActivityType, Record<string, string>> = {
+  Instalare: driveSectionFolders,
+  "Intervenție": {
+    project: "01_Documente interventie",
+    documents: "02_Documente administrative",
+  },
+  Survey: {
+    project: "01_Documente survey",
+    documents: "02_Documente administrative",
+  },
 };
 
 function hexBytes(value: string) {
@@ -114,6 +134,7 @@ export async function getDriveStatus(request: Request) {
     filesSynced: syncedCount?.count ?? 0,
     folders,
     sections: driveSectionFolders,
+    activityFolders: driveActivityFolders,
   };
 }
 
@@ -221,6 +242,27 @@ async function findOrCreateFolder(name: string, parentId?: string) {
   return { id: created.id, webViewLink: created.webViewLink };
 }
 
+async function ensureActivityFolders(rootFolderId: string) {
+  const folders = {} as Record<ProjectActivityType, { id: string; webViewLink?: string }>;
+  for (const activity of Object.keys(driveActivityFolders) as ProjectActivityType[]) {
+    folders[activity] = await findOrCreateFolder(driveActivityFolders[activity], rootFolderId);
+  }
+  return folders;
+}
+
+async function moveFolderToParent(folderId: string, parentId: string) {
+  const metadataUrl = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(folderId)}?fields=id,parents,webViewLink`;
+  const metadata = await (await googleFetch(metadataUrl)).json() as GoogleFileResponse;
+  const currentParents = metadata.parents ?? [];
+  if (currentParents.includes(parentId)) return;
+
+  const destination = new URL(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(folderId)}`);
+  destination.searchParams.set("addParents", parentId);
+  if (currentParents.length) destination.searchParams.set("removeParents", currentParents.join(","));
+  destination.searchParams.set("fields", "id,parents,webViewLink");
+  await googleFetch(destination.toString(), { method: "PATCH" });
+}
+
 export async function finishDriveAuthorization(request: Request, userId: string, username: string, state: string, code: string) {
   const authorization = await getRawDb().prepare("SELECT encrypted_verifier, expires_at FROM google_drive_oauth_states WHERE id = ? AND user_id = ? LIMIT 1")
     .bind(state, userId).first<{ encrypted_verifier: string; expires_at: number }>();
@@ -245,19 +287,49 @@ export async function finishDriveAuthorization(request: Request, userId: string,
     .bind(profile.email ?? "Cont Google autorizat", await encryptSecret(tokens.access_token), await encryptSecret(tokens.refresh_token), now + (tokens.expires_in ?? 3600) * 1000, username, now, settingsId).run();
   const root = await findOrCreateFolder(configuration.root_folder_name);
   await getRawDb().prepare("UPDATE google_drive_settings SET root_folder_id = ?, updated_at = ? WHERE id = ?").bind(root.id, Date.now(), settingsId).run();
+  await ensureActivityFolders(root.id);
   return { email: profile.email ?? "", rootFolderId: root.id };
 }
 
-async function ensureProjectFolder(projectId: string) {
+async function ensureProjectFolder(projectId: string, categoryFolders?: Record<ProjectActivityType, { id: string; webViewLink?: string }>) {
   const existing = await getRawDb().prepare("SELECT * FROM google_drive_project_folders WHERE project_id = ? LIMIT 1").bind(projectId).first<FolderRow>();
-  if (existing) return existing;
   const configuration = await settings();
   if (!isConnected(configuration) || !configuration) throw new Error("Google Drive nu este conectat.");
-  const project = await findOrCreateFolder(projectId, configuration.root_folder_id);
-  const sectionFolders: Record<string, string> = {};
-  for (const [section, name] of Object.entries(driveSectionFolders)) {
+  const projectRecord = await getRawDb().prepare("SELECT activity_type FROM projects WHERE id = ? LIMIT 1").bind(projectId).first<{ activity_type: ProjectActivityType }>();
+  if (!projectRecord) throw new Error("Lucrarea nu mai este disponibilă pentru sincronizare.");
+  const activityType: ProjectActivityType = projectRecord.activity_type;
+
+  let sectionFolders: Record<string, string> = {};
+  if (existing) {
+    try {
+      sectionFolders = JSON.parse(existing.section_folders_json) as Record<string, string>;
+    } catch {
+      sectionFolders = {};
+    }
+    if (sectionFolders[activityFolderMarker] === activityType) return existing;
+  }
+
+  const roots = categoryFolders ?? await ensureActivityFolders(configuration.root_folder_id);
+  const activityRoot = roots[activityType];
+  if (!activityRoot) throw new Error("Categoria Google Drive a lucrării nu este validă.");
+
+  if (existing) {
+    await moveFolderToParent(existing.folder_id, activityRoot.id);
+    for (const [section, name] of Object.entries(activitySectionFolders[activityType])) {
+      if (!sectionFolders[section]) sectionFolders[section] = (await findOrCreateFolder(name, existing.folder_id)).id;
+    }
+    sectionFolders[activityFolderMarker] = activityType;
+    const updatedAt = Date.now();
+    await getRawDb().prepare("UPDATE google_drive_project_folders SET section_folders_json = ?, updated_at = ? WHERE project_id = ?")
+      .bind(JSON.stringify(sectionFolders), updatedAt, projectId).run();
+    return { ...existing, section_folders_json: JSON.stringify(sectionFolders) };
+  }
+
+  const project = await findOrCreateFolder(projectId, activityRoot.id);
+  for (const [section, name] of Object.entries(activitySectionFolders[activityType])) {
     sectionFolders[section] = (await findOrCreateFolder(name, project.id)).id;
   }
+  sectionFolders[activityFolderMarker] = activityType;
   const now = Date.now();
   const folderUrl = project.webViewLink ?? `https://drive.google.com/drive/folders/${project.id}`;
   await getRawDb().prepare("INSERT INTO google_drive_project_folders (project_id, folder_id, folder_url, section_folders_json, report_file_id, created_at, updated_at) VALUES (?, ?, ?, ?, '', ?, ?) ON CONFLICT(project_id) DO UPDATE SET folder_id = excluded.folder_id, folder_url = excluded.folder_url, section_folders_json = excluded.section_folders_json, updated_at = excluded.updated_at")
@@ -326,14 +398,16 @@ export async function syncReportIfConnected(projectId: string) {
 }
 
 export async function syncAllDriveData() {
-  if (!isConnected(await settings())) return { error: "Conectează mai întâi contul Google Drive.", status: 409 as const };
+  const configuration = await settings();
+  if (!isConnected(configuration) || !configuration) return { error: "Conectează mai întâi contul Google Drive.", status: 409 as const };
+  const categoryFolders = await ensureActivityFolders(configuration.root_folder_id);
   const projectRows = await getRawDb().prepare("SELECT id FROM projects ORDER BY created_at DESC").all<{ id: string }>();
   let projectsSynced = 0;
   let filesSynced = 0;
   let failures = 0;
   for (const project of projectRows.results ?? []) {
     try {
-      await ensureProjectFolder(project.id);
+      await ensureProjectFolder(project.id, categoryFolders);
       projectsSynced += 1;
       const files = await getRawDb().prepare("SELECT id FROM project_files WHERE project_id = ? ORDER BY created_at ASC").bind(project.id).all<{ id: string }>();
       for (const file of files.results ?? []) {

@@ -10,7 +10,8 @@ import { fetchProjectFiles, formatCapturedAt, uploadProjectFile } from "./client
 import { initialCpeCatalog, type ProjectActivityType, type ProjectRecord } from "./project-data";
 import type { ClientFieldSummary, ProjectFieldDocumentation, RouteFieldSummary, SiteFieldSummary, SpliceFieldSummary } from "./field-documentation";
 
-type View = "projects" | "team" | "cpe" | "drive" | "documents" | "client" | "route" | "splices" | "site";
+type View = "projects" | "interventions" | "surveys" | "intervention-workspace" | "survey-workspace" | "team" | "cpe" | "drive" | "documents" | "client" | "route" | "splices" | "site";
+type ActivityListView = "projects" | "interventions" | "surveys";
 type Modal = "project" | "edit-project" | "delete-project" | "account" | "cpe" | "edit-cpe" | null;
 type ServiceType = "Internet" | "VPN" | "Internet+OL" | "OL";
 type ClientPhotoKey = "report" | "speed" | "olTest" | "overview" | "detail" | "labels";
@@ -103,6 +104,34 @@ const statusClass: Record<Project["status"], string> = {
   Finalizat: "status status-green",
 };
 
+const activitySections: Record<ActivityListView, { type: ProjectActivityType; title: string; singular: string; description: string; createLabel: string }> = {
+  projects: {
+    type: "Instalare",
+    title: "Instalări",
+    singular: "instalare",
+    description: "Instalări B2B, trasee FO, suduri și operațiuni site.",
+    createLabel: "Instalare nouă",
+  },
+  interventions: {
+    type: "Intervenție",
+    title: "Intervenții",
+    singular: "intervenție",
+    description: "Intervenții tehnice și cerințe dedicate remedierii.",
+    createLabel: "Intervenție nouă",
+  },
+  surveys: {
+    type: "Survey",
+    title: "Survey",
+    singular: "survey",
+    description: "Vizite de evaluare și documentație specifică survey.",
+    createLabel: "Survey nou",
+  },
+};
+
+function listViewForActivity(type: ProjectActivityType): ActivityListView {
+  return type === "Intervenție" ? "interventions" : type === "Survey" ? "surveys" : "projects";
+}
+
 function initials(name: string) {
   return name
     .split(" ")
@@ -130,7 +159,6 @@ export default function Home() {
   const [cpeSearch, setCpeSearch] = useState("");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("Toate statusurile");
-  const [activityFilter, setActivityFilter] = useState("Toate activitățile");
   const [selected, setSelected] = useState<Project | null>(null);
   const [toast, setToast] = useState("");
   const [ipwoName, setIpwoName] = useState("");
@@ -279,7 +307,19 @@ export default function Home() {
   const canManageDocuments = currentAccount?.role === "Admin" || currentAccount?.role === "Manager" || currentAccount?.role === "Coordonator";
   const activeProject = projects.find((project) => project.id === activeProjectId) ?? projects[0] ?? emptyProject;
   const isDocumentationView = view === "client" || view === "route" || view === "splices" || view === "site";
-  const isProjectView = isDocumentationView || view === "documents";
+  const isActivityWorkspace = view === "intervention-workspace" || view === "survey-workspace";
+  const isProjectView = isDocumentationView || view === "documents" || isActivityWorkspace;
+  const isActivityListView = view === "projects" || view === "interventions" || view === "surveys";
+  const currentListView: ActivityListView = view === "interventions" || view === "intervention-workspace"
+    ? "interventions"
+    : view === "surveys" || view === "survey-workspace"
+      ? "surveys"
+      : "projects";
+  const currentActivitySection = activitySections[currentListView];
+  const currentActivityProjects = useMemo(() => projects.filter((project) => project.activityType === currentActivitySection.type), [currentActivitySection.type, projects]);
+  const formActivityType = editingProject?.activityType ?? currentActivitySection.type;
+  const isInstallationForm = formActivityType === "Instalare";
+  const showInstallationNavigation = view === "projects" || isDocumentationView || (view === "documents" && activeProject.activityType === "Instalare");
   const displayedAccountName = currentAccount.name;
   const displayedAccountRole = currentAccount.role;
   const activeFieldDocumentation = fieldDocumentation[activeProject.id] ?? {};
@@ -295,17 +335,16 @@ export default function Home() {
   const clientProgress = Math.round((completedClientPhotos / requiredClientPhotoKeys.length) * 100);
   const filteredProjects = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return projects.filter((project) => {
+    return currentActivityProjects.filter((project) => {
       const matchesSearch =
         !query ||
         `${project.id} ${project.activityType} ${project.client} ${project.address} ${project.technician} ${project.requirements}`
           .toLowerCase()
           .includes(query);
       const matchesTechnician = currentAccount.role !== "Tehnician" || project.technician === currentAccount.name;
-      const matchesActivity = activityFilter === "Toate activitățile" || project.activityType === activityFilter;
-      return matchesSearch && matchesTechnician && matchesActivity && (filter === "Toate statusurile" || project.status === filter);
+      return matchesSearch && matchesTechnician && (filter === "Toate statusurile" || project.status === filter);
     });
-  }, [activityFilter, currentAccount.name, currentAccount.role, filter, projects, search]);
+  }, [currentAccount.name, currentAccount.role, currentActivityProjects, filter, search]);
   const projectMetrics = useMemo(() => {
     const today = new Date();
     const day = String(today.getDate());
@@ -335,7 +374,7 @@ export default function Home() {
       return label.includes(`${year}-${month}-`) || new RegExp(`(?:^|\\D)\\d{1,2}[./-]${month}[./-]${year}(?:\\D|$)`).test(label);
     }
 
-    const plannedToday = projects.filter((project) => project.status === "Planificat" && scheduledToday(project.date));
+    const plannedToday = currentActivityProjects.filter((project) => project.status === "Planificat" && scheduledToday(project.date));
     const scheduledHours = plannedToday
       .map((project) => project.date.match(/\b(?:[01]?\d|2[0-3]):[0-5]\d\b/u)?.[0] ?? "")
       .filter(Boolean)
@@ -343,13 +382,13 @@ export default function Home() {
       .sort();
 
     return {
-      active: projects.filter((project) => project.status !== "Finalizat").length,
+      active: currentActivityProjects.filter((project) => project.status !== "Finalizat").length,
       plannedToday: plannedToday.length,
       firstScheduledHour: scheduledHours[0] ?? "",
-      awaitingReview: projects.filter((project) => project.status === "De verificat").length,
-      completedThisMonth: projects.filter((project) => project.status === "Finalizat" && scheduledThisMonth(project.date)).length,
+      awaitingReview: currentActivityProjects.filter((project) => project.status === "De verificat").length,
+      completedThisMonth: currentActivityProjects.filter((project) => project.status === "Finalizat" && scheduledThisMonth(project.date)).length,
     };
-  }, [projects]);
+  }, [currentActivityProjects]);
 
   async function handleSignIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -471,7 +510,7 @@ export default function Home() {
       email: String(form.get("email")),
       requirements: String(form.get("requirements")),
       technician: String(form.get("technician")),
-      cpe: String(form.get("cpe")),
+      cpe: String(form.get("cpe") || ""),
       sfp: form.get("sfp") === "on",
       mc: form.get("mc") === "on",
       terminalBox: form.get("terminalBox") === "on",
@@ -522,7 +561,7 @@ export default function Home() {
       email: String(form.get("email") || ""),
       requirements: String(form.get("requirements") || ""),
       technician: String(form.get("technician") || ""),
-      cpe: String(form.get("cpe") || ""),
+      cpe: String(form.get("cpe") || editingProject.cpe || ""),
       sfp: form.get("sfp") === "on",
       mc: form.get("mc") === "on",
       terminalBox: form.get("terminalBox") === "on",
@@ -598,7 +637,7 @@ export default function Home() {
         setClientPhotos({});
       }
       setSelected(null);
-      setView("projects");
+      setView(listViewForActivity(deletingProject.activityType));
       closeModal();
 
       if (driveStatus) {
@@ -843,13 +882,17 @@ export default function Home() {
     setClientService(fieldDocumentation[project.id]?.client?.service ?? "Internet");
     setClientPhotos({});
     setSelected(null);
-    setView("client");
-    showToast(`${project.id} a fost deschis. Toate operațiunile vor fi salvate în acest proiect.`);
+    setView(project.activityType === "Intervenție" ? "intervention-workspace" : project.activityType === "Survey" ? "survey-workspace" : "client");
+    showToast(`${project.id} a fost deschis în secțiunea ${activitySections[listViewForActivity(project.activityType)].title}.`);
   }
 
   function openProjectDocuments(project: Project) {
     if (!canManageDocuments) {
       showToast("Secțiunea Documente este disponibilă numai administratorilor, managerilor și coordonatorilor.");
+      return;
+    }
+    if (project.activityType !== "Instalare") {
+      showToast("Documentele de acceptanță sunt disponibile doar pentru instalări.");
       return;
     }
     setActiveProjectId(project.id);
@@ -862,8 +905,23 @@ export default function Home() {
       showToast("Nu ai permisiunea de a accesa această secțiune administrativă.");
       return;
     }
-    if ((next === "client" || next === "route" || next === "splices" || next === "site" || next === "documents") && projects.length === 0) {
-      showToast("Creează mai întâi un proiect pentru a completa documentația.");
+    if (next === "client" || next === "route" || next === "splices" || next === "site" || next === "documents") {
+      const installation = activeProject.activityType === "Instalare"
+        ? activeProject
+        : projects.find((project) => project.activityType === "Instalare");
+      if (!installation?.id) {
+        showToast("Creează mai întâi o instalare pentru a completa documentația.");
+        setView("projects");
+        return;
+      }
+      if (installation.id !== activeProjectId) setActiveProjectId(installation.id);
+    }
+    if (next === "projects" || next === "interventions" || next === "surveys") {
+      setSearch("");
+      setFilter("Toate statusurile");
+    }
+    if ((next === "intervention-workspace" || next === "survey-workspace") && projects.length === 0) {
+      showToast("Creează mai întâi o lucrare în secțiunea dedicată.");
       setView("projects");
       return;
     }
@@ -937,10 +995,17 @@ export default function Home() {
         </div>
 
         <nav className="side-nav">
-          <p>MANAGEMENT</p>
+          <p>ACTIVITĂȚI</p>
           <button className={view === "projects" ? "active" : ""} onClick={() => goTo("projects")}>
-            <span className="nav-symbol">P</span> Proiecte
+            <span className="nav-symbol">IN</span> Instalări
           </button>
+          <button className={view === "interventions" || view === "intervention-workspace" ? "active" : ""} onClick={() => goTo("interventions")}>
+            <span className="nav-symbol">IT</span> Intervenții
+          </button>
+          <button className={view === "surveys" || view === "survey-workspace" ? "active" : ""} onClick={() => goTo("surveys")}>
+            <span className="nav-symbol">SV</span> Survey
+          </button>
+          {canManageDocuments && <p>MANAGEMENT</p>}
           {canManageDocuments && <button className={view === "team" ? "active" : ""} onClick={() => goTo("team")}>
             <span className="nav-symbol">E</span> Echipă
           </button>}
@@ -950,16 +1015,18 @@ export default function Home() {
           {canManageDocuments && <button className={view === "drive" ? "active" : ""} onClick={() => goTo("drive")}>
             <span className="nav-symbol">GD</span> Google Drive
           </button>}
-          <p>DOCUMENTAȚIE</p>
-          <button className={view === "client" ? "active" : ""} onClick={() => goTo("client")}><span className="nav-symbol">CL</span> Client</button>
-          <button className={view === "route" ? "active" : ""} onClick={() => goTo("route")}><span className="nav-symbol">TR</span> Traseu FO</button>
-          <button className={view === "splices" ? "active" : ""} onClick={() => goTo("splices")}><span className="nav-symbol">SU</span> Suduri FO</button>
-          <button className={view === "site" ? "active" : ""} onClick={() => goTo("site")}><span className="nav-symbol">ST</span> Operațiuni site</button>
-          {canManageDocuments && (
-            <button className={view === "documents" ? "active" : ""} onClick={() => goTo("documents")}>
-              <span className="nav-symbol">DOC</span> Documente <em>Admin</em>
-            </button>
-          )}
+          {showInstallationNavigation && <>
+            <p>DOCUMENTAȚIE INSTALĂRI</p>
+            <button className={view === "client" ? "active" : ""} onClick={() => goTo("client")}><span className="nav-symbol">CL</span> Client</button>
+            <button className={view === "route" ? "active" : ""} onClick={() => goTo("route")}><span className="nav-symbol">TR</span> Traseu FO</button>
+            <button className={view === "splices" ? "active" : ""} onClick={() => goTo("splices")}><span className="nav-symbol">SU</span> Suduri FO</button>
+            <button className={view === "site" ? "active" : ""} onClick={() => goTo("site")}><span className="nav-symbol">ST</span> Operațiuni site</button>
+            {canManageDocuments && (
+              <button className={view === "documents" ? "active" : ""} onClick={() => goTo("documents")}>
+                <span className="nav-symbol">DOC</span> Documente <em>Admin</em>
+              </button>
+            )}
+          </>}
         </nav>
 
         <div className="sidebar-footer">
@@ -975,7 +1042,7 @@ export default function Home() {
             <img className="proconect-logo mobile-proconect-logo" src={proconectLogoUrl} alt="PRO CONECT" />
             <strong>B2B</strong>
           </button>
-          <div className="breadcrumb"><span>{isProjectView ? `Proiect · ${activeProject.id}` : "Management"}</span><b>/</b><strong>{view === "projects" ? "Proiecte" : view === "team" ? "Echipă" : view === "cpe" ? "Echipamente CPE" : view === "drive" ? "Google Drive" : view === "client" ? "Client" : view === "route" ? "Traseu FO" : view === "splices" ? "Suduri FO" : view === "documents" ? "Documente" : "Operațiuni site"}</strong></div>
+          <div className="breadcrumb"><span>{isProjectView ? `${activitySections[listViewForActivity(activeProject.activityType)].title} · ${activeProject.id}` : "Management"}</span><b>/</b><strong>{view === "projects" ? "Instalări" : view === "interventions" ? "Intervenții" : view === "surveys" ? "Survey" : view === "intervention-workspace" ? "Fișa intervenției" : view === "survey-workspace" ? "Fișa survey" : view === "team" ? "Echipă" : view === "cpe" ? "Echipamente CPE" : view === "drive" ? "Google Drive" : view === "client" ? "Client" : view === "route" ? "Traseu FO" : view === "splices" ? "Suduri FO" : view === "documents" ? "Documente" : "Operațiuni site"}</strong></div>
           <div className="top-actions">
             <button className="help-button" aria-label="Ajutor">?</button>
             <button className="bell" aria-label="Notificări">●<span>3</span></button>
@@ -989,7 +1056,7 @@ export default function Home() {
             <label className="active-project-picker">
               <span>PROIECT ACTIV</span>
               <select value={activeProjectId} onChange={(event) => changeActiveProject(event.target.value)}>
-                {projects.map((project) => <option key={project.id} value={project.id}>{project.id} · {project.client}</option>)}
+                {projects.filter((project) => project.activityType === activeProject.activityType).map((project) => <option key={project.id} value={project.id}>{project.id} · {project.client}</option>)}
               </select>
             </label>
             <div className="active-project-summary">
@@ -998,28 +1065,30 @@ export default function Home() {
               <em className={statusClass[activeProject.status]}><i />{activeProject.status}</em>
             </div>
             <nav className="project-operation-tabs" aria-label="Operațiunile proiectului activ">
-              <button className={view === "client" ? "active" : ""} onClick={() => goTo("client")}><span>1</span>Client</button>
-              <button className={view === "route" ? "active" : ""} onClick={() => goTo("route")}><span>2</span>Traseu FO</button>
-              <button className={view === "splices" ? "active" : ""} onClick={() => goTo("splices")}><span>3</span>Suduri FO</button>
-              <button className={view === "site" ? "active" : ""} onClick={() => goTo("site")}><span>4</span>Site</button>
-              {canManageDocuments && <button className={view === "documents" ? "active" : ""} onClick={() => goTo("documents")}><span>5</span>Documente</button>}
+              {activeProject.activityType === "Instalare" ? <>
+                <button className={view === "client" ? "active" : ""} onClick={() => goTo("client")}><span>1</span>Client</button>
+                <button className={view === "route" ? "active" : ""} onClick={() => goTo("route")}><span>2</span>Traseu FO</button>
+                <button className={view === "splices" ? "active" : ""} onClick={() => goTo("splices")}><span>3</span>Suduri FO</button>
+                <button className={view === "site" ? "active" : ""} onClick={() => goTo("site")}><span>4</span>Site</button>
+                {canManageDocuments && <button className={view === "documents" ? "active" : ""} onClick={() => goTo("documents")}><span>5</span>Documente</button>}
+              </> : <button className="active"><span>1</span>{activeProject.activityType === "Intervenție" ? "Fișa intervenției" : "Fișa survey"}</button>}
             </nav>
           </section>
         )}
 
-        {view === "projects" && (
+        {isActivityListView && (
           <div className="page-wrap">
             <section className="page-heading">
               <div>
                 <p className="eyebrow">CENTRU OPERAȚIONAL</p>
-                <h1>Bună dimineața, {currentAccount.name}.</h1>
-                <p>{projects.length ? <>Ai <strong>{projectMetrics.active} {projectMetrics.active === 1 ? "lucrare activă" : "lucrări active"}</strong>{projectMetrics.awaitingReview ? ` și ${projectMetrics.awaitingReview === 1 ? "o documentație care necesită verificare" : `${projectMetrics.awaitingReview} documentații care necesită verificare`}.` : "."}</> : "Nu există proiecte înregistrate momentan."}</p>
+                <h1>{currentActivitySection.title}</h1>
+                <p>{currentActivityProjects.length ? <>Ai <strong>{projectMetrics.active} {projectMetrics.active === 1 ? "lucrare activă" : "lucrări active"}</strong>{projectMetrics.awaitingReview ? ` și ${projectMetrics.awaitingReview === 1 ? "o documentație care necesită verificare" : `${projectMetrics.awaitingReview} documentații care necesită verificare`}.` : "."}</> : `Nu există lucrări de ${currentActivitySection.singular} înregistrate momentan.`}</p>
               </div>
-              {canManageDocuments && <button className="primary-button" onClick={() => { setEditingProject(null); setModal("project"); }}><span>＋</span> Proiect nou</button>}
+              {canManageDocuments && <button className="primary-button" onClick={() => { setEditingProject(null); setModal("project"); }}><span>＋</span> {currentActivitySection.createLabel}</button>}
             </section>
 
             <section className="metrics" aria-label="Rezumat proiecte">
-              <article><div className="metric-icon blue">↗</div><div><small>LUCRĂRI ACTIVE</small><strong>{projectMetrics.active}</strong><p>{projects.length ? `${projects.length} ${projects.length === 1 ? "proiect înregistrat" : "proiecte înregistrate"}` : "Niciun proiect înregistrat"}</p></div></article>
+              <article><div className="metric-icon blue">↗</div><div><small>LUCRĂRI ACTIVE</small><strong>{projectMetrics.active}</strong><p>{currentActivityProjects.length ? `${currentActivityProjects.length} ${currentActivityProjects.length === 1 ? "lucrare înregistrată" : "lucrări înregistrate"}` : "Nicio lucrare înregistrată"}</p></div></article>
               <article><div className="metric-icon violet">◷</div><div><small>PLANIFICATE AZI</small><strong>{projectMetrics.plannedToday}</strong><p>{projectMetrics.firstScheduledHour ? <>Prima lucrare la <b>{projectMetrics.firstScheduledHour}</b></> : projectMetrics.plannedToday ? "Lucrări programate astăzi" : "Nicio lucrare planificată"}</p></div></article>
               <article><div className="metric-icon amber">!</div><div><small>DE VERIFICAT</small><strong>{projectMetrics.awaitingReview}</strong><p>{projectMetrics.awaitingReview ? "Documentații în așteptare" : "Nimic de verificat"}</p></div></article>
               <article><div className="metric-icon green">✓</div><div><small>FINALIZATE LUNA ACEASTA</small><strong>{projectMetrics.completedThisMonth}</strong><p>{projectMetrics.completedThisMonth ? "Lucrări încheiate luna curentă" : "Nicio lucrare finalizată"}</p></div></article>
@@ -1027,30 +1096,26 @@ export default function Home() {
 
             <section className="project-card">
               <div className="card-heading">
-                <div><h2>Proiecte recente</h2><p>Gestionează lucrările de instalare, intervențiile și activitățile Survey.</p></div>
+                <div><h2>{currentActivitySection.title}</h2><p>{currentActivitySection.description}</p></div>
                 <div className="view-controls"><button className="icon-toggle active" aria-label="Vizualizare listă">☷</button><button className="icon-toggle" aria-label="Vizualizare grilă">▦</button></div>
               </div>
               <div className="toolbar">
                 <label className="search-box"><span>⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Caută după RID, client, adresă..." /></label>
                 <div className="filters">
-                  <select value={activityFilter} onChange={(event) => setActivityFilter(event.target.value)} aria-label="Filtru activitate">
-                    <option>Toate activitățile</option><option>Instalare</option><option>Intervenție</option><option>Survey</option>
-                  </select>
                   <select value={filter} onChange={(event) => setFilter(event.target.value)} aria-label="Filtru status">
                     <option>Toate statusurile</option><option>Planificat</option><option>În desfășurare</option><option>De verificat</option><option>Finalizat</option>
                   </select>
-                  <button onClick={() => { setSearch(""); setFilter("Toate statusurile"); setActivityFilter("Toate activitățile"); }}>↻ <span>Resetează</span></button>
+                  <button onClick={() => { setSearch(""); setFilter("Toate statusurile"); }}>↻ <span>Resetează</span></button>
                 </div>
               </div>
 
               <div className="table-wrap">
                 <table>
-                  <thead><tr><th>REQUEST ID</th><th>ACTIVITATE</th><th>CLIENT / ADRESĂ</th><th>TEHNICIAN</th><th>STATUS</th><th>PROGRAMARE</th><th /></tr></thead>
+                  <thead><tr><th>REQUEST ID</th><th>CLIENT / ADRESĂ</th><th>TEHNICIAN</th><th>STATUS</th><th>PROGRAMARE</th><th /></tr></thead>
                   <tbody>
                     {filteredProjects.map((project) => (
                       <tr className={project.id === activeProject.id ? "active-project-row" : ""} key={project.id} onClick={() => setSelected(project)} tabIndex={0} onKeyDown={(event) => event.key === "Enter" && setSelected(project)}>
                         <td><strong className="rid">{project.id}</strong><small>{project.id === activeProject.id ? "Proiect activ" : "Salvat permanent"}</small></td>
-                        <td><strong>{project.activityType}</strong><small>Tip activitate</small></td>
                         <td><strong>{project.client}</strong><small>{project.address}</small></td>
                         <td><div className="technician"><span className="avatar">{initials(project.technician)}</span><strong>{project.technician}</strong></div></td>
                         <td><span className={statusClass[project.status]}><i />{project.status}</span></td>
@@ -1060,9 +1125,9 @@ export default function Home() {
                     ))}
                   </tbody>
                 </table>
-                {filteredProjects.length === 0 && <div className="empty-state"><strong>{projects.length ? "Nicio lucrare găsită" : "Nu există proiecte"}</strong><p>{projects.length ? "Modifică termenul de căutare sau filtrele." : canManageDocuments ? "Adaugă un proiect nou pentru a începe." : "Nu există proiecte alocate contului tău."}</p></div>}
+                {filteredProjects.length === 0 && <div className="empty-state"><strong>{currentActivityProjects.length ? "Nicio lucrare găsită" : `Nu există lucrări de ${currentActivitySection.singular}`}</strong><p>{currentActivityProjects.length ? "Modifică termenul de căutare sau filtrele." : canManageDocuments ? `Adaugă o lucrare de ${currentActivitySection.singular} pentru a începe.` : "Nu există lucrări alocate contului tău în această secțiune."}</p></div>}
               </div>
-              <div className="card-footer"><span>Se afișează {filteredProjects.length} din {projects.length} proiecte</span><div><button disabled>‹</button><button className="current">1</button><button>2</button><button>3</button><button>›</button></div></div>
+              <div className="card-footer"><span>Se afișează {filteredProjects.length} din {currentActivityProjects.length} lucrări</span><div><button disabled>‹</button><button className="current">1</button><button>2</button><button>3</button><button>›</button></div></div>
             </section>
           </div>
         )}
@@ -1219,6 +1284,46 @@ export default function Home() {
           </div>
         )}
 
+        {isActivityWorkspace && (
+          <div className="page-wrap inner-page activity-workspace-page">
+            <section className="page-heading compact">
+              <div>
+                <p className="eyebrow">{activeProject.activityType === "Intervenție" ? "INTERVENȚII TEHNICE" : "SURVEY ȘI EVALUARE"}</p>
+                <h1>{activeProject.activityType === "Intervenție" ? "Fișa intervenției" : "Fișa survey"}</h1>
+                <p>{activeProject.id} · {activeProject.client}</p>
+              </div>
+              {canManageDocuments && <button className="primary-button" onClick={() => openProjectEditor(activeProject)}>Editează lucrarea <span>→</span></button>}
+            </section>
+
+            <div className="activity-workspace-grid">
+              <section className="project-card activity-brief-card">
+                <div className="card-heading"><div><h2>{activeProject.activityType === "Intervenție" ? "Cerințele intervenției" : "Obiectivele survey-ului"}</h2><p>Informațiile transmise tehnicianului pentru această lucrare.</p></div></div>
+                <div className="activity-brief-content"><p>{activeProject.requirements}</p></div>
+                <div className="activity-contact-grid">
+                  <div><small>LOCAȚIE</small><strong>{activeProject.address}</strong></div>
+                  <div><small>PERSOANĂ DE CONTACT</small><strong>{activeProject.contact}</strong><span>{activeProject.phone}</span></div>
+                  {activeProject.email && <div><small>E-MAIL</small><strong>{activeProject.email}</strong></div>}
+                </div>
+              </section>
+
+              <aside className="project-card activity-assignment-card">
+                <div className="card-heading"><div><h2>Alocare</h2><p>Fișa dedicată acestei activități.</p></div></div>
+                <div className="activity-assignment-content">
+                  <div><small>TEHNICIAN</small><strong>{activeProject.technician}</strong></div>
+                  <div><small>PROGRAMARE</small><strong>{activeProject.date}</strong></div>
+                  <div><small>STATUS</small><span className={statusClass[activeProject.status]}><i />{activeProject.status}</span></div>
+                  {driveStatus?.folders[activeProject.id] && <a href={driveStatus.folders[activeProject.id]} target="_blank" rel="noreferrer">Deschide dosarul Google Drive ↗</a>}
+                </div>
+              </aside>
+            </div>
+
+            <section className="project-card activity-workflow-card">
+              <div className="card-heading"><div><h2>{activeProject.activityType === "Intervenție" ? "Flux dedicat intervențiilor" : "Flux dedicat survey"}</h2><p>Secțiune separată de documentația pentru instalări.</p></div></div>
+              <p>Etapele, fotografiile și informațiile specifice vor fi definite separat pentru această categorie.</p>
+            </section>
+          </div>
+        )}
+
         {view === "drive" && canManageDocuments && <GoogleDriveSettings initialStatus={driveStatus} onStatusChange={setDriveStatus} onNotify={showToast} />}
         {view === "route" && <FoRouteSection project={activeProject} initialSummary={activeFieldDocumentation.route} onNotify={showToast} onSaved={saveRouteSummary} />}
         {view === "splices" && <FoSplicesSection project={activeProject} initialSummary={activeFieldDocumentation.splices} onNotify={showToast} onSaved={saveSpliceSummary} />}
@@ -1226,48 +1331,52 @@ export default function Home() {
         {view === "documents" && canManageDocuments && <ProjectDocumentsSection project={activeProject} fieldData={activeFieldDocumentation} onNotify={showToast} />}
       </section>
 
-      <nav className={canManageDocuments ? "mobile-nav manager-nav" : "mobile-nav"} aria-label="Navigare mobilă">
-        <button className={view === "projects" ? "active" : ""} onClick={() => goTo("projects")}><span>P</span>Proiecte</button>
+      <nav className={`${canManageDocuments ? "mobile-nav manager-nav" : "mobile-nav"}${showInstallationNavigation ? "" : " activity-nav"}`} aria-label="Navigare mobilă">
+        <button className={view === "projects" ? "active" : ""} onClick={() => goTo("projects")}><span>IN</span>Instalări</button>
+        <button className={view === "interventions" || view === "intervention-workspace" ? "active" : ""} onClick={() => goTo("interventions")}><span>IT</span>Intervenții</button>
+        <button className={view === "surveys" || view === "survey-workspace" ? "active" : ""} onClick={() => goTo("surveys")}><span>SV</span>Survey</button>
         {canManageDocuments && <button className={view === "team" ? "active" : ""} onClick={() => goTo("team")}><span>E</span>Echipă</button>}
         {canManageDocuments && <button className={view === "cpe" ? "active" : ""} onClick={() => goTo("cpe")}><span>C</span>CPE</button>}
         {canManageDocuments && <button className={view === "drive" ? "active" : ""} onClick={() => goTo("drive")}><span>GD</span>Drive</button>}
-        <button className={view === "client" ? "active" : ""} onClick={() => goTo("client")}><span>CL</span>Client</button>
-        <button className={view === "route" ? "active" : ""} onClick={() => goTo("route")}><span>TR</span>Traseu</button>
-        <button className={view === "splices" ? "active" : ""} onClick={() => goTo("splices")}><span>SU</span>Suduri</button>
-        <button className={view === "site" ? "active" : ""} onClick={() => goTo("site")}><span>ST</span>Site</button>
-        {canManageDocuments && <button className={view === "documents" ? "active" : ""} onClick={() => goTo("documents")}><span>DOC</span>Documente</button>}
+        {showInstallationNavigation && <>
+          <button className={view === "client" ? "active" : ""} onClick={() => goTo("client")}><span>CL</span>Client</button>
+          <button className={view === "route" ? "active" : ""} onClick={() => goTo("route")}><span>TR</span>Traseu</button>
+          <button className={view === "splices" ? "active" : ""} onClick={() => goTo("splices")}><span>SU</span>Suduri</button>
+          <button className={view === "site" ? "active" : ""} onClick={() => goTo("site")}><span>ST</span>Site</button>
+          {canManageDocuments && <button className={view === "documents" ? "active" : ""} onClick={() => goTo("documents")}><span>DOC</span>Documente</button>}
+        </>}
       </nav>
 
       {modal && <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && closeModal()}>
         {(modal === "project" || modal === "edit-project") && (
           <form className="modal project-modal" onSubmit={modal === "edit-project" ? saveProjectChanges : createProject}>
-            <div className="modal-head"><div><span className="modal-kicker">{editingProject ? "EDITARE PROIECT" : "PROIECT NOU"}</span><h2>{editingProject ? `Actualizează ${editingProject.id}` : "Generează o lucrare"}</h2><p>{editingProject ? "Modificările se salvează permanent pentru proiectul selectat." : "Datele inițiale pentru instalarea B2B."}</p></div><button type="button" onClick={closeModal} aria-label="Închide">×</button></div>
+            <div className="modal-head"><div><span className="modal-kicker">{editingProject ? "EDITARE LUCRARE" : currentActivitySection.title.toUpperCase()}</span><h2>{editingProject ? `Actualizează ${editingProject.id}` : currentActivitySection.createLabel}</h2><p>{editingProject ? "Modificările se salvează permanent pentru lucrarea selectată." : isInstallationForm ? "Datele inițiale pentru instalarea B2B." : formActivityType === "Intervenție" ? "Datele și cerințele specifice intervenției." : "Datele și obiectivele vizitei de survey."}</p></div><button type="button" onClick={closeModal} aria-label="Închide">×</button></div>
             <div className="modal-body">
               <div className="form-section"><h3><span>1</span> Date proiect și client</h3><div className="form-grid">
+                <input type="hidden" name="activityType" value={formActivityType} />
                 <label><span>Request ID *</span><div className="prefix-input"><b>RID</b><input name="requestId" required readOnly={Boolean(editingProject)} defaultValue={editingProject?.id.replace(/^RID/i, "")} inputMode="numeric" placeholder="ex. 10483" /></div></label>
-                <label><span>Tip activitate *</span><select name="activityType" required defaultValue={editingProject?.activityType || "Instalare"}><option>Instalare</option><option>Intervenție</option><option>Survey</option></select></label>
                 <label><span>Nume client *</span><input name="client" required defaultValue={editingProject?.client} placeholder="Denumirea companiei" /></label>
-                <label className="wide"><span>Adresă instalare *</span><input name="address" required defaultValue={editingProject?.address} placeholder="Stradă, număr, localitate" /></label>
+                <label className="wide"><span>{isInstallationForm ? "Adresă instalare" : "Adresă lucrare"} *</span><input name="address" required defaultValue={editingProject?.address} placeholder="Stradă, număr, localitate" /></label>
                 <label><span>Persoană de contact *</span><input name="contact" required defaultValue={editingProject?.contact} placeholder="Nume și prenume" /></label>
                 <label><span>Telefon *</span><input name="phone" required defaultValue={editingProject?.phone} placeholder="+40 7xx xxx xxx" /></label>
                 <label className="wide"><span>E-mail</span><input name="email" type="email" defaultValue={editingProject?.email} placeholder="contact@companie.ro" /></label>
-                <label className="wide work-requirements"><span>Cerințele lucrării *</span><textarea name="requirements" required defaultValue={editingProject?.requirements} rows={5} placeholder="Descrie lucrările solicitate, condițiile de instalare, echipamentele sau configurațiile speciale și orice alte informații utile tehnicianului..." /></label>
+                <label className="wide work-requirements"><span>{formActivityType === "Intervenție" ? "Cerințele intervenției" : formActivityType === "Survey" ? "Obiectivele survey-ului" : "Cerințele lucrării"} *</span><textarea name="requirements" required defaultValue={editingProject?.requirements} rows={5} placeholder={formActivityType === "Intervenție" ? "Descrie problema semnalată, simptomele, verificările cerute și informațiile utile tehnicianului..." : formActivityType === "Survey" ? "Descrie locația, obiectivele vizitei și informațiile care trebuie verificate în teren..." : "Descrie lucrările solicitate, condițiile de instalare, echipamentele sau configurațiile speciale și orice alte informații utile tehnicianului..."} /></label>
               </div></div>
-              <div className="form-section"><h3><span>2</span> Alocare și echipamente</h3><div className="form-grid">
+              <div className="form-section"><h3><span>2</span> {isInstallationForm ? "Alocare și echipamente" : "Alocare tehnician"}</h3><div className="form-grid">
                 <label><span>Tehnician alocat *</span><select name="technician" required defaultValue={editingProject?.technician || ""}><option value="" disabled>Selectează tehnicianul</option>{technicians.map((tech) => <option key={tech.username}>{tech.name}</option>)}</select></label>
-                <label><span>Tip CPE *</span><div className="select-plus"><select name="cpe" required defaultValue={editingProject?.cpe || ""}><option value="" disabled>Selectează echipamentul</option>{cpeList.map((cpe) => <option key={cpe}>{cpe}</option>)}</select><button type="button" onClick={() => { const value = window.prompt("Denumirea echipamentului CPE"); if (value?.trim()) void addCpeByName(value.trim()); }} aria-label="Adaugă CPE">＋</button></div></label>
+                {isInstallationForm && <label><span>Tip CPE *</span><div className="select-plus"><select name="cpe" required defaultValue={editingProject?.cpe || ""}><option value="" disabled>Selectează echipamentul</option>{cpeList.map((cpe) => <option key={cpe}>{cpe}</option>)}</select><button type="button" onClick={() => { const value = window.prompt("Denumirea echipamentului CPE"); if (value?.trim()) void addCpeByName(value.trim()); }} aria-label="Adaugă CPE">＋</button></div></label>}
                 {editingProject && <><label><span>Status proiect *</span><select name="status" required defaultValue={editingProject.status}><option>Planificat</option><option>În desfășurare</option><option>De verificat</option><option>Finalizat</option></select></label><label><span>Programare *</span><input name="date" required defaultValue={editingProject.date} placeholder="ex. 26 aug, 09:30" /></label></>}
-                <div className="wide"><span className="field-label">Echipamente suplimentare</span><div className="switch-row">
+                {isInstallationForm && <div className="wide"><span className="field-label">Echipamente suplimentare</span><div className="switch-row">
                   <label className="switch-card"><span><b>SFP</b><small>Modul optic</small></span><input type="checkbox" name="sfp" defaultChecked={editingProject ? editingProject.sfp : true} /><i /></label>
                   <label className="switch-card"><span><b>MC</b><small>Media converter</small></span><input type="checkbox" name="mc" defaultChecked={editingProject?.mc} /><i /></label>
                   <label className="switch-card"><span><b>Terminal Box</b><small>Cutie terminală</small></span><input type="checkbox" name="terminalBox" defaultChecked={editingProject ? editingProject.terminalBox : true} /><i /></label>
-                </div></div>
+                </div></div>}
               </div></div>
-              <div className="form-section"><h3><span>3</span> Documente</h3><div className="upload-grid">
+              {isInstallationForm && <div className="form-section"><h3><span>3</span> Documente</h3><div className="upload-grid">
                 <label className={ipwoName ? "upload-box has-file" : "upload-box"}><input type="file" accept=".pdf,.doc,.docx" onChange={(event) => { const file = event.target.files?.[0] ?? null; setIpwoFile(file); setIpwoName(file?.name ?? editingProject?.ipwo ?? ""); }} /><b>{ipwoName ? "✓" : "↑"}</b><strong>{ipwoName || "Încarcă IPWO"}</strong><small>{ipwoFile ? "Fișier nou selectat" : editingProject && ipwoName ? "Document existent · selectează pentru înlocuire" : "PDF sau DOC, max. 20 MB"}</small></label>
                 <label className={spliceName ? "upload-box has-file" : "upload-box"}><input type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={(event) => { const file = event.target.files?.[0] ?? null; setSpliceFile(file); setSpliceName(file?.name ?? editingProject?.splice ?? ""); }} /><b>{spliceName ? "✓" : "↑"}</b><strong>{spliceName || "Diagrama de suduri"}</strong><small>{spliceFile ? "Fișier nou selectat" : editingProject && spliceName ? "Document existent · selectează pentru înlocuire" : "PDF, PNG sau JPG, max. 20 MB"}</small></label>
-              </div></div>
-              <div className="drive-note"><span className="drive-mark"><i /><i /><i /></span><div><strong>{driveStatus?.connected ? "Google Drive conectat" : "Stocare securizată proiect"}</strong><p>{driveStatus?.connected ? <>Dosarul <b>RID + Request ID</b> și subdosarele documentației se creează automat în Google Drive.</> : <>Documentele sunt salvate permanent. Configurează <b>Google Drive</b> din secțiunea administrativă pentru sincronizare automată.</>}</p></div></div>
+              </div></div>}
+              <div className="drive-note"><span className="drive-mark"><i /><i /><i /></span><div><strong>{driveStatus?.connected ? "Google Drive conectat" : "Stocare securizată proiect"}</strong><p>{driveStatus?.connected ? <>Dosarul lucrării se creează automat în <b>{formActivityType === "Intervenție" ? "Interventii" : formActivityType === "Survey" ? "Survey" : "Instalari"}</b>.</> : <>Documentele sunt salvate permanent. Configurează <b>Google Drive</b> din secțiunea administrativă pentru sincronizare automată.</>}</p></div></div>
             </div>
             <div className="modal-actions"><button type="button" className="secondary-button" onClick={closeModal}>Anulează</button><button className="primary-button" type="submit" disabled={projectSaving}>{projectSaving ? "Se salvează..." : editingProject ? "Salvează modificările" : "Generează proiectul"} <span>→</span></button></div>
           </form>
@@ -1309,15 +1418,15 @@ export default function Home() {
         <div className="drawer-section"><small>LOCAȚIE ȘI CONTACT</small><strong>{selected.address}</strong><p>{selected.contact} · {selected.phone}</p><p>{selected.email}</p></div>
         <div className="drawer-section"><small>CERINȚELE LUCRĂRII</small><p className="requirements-text">{selected.requirements}</p></div>
         <div className="drawer-section"><small>TEHNICIAN ALOCAT</small><div className="technician large"><span className="avatar">{initials(selected.technician)}</span><div><strong>{selected.technician}</strong><p>Programare: {selected.date}</p></div></div></div>
-        <div className="drawer-section"><small>ECHIPAMENTE</small><strong>{selected.cpe}</strong><div className="tag-row">{selected.sfp && <span>SFP</span>}{selected.mc && <span>MC</span>}{selected.terminalBox && <span>Terminal Box</span>}</div></div>
-        <div className="drawer-section"><small>DOCUMENTE</small><button className="file-row" onClick={() => void openProjectFile(selected.id, "ipwo")}><span>PDF</span><div><strong>{selected.ipwo}</strong><small>IPWO</small></div><b>↗</b></button><button className="file-row" onClick={() => void openProjectFile(selected.id, "splice-diagram")}><span>FO</span><div><strong>{selected.splice}</strong><small>Diagramă suduri</small></div><b>↗</b></button></div>
+        {selected.activityType === "Instalare" && <div className="drawer-section"><small>ECHIPAMENTE</small><strong>{selected.cpe}</strong><div className="tag-row">{selected.sfp && <span>SFP</span>}{selected.mc && <span>MC</span>}{selected.terminalBox && <span>Terminal Box</span>}</div></div>}
+        {selected.activityType === "Instalare" && <div className="drawer-section"><small>DOCUMENTE</small><button className="file-row" onClick={() => void openProjectFile(selected.id, "ipwo")}><span>PDF</span><div><strong>{selected.ipwo}</strong><small>IPWO</small></div><b>↗</b></button><button className="file-row" onClick={() => void openProjectFile(selected.id, "splice-diagram")}><span>FO</span><div><strong>{selected.splice}</strong><small>Diagramă suduri</small></div><b>↗</b></button></div>}
         <div className="drive-folder"><span className="folder-icon">▰</span><div><small>{driveStatus?.folders[selected.id] ? "GOOGLE DRIVE" : "STOCARE SECURIZATĂ"}</small><strong>Dosar {selected.id}</strong></div>{driveStatus?.folders[selected.id] ? <a className="drive-folder-open" href={driveStatus.folders[selected.id]} target="_blank" rel="noreferrer" aria-label={`Deschide dosarul Google Drive ${selected.id}`}>↗</a> : <span>✓</span>}</div>
         <div className="drawer-project-actions">
           <button className="primary-button" onClick={() => openProject(selected)}>Deschide proiectul <span>→</span></button>
           {canManageDocuments && <button className="secondary-button" onClick={() => openProjectEditor(selected)}>Editează proiectul</button>}
-          {canManageDocuments && <button className="secondary-button" onClick={() => openProjectDocuments(selected)}>Documente administrative</button>}
+          {canManageDocuments && selected.activityType === "Instalare" && <button className="secondary-button" onClick={() => openProjectDocuments(selected)}>Documente administrative</button>}
           {canManageDocuments && <button className="secondary-button" style={{ color: "#b42336", borderColor: "#ecc8cc" }} onClick={() => openProjectDeletion(selected)}>Șterge proiectul</button>}
-          <small>Client, traseu, suduri, operațiuni site și închiderea proiectului</small>
+          <small>{selected.activityType === "Instalare" ? "Client, traseu, suduri, operațiuni site și închiderea proiectului" : selected.activityType === "Intervenție" ? "Fișă și cerințe dedicate intervenției" : "Fișă și obiective dedicate survey-ului"}</small>
         </div>
       </aside></div>}
 

@@ -16,6 +16,7 @@ export type GoogleDriveStatus = {
   filesSynced: number;
   folders: Record<string, string>;
   sections: Record<string, string>;
+  activityFolders?: Record<string, string>;
 };
 
 type GoogleDriveSettingsProps = {
@@ -160,6 +161,11 @@ export function GoogleDriveSettings({ initialStatus, onStatusChange, onNotify }:
     site: "05_Operatiuni site",
     documents: "06_Documente administrative",
   };
+  const activityFolders = status?.activityFolders ?? {
+    Instalare: "Instalari",
+    "Intervenție": "Interventii",
+    Survey: "Survey",
+  };
 
   return (
     <div className="page-wrap inner-page drive-settings-page">
@@ -167,7 +173,7 @@ export function GoogleDriveSettings({ initialStatus, onStatusChange, onNotify }:
         <div>
           <p className="eyebrow">INTEGRĂRI ȘI STOCARE</p>
           <h1>Google Drive</h1>
-          <p>Conectează contul companiei și organizează automat documentația fiecărui proiect.</p>
+          <p>Organizează separat instalările, intervențiile și activitățile survey.</p>
         </div>
         {status?.connected && (
           <button className="primary-button" onClick={() => void syncNow()} disabled={syncing}>
@@ -235,8 +241,15 @@ export function GoogleDriveSettings({ initialStatus, onStatusChange, onNotify }:
         </section>
 
         <section className="project-card drive-structure-card">
-          <div className="card-heading"><div><h2>Structura dosarelor</h2><p>Se creează automat pentru fiecare proiect RID.</p></div></div>
-          <div className="drive-folder-tree"><div className="drive-tree-root"><span>▰</span><strong>Proconect B2B</strong></div><div className="drive-tree-project"><span>▰</span><strong>RID10482</strong><small>Exemplu proiect</small></div>{Object.entries(sections).map(([section, name]) => <div className="drive-tree-section" key={section}><span>▰</span><div><strong>{name}</strong><small>{sectionLabels[section]}</small></div></div>)}</div>
+          <div className="card-heading"><div><h2>Structura dosarelor</h2><p>Trei categorii independente, fiecare cu propriile lucrări.</p></div></div>
+          <div className="drive-folder-tree">
+            <div className="drive-tree-root"><span>▰</span><strong>Proconect B2B</strong></div>
+            {Object.entries(activityFolders).map(([activity, folder]) => <div className="drive-activity-tree" key={activity}>
+              <div className="drive-tree-project"><span>▰</span><strong>{folder}</strong><small>{activity === "Instalare" ? "Instalări B2B" : activity === "Intervenție" ? "Intervenții tehnice" : "Vizite și evaluări"}</small></div>
+              <div className="drive-tree-section"><span>▰</span><div><strong>{activity === "Instalare" ? "RID10482" : "RID + Request ID"}</strong><small>Dosarul lucrării</small></div></div>
+              {activity === "Instalare" && Object.entries(sections).map(([section, name]) => <div className="drive-tree-section drive-tree-nested" key={section}><span>▰</span><div><strong>{name}</strong><small>{sectionLabels[section]}</small></div></div>)}
+            </div>)}
+          </div>
         </section>
       </div>
     </div>
