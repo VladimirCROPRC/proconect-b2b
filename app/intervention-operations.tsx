@@ -3,7 +3,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { deleteProjectFile, fetchProjectFiles, formatCapturedAt, uploadProjectFile, type StoredProjectFile } from "./client-storage";
 import { InterventionExecutionSection } from "./intervention-execution";
-import type { InterventionDamageType, InterventionFieldSummary } from "./field-documentation";
+import type { InterventionDamageType, InterventionExecutionActivity, InterventionFieldSummary } from "./field-documentation";
 import type { ProjectRecord } from "./project-data";
 
 type InterventionSection = "assessment" | "execution" | "documentation";
@@ -25,6 +25,46 @@ const sectionTitles: Record<InterventionSection, string> = {
   execution: "Execuție",
   documentation: "Documentare",
 };
+
+const interventionActivityLabels: Record<InterventionExecutionActivity["type"], string> = {
+  "fo-installation": "Instalare cablu FO",
+  "junction-installation": "Instalare joncțiune nouă",
+  diagnostics: "Diagnosticare OTDR",
+  "splice-repair": "Refacere sudură",
+};
+
+function interventionActivityDescription(activity: InterventionExecutionActivity) {
+  const label = interventionActivityLabels[activity.type];
+  if (activity.type === "fo-installation") {
+    return `${label}: ${activity.cableType ?? "cablu FO"}, ${activity.cableLengthMeters ?? 0} m, între ${activity.endpointA?.code ?? "joncțiunea A"} și ${activity.endpointB?.code ?? "joncțiunea B"}.`;
+  }
+  const junction = activity.junction?.documented ? activity.junction.code : "joncțiune nedocumentată";
+  const network = activity.junction?.network === "mobile"
+    ? " · Vodafone Mobil"
+    : activity.junction?.network === "fixed"
+      ? " · Vodafone Fixed"
+      : "";
+  return `${label}: ${junction}${network}.`;
+}
+
+function buildInterventionReport(project: ProjectRecord, summary?: InterventionFieldSummary) {
+  const activities = summary?.execution?.activities ?? [];
+  const activityLines = activities.length
+    ? activities.map((activity, index) => `${index + 1}. ${interventionActivityDescription(activity)}`)
+    : ["Activitățile de execuție nu au fost documentate încă."];
+  const executionPhotos = activities.reduce((total, activity) => total + activity.photoCount, 0);
+
+  return [
+    `Tichet: ${project.id}`,
+    `Client: ${project.client}`,
+    `Locație: ${project.address}`,
+    `Tehnician: ${project.technician}`,
+    `Avarie constatată: ${summary?.assessment?.damageType ?? "Necompletată"}.`,
+    "Operațiuni efectuate:",
+    ...activityLines,
+    `Documentare foto: ${summary?.assessment?.geotaggedPhotoCount ?? 0} fotografii constatare și ${executionPhotos} fotografii execuție.`,
+  ].join("\n");
+}
 
 function validPhotoCoordinates(value: string) {
   const coordinates = /^(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)(?:\s|$)/.exec(value.trim());
@@ -76,6 +116,7 @@ export function InterventionOperationsSection({
   const [saving, setSaving] = useState(false);
   const [removingId, setRemovingId] = useState("");
   const [error, setError] = useState("");
+  const [report, setReport] = useState(() => initialSummary?.documentation?.report ?? buildInterventionReport(project, initialSummary));
 
   useEffect(() => {
     let mounted = true;
@@ -103,10 +144,25 @@ export function InterventionOperationsSection({
     };
   }, [project.id, initialSummary?.assessment?.damageType]);
 
+  useEffect(() => {
+    let mounted = true;
+    queueMicrotask(() => {
+      if (mounted) setReport(initialSummary?.documentation?.report ?? buildInterventionReport(project, initialSummary));
+    });
+    return () => {
+      mounted = false;
+    };
+  }, [project, initialSummary]);
+
   const validPhotos = photos.filter((photo) => validPhotoCoordinates(photo.geo));
   const completedItems = Number(Boolean(damageType)) + Number(validPhotos.length > 0);
   const progress = Math.round((completedItems / 2) * 100);
   const ready = Boolean(damageType) && validPhotos.length > 0;
+  const executionActivities = initialSummary?.execution?.activities ?? [];
+  const totalExecutionPhotos = executionActivities.reduce((total, activity) => total + activity.photoCount, 0);
+  const totalCableMeters = executionActivities.reduce((total, activity) => total + (activity.type === "fo-installation" ? activity.cableLengthMeters ?? 0 : 0), 0);
+  const reportReady = report.trim().length >= 20 && report.trim().length <= 5_000;
+  const canFinalize = Boolean(canEdit && initialSummary?.assessment && executionActivities.length && reportReady && project.status !== "Finalizat");
 
   async function addPhotos(selectedFiles: File[]) {
     if (!selectedFiles.length) return;
@@ -176,6 +232,31 @@ export function InterventionOperationsSection({
     }
   }
 
+  async function closeIntervention() {
+    if (!canFinalize || !initialSummary?.assessment) {
+      setError("Completează constatarea, cel puțin o activitate de execuție și raportul intervenției.");
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+    try {
+      await onSaved({
+        ...initialSummary,
+        documentation: {
+          report: report.trim(),
+          validatedAt: 0,
+          validatedBy: "",
+        },
+      });
+      onNotify(`Intervenția ${project.id} a fost validată și închisă.`);
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "Intervenția nu a putut fi validată și închisă.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div className="page-wrap inner-page activity-workspace-page intervention-page">
       <section className="page-heading compact">
@@ -187,16 +268,16 @@ export function InterventionOperationsSection({
         {canEdit && <button className="primary-button" onClick={onEdit}>Editează lucrarea <span>→</span></button>}
       </section>
 
-      <nav className="intervention-stage-nav" aria-label="Etapele intervenției">
+      <nav className={`intervention-stage-nav${canEdit ? "" : " technician-stages"}`} aria-label="Etapele intervenției">
         <button type="button" className={section === "assessment" ? "active" : ""} onClick={() => onSectionChange("assessment")}>
           <span>1</span><div><strong>Constatare</strong><small>Avarie și fotografii inițiale</small></div>
         </button>
         <button type="button" className={section === "execution" ? "active" : ""} onClick={() => onSectionChange("execution")}>
           <span>2</span><div><strong>Execuție</strong><small>Activități și hartă Optix</small></div>
         </button>
-        <button type="button" className={section === "documentation" ? "active" : ""} onClick={() => onSectionChange("documentation")}>
-          <span>3</span><div><strong>Documentare</strong><small>Închiderea intervenției</small></div>
-        </button>
+        {canEdit && <button type="button" className={section === "documentation" ? "active" : ""} onClick={() => onSectionChange("documentation")}>
+          <span>3</span><div><strong>Documentare</strong><small>Validare administrativă</small></div>
+        </button>}
       </nav>
 
       <div className="activity-workspace-grid intervention-brief-grid">
@@ -290,12 +371,60 @@ export function InterventionOperationsSection({
         </form>
       ) : section === "execution" ? (
         <InterventionExecutionSection project={project} initialSummary={initialSummary} onNotify={onNotify} onSaved={onSaved} />
-      ) : (
-        <section className="project-card activity-workflow-card intervention-pending-card">
-          <div className="card-heading"><div><h2>Documentarea intervenției</h2><p>Secțiune separată, dedicată intervențiilor.</p></div></div>
-          <p>Documentele și fotografiile finale ale intervenției vor fi configurate separat.</p>
-        </section>
-      )}
+      ) : canEdit ? (
+        <div className="intervention-documentation-layout">
+          <section className="project-card intervention-report-card">
+            <div className="card-heading"><div><h2>Raport scurt al intervenției</h2><p>Generat din constatare și operațiunile realizate în teren.</p></div></div>
+
+            <div className="intervention-report-body">
+              <div className="intervention-report-metrics">
+                <article><small>TIP AVARIE</small><strong>{initialSummary?.assessment?.damageType ?? "Necompletat"}</strong></article>
+                <article><small>ACTIVITĂȚI</small><strong>{executionActivities.length}</strong></article>
+                <article><small>FOTOGRAFII GPS</small><strong>{(initialSummary?.assessment?.geotaggedPhotoCount ?? 0) + totalExecutionPhotos}</strong></article>
+                <article><small>CABLU FO</small><strong>{totalCableMeters.toLocaleString("ro-RO")} m</strong></article>
+              </div>
+
+              <div className="intervention-report-heading">
+                <div><strong>Conținut raport</strong><small>Poți ajusta textul înainte de validare.</small></div>
+                {project.status !== "Finalizat" && <button type="button" onClick={() => setReport(buildInterventionReport(project, initialSummary))}>Regenerează</button>}
+              </div>
+
+              <textarea
+                className="intervention-report-textarea"
+                value={report}
+                onChange={(event) => setReport(event.target.value)}
+                maxLength={5_000}
+                rows={11}
+                readOnly={project.status === "Finalizat"}
+                aria-label="Raportul intervenției"
+              />
+              <p className="intervention-report-counter">{report.trim().length.toLocaleString("ro-RO")} / 5.000 caractere</p>
+
+              {executionActivities.length > 0 && <div className="intervention-report-activities">
+                <h3>Operațiuni incluse</h3>
+                {executionActivities.map((activity) => <article key={activity.id}><span>✓</span><div><strong>{interventionActivityLabels[activity.type]}</strong><small>{interventionActivityDescription(activity)}</small></div><b>{activity.photoCount} foto GPS</b></article>)}
+              </div>}
+
+              {error && <p className="intervention-error" role="alert">{error}</p>}
+            </div>
+          </section>
+
+          <aside className="client-summary intervention-summary intervention-closure-summary">
+            <div className="summary-title"><span>✓</span><div><h2>Validare și închidere</h2><p>{project.id} · Acces administrativ</p></div></div>
+            <div className="summary-checklist">
+              <div className={initialSummary?.assessment ? "done" : ""}><span>{initialSummary?.assessment ? "✓" : "○"}</span><p><strong>Constatare completată</strong><small>{initialSummary?.assessment?.damageType ?? "Tipul avariei și fotografiile lipsesc"}</small></p></div>
+              <div className={executionActivities.length ? "done" : ""}><span>{executionActivities.length ? "✓" : "○"}</span><p><strong>Execuție documentată</strong><small>{executionActivities.length ? `${executionActivities.length} ${executionActivities.length === 1 ? "activitate salvată" : "activități salvate"}` : "Minimum o activitate obligatorie"}</small></p></div>
+              <div className={reportReady ? "done" : ""}><span>{reportReady ? "✓" : "○"}</span><p><strong>Raport pregătit</strong><small>{reportReady ? "Raportul intervenției este complet" : "Raportul trebuie să aibă cel puțin 20 de caractere"}</small></p></div>
+            </div>
+
+            {initialSummary?.documentation && <p className="intervention-saved-note">Validată de {initialSummary.documentation.validatedBy} · {formatCapturedAt(initialSummary.documentation.validatedAt)}</p>}
+
+            <button className="primary-button submit-documentation" type="button" onClick={() => void closeIntervention()} disabled={!canFinalize || saving}>
+              {project.status === "Finalizat" ? "Intervenție închisă" : saving ? "Se validează..." : "Validează și închide"}<span>{project.status === "Finalizat" ? "✓" : "→"}</span>
+            </button>
+          </aside>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -831,9 +831,13 @@ export default function Home() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ projectId, section, content }),
     });
-    const payload = (await response.json()) as { documentation?: ProjectFieldDocumentation; error?: string };
+    const payload = (await response.json()) as { documentation?: ProjectFieldDocumentation; project?: Project; error?: string };
     if (!response.ok || !payload.documentation) throw new Error(payload.error || "Documentația nu a putut fi salvată.");
     setFieldDocumentation((current) => ({ ...current, [projectId]: payload.documentation! }));
+    if (payload.project) {
+      setProjects((current) => current.map((project) => project.id === payload.project!.id ? payload.project! : project));
+      setSelected((current) => current?.id === payload.project!.id ? payload.project! : current);
+    }
   }
 
   async function submitClientDocumentation() {
@@ -908,7 +912,7 @@ export default function Home() {
   }
 
   function goTo(next: View) {
-    if ((next === "documents" || next === "team" || next === "cpe" || next === "drive") && !canManageDocuments) {
+    if ((next === "documents" || next === "intervention-documentation" || next === "team" || next === "cpe" || next === "drive") && !canManageDocuments) {
       showToast("Nu ai permisiunea de a accesa această secțiune administrativă.");
       return;
     }
@@ -1081,7 +1085,7 @@ export default function Home() {
               </> : activeProject.activityType === "Intervenție" ? <>
                 <button className={view === "intervention-workspace" ? "active" : ""} onClick={() => goTo("intervention-workspace")}><span>1</span>Constatare</button>
                 <button className={view === "intervention-execution" ? "active" : ""} onClick={() => goTo("intervention-execution")}><span>2</span>Execuție</button>
-                <button className={view === "intervention-documentation" ? "active" : ""} onClick={() => goTo("intervention-documentation")}><span>3</span>Documentare</button>
+                {canManageDocuments && <button className={view === "intervention-documentation" ? "active" : ""} onClick={() => goTo("intervention-documentation")}><span>3</span>Documentare</button>}
               </> : <button className="active"><span>1</span>Fișa survey</button>}
             </nav>
           </section>

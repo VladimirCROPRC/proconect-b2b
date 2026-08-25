@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { getRawDb } from "../db";
-import { requiredInterventionCablePhotos, type InterventionExecutionActivity, type InterventionExecutionSummary, type InterventionJunction, type ProjectFieldDocumentation } from "./field-documentation";
+import { requiredInterventionCablePhotos, type InterventionDocumentationSummary, type InterventionExecutionActivity, type InterventionExecutionSummary, type InterventionJunction, type ProjectFieldDocumentation } from "./field-documentation";
 import { initialCpeCatalog, initialFieldDocumentation, initialProjects, type ProjectActivityType, type ProjectRecord } from "./project-data";
 import type { AuthenticatedAccount } from "./server-auth";
 
@@ -166,7 +166,19 @@ export async function listProjectData(account: AuthenticatedAccount) {
   const fieldDocumentation: Record<string, ProjectFieldDocumentation> = {};
   for (const row of documentationRows.results ?? []) {
     try {
-      fieldDocumentation[row.project_id] = JSON.parse(row.content_json) as ProjectFieldDocumentation;
+      const documentation = JSON.parse(row.content_json) as ProjectFieldDocumentation;
+      if (!isManagementRole(account) && documentation.intervention?.documentation) {
+        const { assessment, execution } = documentation.intervention;
+        fieldDocumentation[row.project_id] = {
+          ...documentation,
+          intervention: {
+            ...(assessment ? { assessment } : {}),
+            ...(execution ? { execution } : {}),
+          },
+        };
+      } else {
+        fieldDocumentation[row.project_id] = documentation;
+      }
     } catch {
       fieldDocumentation[row.project_id] = {};
     }
@@ -355,13 +367,25 @@ export async function saveFieldDocumentation(projectId: string, section: string,
   }
   const project = await getAuthorizedProject(projectId, account);
   if (!project) return { error: "Proiectul nu este disponibil pentru acest utilizator.", status: 404 as const };
+  let finalizedProject: ProjectRecord | undefined;
 
   if (section === "intervention") {
     if (project.activity_type !== "Intervenție") {
       return { error: "Constatarea este disponibilă numai pentru intervenții.", status: 400 as const };
     }
 
-    const intervention = content as { assessment?: { damageType?: unknown }; execution?: Partial<InterventionExecutionSummary> };
+    if (project.status === "Finalizat") {
+      return { error: "Intervenția a fost deja validată și închisă.", status: 409 as const };
+    }
+
+    const intervention = content as {
+      assessment?: { damageType?: unknown };
+      execution?: Partial<InterventionExecutionSummary>;
+      documentation?: Partial<InterventionDocumentationSummary>;
+    };
+    if (intervention.documentation && !isManagementRole(account)) {
+      return { error: "Documentarea și închiderea intervenției sunt rezervate administratorului, managerului sau coordonatorului.", status: 403 as const };
+    }
     const assessment = intervention?.assessment;
     if (!assessment || !["FO cut", "Atenuare", "Echipament"].includes(String(assessment.damageType))) {
       return { error: "Selectează tipul avariei înainte de salvarea constatării.", status: 400 as const };
@@ -432,6 +456,25 @@ export async function saveFieldDocumentation(projectId: string, section: string,
         }
       }
     }
+
+    if (intervention.documentation) {
+      if (!intervention.execution?.activities?.length) {
+        return { error: "Înregistrează cel puțin o activitate de execuție înainte de închiderea intervenției.", status: 400 as const };
+      }
+      const report = typeof intervention.documentation.report === "string" ? intervention.documentation.report.trim() : "";
+      if (report.length < 20 || report.length > 5_000) {
+        return { error: "Raportul intervenției trebuie să conțină între 20 și 5.000 de caractere.", status: 400 as const };
+      }
+      content = {
+        ...intervention,
+        documentation: {
+          report,
+          validatedAt: Date.now(),
+          validatedBy: account.name,
+        } satisfies InterventionDocumentationSummary,
+      };
+      finalizedProject = { ...projectRowToRecord(project), status: "Finalizat" };
+    }
   }
 
   const serialized = JSON.stringify(content);
@@ -451,12 +494,22 @@ export async function saveFieldDocumentation(projectId: string, section: string,
   }
 
   const next = { ...current, [section]: content };
-  await getRawDb()
+  const now = Date.now();
+  const saveDocumentation = getRawDb()
     .prepare(
       "INSERT INTO project_field_documentation (project_id, content_json, updated_by, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(project_id) DO UPDATE SET content_json = excluded.content_json, updated_by = excluded.updated_by, updated_at = excluded.updated_at",
     )
-    .bind(projectId, JSON.stringify(next), account.username, Date.now())
-    .run();
+    .bind(projectId, JSON.stringify(next), account.username, now);
+
+  if (finalizedProject) {
+    await getRawDb().batch([
+      saveDocumentation,
+      getRawDb().prepare("UPDATE projects SET status = ?, updated_at = ? WHERE id = ?").bind("Finalizat", now, projectId),
+    ]);
+    return { documentation: next, project: finalizedProject };
+  }
+
+  await saveDocumentation.run();
   return { documentation: next };
 }
 

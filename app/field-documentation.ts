@@ -105,6 +105,12 @@ export type InterventionExecutionSummary = {
   documentedAt: number;
 };
 
+export type InterventionDocumentationSummary = {
+  report: string;
+  validatedAt: number;
+  validatedBy: string;
+};
+
 export function requiredInterventionCablePhotos(lengthMeters: number) {
   if (!Number.isFinite(lengthMeters) || lengthMeters <= 0) return 0;
   if (lengthMeters <= 100) return 3;
@@ -116,6 +122,7 @@ export function requiredInterventionCablePhotos(lengthMeters: number) {
 export type InterventionFieldSummary = {
   assessment?: InterventionAssessmentSummary;
   execution?: InterventionExecutionSummary;
+  documentation?: InterventionDocumentationSummary;
 };
 
 export type ProjectFieldDocumentation = {

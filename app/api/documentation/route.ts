@@ -14,7 +14,7 @@ export async function PATCH(request: Request) {
     }
     const result = await saveFieldDocumentation(body.projectId, body.section, body.content, session.account);
     if ("error" in result) return Response.json({ error: result.error }, { status: result.status });
-    return Response.json({ documentation: result.documentation });
+    return Response.json({ documentation: result.documentation, ...(result.project ? { project: result.project } : {}) });
   } catch (error) {
     console.error("Proconect field documentation error:", error instanceof Error ? error.message : "Unknown documentation failure");
     return Response.json({ error: "Documentația nu a putut fi salvată." }, { status: 503 });
