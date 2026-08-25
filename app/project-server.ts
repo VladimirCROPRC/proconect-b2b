@@ -49,8 +49,16 @@ type StorageEnvironment = {
 };
 
 const storageEnvironment = env as unknown as StorageEnvironment;
-const fileSections = new Set(["project", "client", "route", "splices", "site", "documents"]);
+const fileSections = new Set(["project", "client", "route", "splices", "site", "documents", "intervention-assessment"]);
 const maximumUploadBytes = 20 * 1024 * 1024;
+
+export function hasValidPhotoCoordinates(value: string) {
+  const coordinates = /^(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)(?:\s|$)/.exec(value.trim());
+  if (!coordinates) return false;
+  const latitude = Number(coordinates[1]);
+  const longitude = Number(coordinates[2]);
+  return Number.isFinite(latitude) && Number.isFinite(longitude) && Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180;
+}
 
 export function isManagementRole(account: AuthenticatedAccount) {
   return account.role === "Admin" || account.role === "Manager" || account.role === "Coordonator";
@@ -318,11 +326,32 @@ export async function deleteProject(projectId: string) {
 }
 
 export async function saveFieldDocumentation(projectId: string, section: string, content: unknown, account: AuthenticatedAccount) {
-  if (!["client", "route", "splices", "site"].includes(section)) {
+  if (!["client", "route", "splices", "site", "intervention"].includes(section)) {
     return { error: "Secțiunea de documentație nu este validă.", status: 400 as const };
   }
   const project = await getAuthorizedProject(projectId, account);
   if (!project) return { error: "Proiectul nu este disponibil pentru acest utilizator.", status: 404 as const };
+
+  if (section === "intervention") {
+    if (project.activity_type !== "Intervenție") {
+      return { error: "Constatarea este disponibilă numai pentru intervenții.", status: 400 as const };
+    }
+
+    const assessment = (content as { assessment?: { damageType?: unknown } })?.assessment;
+    if (!assessment || !["FO cut", "Atenuare", "Echipament"].includes(String(assessment.damageType))) {
+      return { error: "Selectează tipul avariei înainte de salvarea constatării.", status: 400 as const };
+    }
+
+    const photos = await getRawDb()
+      .prepare("SELECT geolocation FROM project_files WHERE project_id = ? AND section = ?")
+      .bind(projectId, "intervention-assessment")
+      .all<{ geolocation: string }>();
+
+    if (!(photos.results ?? []).some((photo) => hasValidPhotoCoordinates(photo.geolocation))) {
+      return { error: "Încarcă cel puțin o fotografie a avariei cu coordonate GPS valide.", status: 400 as const };
+    }
+  }
+
   const serialized = JSON.stringify(content);
   if (!serialized || serialized.length > 600_000) return { error: "Documentația depășește dimensiunea permisă.", status: 400 as const };
 

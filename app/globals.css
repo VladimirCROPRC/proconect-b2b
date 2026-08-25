@@ -8088,10 +8088,230 @@ td > small {
   line-height: 1.7;
 }
 
+.intervention-section-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(260px, 0.8fr);
+  align-items: start;
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.intervention-assessment-content {
+  display: grid;
+  gap: 22px;
+  padding: 21px 22px 23px;
+}
+
+.intervention-damage-field {
+  display: grid;
+  gap: 9px;
+}
+
+.intervention-damage-field > span {
+  color: #344054;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.intervention-damage-field > span > b {
+  margin-left: 8px;
+  color: #5767a6;
+  font-size: 9px;
+  letter-spacing: .35px;
+}
+
+.intervention-damage-field > select {
+  width: 100%;
+  min-height: 45px;
+  padding: 0 13px;
+  border: 1px solid #d9dfeb;
+  border-radius: 8px;
+  color: #273449;
+  background: #fff;
+  font-size: 14px;
+}
+
+.intervention-damage-field > small {
+  color: #75808b;
+  font-size: 12px;
+}
+
+.intervention-photo-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.intervention-photo-heading h3 {
+  margin: 0;
+  color: #253146;
+  font-size: 14px;
+}
+
+.intervention-photo-heading p {
+  margin: 5px 0 0;
+  color: #76828b;
+  font-size: 12px;
+}
+
+.intervention-photo-heading > span {
+  padding: 6px 9px;
+  border-radius: 7px;
+  color: #425498;
+  background: #edf0fb;
+  font-size: 11px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.intervention-photo-upload {
+  display: grid;
+  min-height: 152px;
+  align-content: center;
+  justify-items: center;
+  gap: 8px;
+  padding: 18px;
+  border: 1px dashed #bbc6dd;
+  border-radius: 10px;
+  background: #f9fbff;
+  cursor: pointer;
+  text-align: center;
+}
+
+.intervention-photo-upload > input {
+  display: none;
+}
+
+.intervention-photo-upload.is-uploading {
+  opacity: .72;
+  cursor: progress;
+}
+
+.intervention-upload-icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 9px;
+  color: #405292;
+  background: #e9eefb;
+  font-size: 24px;
+}
+
+.intervention-photo-upload > strong {
+  color: #334475;
+  font-size: 13px;
+}
+
+.intervention-photo-upload > small,
+.intervention-loading {
+  color: #76828b;
+  font-size: 12px;
+}
+
+.intervention-loading {
+  margin: 0;
+}
+
+.intervention-photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 14px;
+}
+
+.intervention-photo-item {
+  overflow: hidden;
+  border: 1px solid #e3e8ef;
+  border-radius: 9px;
+  background: #fff;
+}
+
+.intervention-photo-item > a {
+  display: block;
+  background: #edf1f8;
+}
+
+.intervention-photo-item img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+}
+
+.intervention-photo-meta {
+  display: grid;
+  gap: 6px;
+  padding: 11px 11px 8px;
+}
+
+.intervention-photo-meta > strong {
+  overflow: hidden;
+  color: #334155;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.intervention-photo-meta > span {
+  color: #425498;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.intervention-photo-meta > small {
+  color: #75808b;
+  font-size: 11px;
+}
+
+.intervention-photo-item > button {
+  margin: 0 11px 11px;
+  padding: 0;
+  border: 0;
+  color: #b42336;
+  background: none;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.intervention-error {
+  margin: 0;
+  padding: 11px 12px;
+  border: 1px solid #f2cad0;
+  border-radius: 8px;
+  color: #aa3040;
+  background: #fff7f8;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.intervention-summary {
+  position: sticky;
+  top: 88px;
+}
+
+.intervention-summary .submit-documentation:disabled {
+  opacity: .58;
+  cursor: not-allowed;
+}
+
+.intervention-saved-note {
+  margin: 15px 0 0;
+  color: #667085;
+  font-size: 11px;
+  text-align: center;
+}
+
 @media (max-width: 850px) {
   .drive-settings-layout,
-  .activity-workspace-grid {
+  .activity-workspace-grid,
+  .intervention-section-layout {
     grid-template-columns: 1fr;
+  }
+
+  .intervention-summary {
+    position: static;
   }
 }
 
@@ -8178,5 +8398,33 @@ td > small {
 
   .drive-tree-section {
     margin-left: 24px;
+  }
+
+  .intervention-assessment-content {
+    gap: 19px;
+    padding: 17px 16px 19px;
+  }
+
+  .intervention-damage-field > select {
+    min-height: 47px;
+    font-size: 16px;
+  }
+
+  .intervention-damage-field > small,
+  .intervention-photo-heading p,
+  .intervention-photo-upload > small,
+  .intervention-photo-meta > span,
+  .intervention-photo-meta > small,
+  .intervention-saved-note {
+    font-size: 12px;
+  }
+
+  .intervention-photo-meta > strong,
+  .intervention-photo-upload > strong {
+    font-size: 13px;
+  }
+
+  .intervention-photo-grid {
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   }
 }

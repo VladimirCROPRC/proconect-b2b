@@ -1,4 +1,4 @@
-import { getAuthorizedProject, getFileRow, isManagementRole, listProjectFiles, removeFile, storeFile, validateUpload } from "../../project-server";
+import { getAuthorizedProject, getFileRow, hasValidPhotoCoordinates, isManagementRole, listProjectFiles, removeFile, storeFile, validateUpload } from "../../project-server";
 import { syncFileIfConnected } from "../../google-drive-server";
 import { currentSession, sameOrigin } from "../../server-auth";
 
@@ -39,7 +39,16 @@ export async function POST(request: Request) {
     if ((section === "project" || section === "documents") && !isManagementRole(session.account)) {
       return Response.json({ error: "Încărcarea documentelor proiectului este rezervată administratorului." }, { status: 403 });
     }
-    if (!(await getAuthorizedProject(projectId, session.account))) return Response.json({ error: "Proiect indisponibil." }, { status: 404 });
+    const project = await getAuthorizedProject(projectId, session.account);
+    if (!project) return Response.json({ error: "Proiect indisponibil." }, { status: 404 });
+    if (section === "intervention-assessment") {
+      if (project.activity_type !== "Intervenție") {
+        return Response.json({ error: "Fotografiile constatării sunt disponibile numai pentru intervenții." }, { status: 400 });
+      }
+      if (typeof geo !== "string" || !hasValidPhotoCoordinates(geo)) {
+        return Response.json({ error: "Fotografiile constatării necesită coordonate GPS valide." }, { status: 400 });
+      }
+    }
     const validation = validateUpload(section, category, file);
     if (validation) return Response.json({ error: validation }, { status: 400 });
     const result = await storeFile({ projectId, section, category, file, geo: typeof geo === "string" ? geo.slice(0, 250) : "", uploadedBy: session.account.username });

@@ -50,8 +50,11 @@ export const driveSectionFolders: Record<string, string> = {
 const activitySectionFolders: Record<ProjectActivityType, Record<string, string>> = {
   Instalare: driveSectionFolders,
   "Intervenție": {
-    project: "01_Documente interventie",
-    documents: "02_Documente administrative",
+    "intervention-assessment": "01_Constatare",
+    "intervention-execution": "02_Executie",
+    "intervention-documentation": "03_Documentare",
+    project: "04_Documente interventie",
+    documents: "05_Documente administrative",
   },
   Survey: {
     project: "01_Documente survey",
@@ -135,6 +138,7 @@ export async function getDriveStatus(request: Request) {
     folders,
     sections: driveSectionFolders,
     activityFolders: driveActivityFolders,
+    activitySections: activitySectionFolders,
   };
 }
 
@@ -306,7 +310,10 @@ async function ensureProjectFolder(projectId: string, categoryFolders?: Record<P
     } catch {
       sectionFolders = {};
     }
-    if (sectionFolders[activityFolderMarker] === activityType) return existing;
+    if (
+      sectionFolders[activityFolderMarker] === activityType
+      && Object.keys(activitySectionFolders[activityType]).every((section) => Boolean(sectionFolders[section]))
+    ) return existing;
   }
 
   const roots = categoryFolders ?? await ensureActivityFolders(configuration.root_folder_id);

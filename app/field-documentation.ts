@@ -63,9 +63,23 @@ export type ClientFieldSummary = {
   equipment: string[];
 };
 
+export type InterventionDamageType = "FO cut" | "Atenuare" | "Echipament";
+
+export type InterventionAssessmentSummary = {
+  damageType: InterventionDamageType;
+  photoCount: number;
+  geotaggedPhotoCount: number;
+  documentedAt: number;
+};
+
+export type InterventionFieldSummary = {
+  assessment?: InterventionAssessmentSummary;
+};
+
 export type ProjectFieldDocumentation = {
   client?: ClientFieldSummary;
   route?: RouteFieldSummary;
   splices?: SpliceFieldSummary;
   site?: SiteFieldSummary;
+  intervention?: InterventionFieldSummary;
 };

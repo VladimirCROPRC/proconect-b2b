@@ -4,13 +4,14 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { FoRouteSection } from "./fo-route-map";
 import { FoSplicesSection } from "./fo-splices";
 import { SiteOperationsSection } from "./site-operations";
+import { InterventionOperationsSection } from "./intervention-operations";
 import { ProjectDocumentsSection } from "./project-documents";
 import { GoogleDriveSettings, type GoogleDriveStatus } from "./google-drive-settings";
 import { fetchProjectFiles, formatCapturedAt, uploadProjectFile } from "./client-storage";
 import { initialCpeCatalog, type ProjectActivityType, type ProjectRecord } from "./project-data";
-import type { ClientFieldSummary, ProjectFieldDocumentation, RouteFieldSummary, SiteFieldSummary, SpliceFieldSummary } from "./field-documentation";
+import type { ClientFieldSummary, InterventionFieldSummary, ProjectFieldDocumentation, RouteFieldSummary, SiteFieldSummary, SpliceFieldSummary } from "./field-documentation";
 
-type View = "projects" | "interventions" | "surveys" | "intervention-workspace" | "survey-workspace" | "team" | "cpe" | "drive" | "documents" | "client" | "route" | "splices" | "site";
+type View = "projects" | "interventions" | "surveys" | "intervention-workspace" | "intervention-execution" | "intervention-documentation" | "survey-workspace" | "team" | "cpe" | "drive" | "documents" | "client" | "route" | "splices" | "site";
 type ActivityListView = "projects" | "interventions" | "surveys";
 type Modal = "project" | "edit-project" | "delete-project" | "account" | "cpe" | "edit-cpe" | null;
 type ServiceType = "Internet" | "VPN" | "Internet+OL" | "OL";
@@ -307,10 +308,11 @@ export default function Home() {
   const canManageDocuments = currentAccount?.role === "Admin" || currentAccount?.role === "Manager" || currentAccount?.role === "Coordonator";
   const activeProject = projects.find((project) => project.id === activeProjectId) ?? projects[0] ?? emptyProject;
   const isDocumentationView = view === "client" || view === "route" || view === "splices" || view === "site";
-  const isActivityWorkspace = view === "intervention-workspace" || view === "survey-workspace";
+  const isInterventionWorkspace = view === "intervention-workspace" || view === "intervention-execution" || view === "intervention-documentation";
+  const isActivityWorkspace = isInterventionWorkspace || view === "survey-workspace";
   const isProjectView = isDocumentationView || view === "documents" || isActivityWorkspace;
   const isActivityListView = view === "projects" || view === "interventions" || view === "surveys";
-  const currentListView: ActivityListView = view === "interventions" || view === "intervention-workspace"
+  const currentListView: ActivityListView = view === "interventions" || isInterventionWorkspace
     ? "interventions"
     : view === "surveys" || view === "survey-workspace"
       ? "surveys"
@@ -820,7 +822,7 @@ export default function Home() {
     );
   }
 
-  async function persistFieldSection(section: "client" | "route" | "splices" | "site", content: ClientFieldSummary | RouteFieldSummary | SpliceFieldSummary | SiteFieldSummary) {
+  async function persistFieldSection(section: "client" | "route" | "splices" | "site" | "intervention", content: ClientFieldSummary | RouteFieldSummary | SpliceFieldSummary | SiteFieldSummary | InterventionFieldSummary) {
     const projectId = activeProject.id;
     const response = await fetch("/api/documentation", {
       method: "PATCH",
@@ -866,6 +868,10 @@ export default function Home() {
 
   async function saveSiteSummary(summary: SiteFieldSummary) {
     await persistFieldSection("site", summary);
+  }
+
+  async function saveInterventionSummary(summary: InterventionFieldSummary) {
+    await persistFieldSection("intervention", summary);
   }
 
   function changeActiveProject(nextProjectId: string) {
@@ -920,7 +926,7 @@ export default function Home() {
       setSearch("");
       setFilter("Toate statusurile");
     }
-    if ((next === "intervention-workspace" || next === "survey-workspace") && projects.length === 0) {
+    if ((next === "intervention-workspace" || next === "intervention-execution" || next === "intervention-documentation" || next === "survey-workspace") && projects.length === 0) {
       showToast("Creează mai întâi o lucrare în secțiunea dedicată.");
       setView("projects");
       return;
@@ -999,7 +1005,7 @@ export default function Home() {
           <button className={view === "projects" ? "active" : ""} onClick={() => goTo("projects")}>
             <span className="nav-symbol">IN</span> Instalări
           </button>
-          <button className={view === "interventions" || view === "intervention-workspace" ? "active" : ""} onClick={() => goTo("interventions")}>
+          <button className={view === "interventions" || isInterventionWorkspace ? "active" : ""} onClick={() => goTo("interventions")}>
             <span className="nav-symbol">IT</span> Intervenții
           </button>
           <button className={view === "surveys" || view === "survey-workspace" ? "active" : ""} onClick={() => goTo("surveys")}>
@@ -1042,7 +1048,7 @@ export default function Home() {
             <img className="proconect-logo mobile-proconect-logo" src={proconectLogoUrl} alt="PRO CONECT" />
             <strong>B2B</strong>
           </button>
-          <div className="breadcrumb"><span>{isProjectView ? `${activitySections[listViewForActivity(activeProject.activityType)].title} · ${activeProject.id}` : "Management"}</span><b>/</b><strong>{view === "projects" ? "Instalări" : view === "interventions" ? "Intervenții" : view === "surveys" ? "Survey" : view === "intervention-workspace" ? "Fișa intervenției" : view === "survey-workspace" ? "Fișa survey" : view === "team" ? "Echipă" : view === "cpe" ? "Echipamente CPE" : view === "drive" ? "Google Drive" : view === "client" ? "Client" : view === "route" ? "Traseu FO" : view === "splices" ? "Suduri FO" : view === "documents" ? "Documente" : "Operațiuni site"}</strong></div>
+          <div className="breadcrumb"><span>{isProjectView ? `${activitySections[listViewForActivity(activeProject.activityType)].title} · ${activeProject.id}` : "Management"}</span><b>/</b><strong>{view === "projects" ? "Instalări" : view === "interventions" ? "Intervenții" : view === "surveys" ? "Survey" : view === "intervention-workspace" ? "Constatare" : view === "intervention-execution" ? "Execuție" : view === "intervention-documentation" ? "Documentare" : view === "survey-workspace" ? "Fișa survey" : view === "team" ? "Echipă" : view === "cpe" ? "Echipamente CPE" : view === "drive" ? "Google Drive" : view === "client" ? "Client" : view === "route" ? "Traseu FO" : view === "splices" ? "Suduri FO" : view === "documents" ? "Documente" : "Operațiuni site"}</strong></div>
           <div className="top-actions">
             <button className="help-button" aria-label="Ajutor">?</button>
             <button className="bell" aria-label="Notificări">●<span>3</span></button>
@@ -1071,7 +1077,11 @@ export default function Home() {
                 <button className={view === "splices" ? "active" : ""} onClick={() => goTo("splices")}><span>3</span>Suduri FO</button>
                 <button className={view === "site" ? "active" : ""} onClick={() => goTo("site")}><span>4</span>Site</button>
                 {canManageDocuments && <button className={view === "documents" ? "active" : ""} onClick={() => goTo("documents")}><span>5</span>Documente</button>}
-              </> : <button className="active"><span>1</span>{activeProject.activityType === "Intervenție" ? "Fișa intervenției" : "Fișa survey"}</button>}
+              </> : activeProject.activityType === "Intervenție" ? <>
+                <button className={view === "intervention-workspace" ? "active" : ""} onClick={() => goTo("intervention-workspace")}><span>1</span>Constatare</button>
+                <button className={view === "intervention-execution" ? "active" : ""} onClick={() => goTo("intervention-execution")}><span>2</span>Execuție</button>
+                <button className={view === "intervention-documentation" ? "active" : ""} onClick={() => goTo("intervention-documentation")}><span>3</span>Documentare</button>
+              </> : <button className="active"><span>1</span>Fișa survey</button>}
             </nav>
           </section>
         )}
@@ -1284,7 +1294,7 @@ export default function Home() {
           </div>
         )}
 
-        {isActivityWorkspace && (
+        {view === "survey-workspace" && (
           <div className="page-wrap inner-page activity-workspace-page">
             <section className="page-heading compact">
               <div>
@@ -1324,6 +1334,16 @@ export default function Home() {
           </div>
         )}
 
+        {isInterventionWorkspace && <InterventionOperationsSection
+          project={activeProject}
+          section={view === "intervention-execution" ? "execution" : view === "intervention-documentation" ? "documentation" : "assessment"}
+          initialSummary={activeFieldDocumentation.intervention}
+          driveFolderUrl={driveStatus?.folders[activeProject.id]}
+          canEdit={canManageDocuments}
+          onEdit={() => openProjectEditor(activeProject)}
+          onNotify={showToast}
+          onSaved={saveInterventionSummary}
+        />}
         {view === "drive" && canManageDocuments && <GoogleDriveSettings initialStatus={driveStatus} onStatusChange={setDriveStatus} onNotify={showToast} />}
         {view === "route" && <FoRouteSection project={activeProject} initialSummary={activeFieldDocumentation.route} onNotify={showToast} onSaved={saveRouteSummary} />}
         {view === "splices" && <FoSplicesSection project={activeProject} initialSummary={activeFieldDocumentation.splices} onNotify={showToast} onSaved={saveSpliceSummary} />}
@@ -1333,7 +1353,7 @@ export default function Home() {
 
       <nav className={`${canManageDocuments ? "mobile-nav manager-nav" : "mobile-nav"}${showInstallationNavigation ? "" : " activity-nav"}`} aria-label="Navigare mobilă">
         <button className={view === "projects" ? "active" : ""} onClick={() => goTo("projects")}><span>IN</span>Instalări</button>
-        <button className={view === "interventions" || view === "intervention-workspace" ? "active" : ""} onClick={() => goTo("interventions")}><span>IT</span>Intervenții</button>
+        <button className={view === "interventions" || isInterventionWorkspace ? "active" : ""} onClick={() => goTo("interventions")}><span>IT</span>Intervenții</button>
         <button className={view === "surveys" || view === "survey-workspace" ? "active" : ""} onClick={() => goTo("surveys")}><span>SV</span>Survey</button>
         {canManageDocuments && <button className={view === "team" ? "active" : ""} onClick={() => goTo("team")}><span>E</span>Echipă</button>}
         {canManageDocuments && <button className={view === "cpe" ? "active" : ""} onClick={() => goTo("cpe")}><span>C</span>CPE</button>}

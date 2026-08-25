@@ -12,7 +12,7 @@ export type StoredProjectFile = {
   url: string;
 };
 
-const fieldPhotoSections = new Set(["client", "route", "splices", "site"]);
+const fieldPhotoSections = new Set(["client", "route", "splices", "site", "intervention-assessment"]);
 
 async function getPhotoGeolocation() {
   if (typeof window === "undefined" || !window.isSecureContext || !navigator.geolocation) {

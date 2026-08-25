@@ -17,6 +17,7 @@ export type GoogleDriveStatus = {
   folders: Record<string, string>;
   sections: Record<string, string>;
   activityFolders?: Record<string, string>;
+  activitySections?: Record<string, Record<string, string>>;
 };
 
 type GoogleDriveSettingsProps = {
@@ -32,6 +33,9 @@ const sectionLabels: Record<string, string> = {
   splices: "Fotografii joncțiuni și suduri",
   site: "ODF, eTN și ansamblu site",
   documents: "Rapoarte și documente de acceptanță",
+  "intervention-assessment": "Tipul avariei și fotografii GPS",
+  "intervention-execution": "Operațiunile de remediere",
+  "intervention-documentation": "Documentația finală a intervenției",
 };
 
 export function GoogleDriveSettings({ initialStatus, onStatusChange, onNotify }: GoogleDriveSettingsProps) {
@@ -166,6 +170,16 @@ export function GoogleDriveSettings({ initialStatus, onStatusChange, onNotify }:
     "Intervenție": "Interventii",
     Survey: "Survey",
   };
+  const activitySections = status?.activitySections ?? {
+    Instalare: sections,
+    "Intervenție": {
+      "intervention-assessment": "01_Constatare",
+      "intervention-execution": "02_Executie",
+      "intervention-documentation": "03_Documentare",
+      project: "04_Documente interventie",
+      documents: "05_Documente administrative",
+    },
+  };
 
   return (
     <div className="page-wrap inner-page drive-settings-page">
@@ -247,7 +261,7 @@ export function GoogleDriveSettings({ initialStatus, onStatusChange, onNotify }:
             {Object.entries(activityFolders).map(([activity, folder]) => <div className="drive-activity-tree" key={activity}>
               <div className="drive-tree-project"><span>▰</span><strong>{folder}</strong><small>{activity === "Instalare" ? "Instalări B2B" : activity === "Intervenție" ? "Intervenții tehnice" : "Vizite și evaluări"}</small></div>
               <div className="drive-tree-section"><span>▰</span><div><strong>{activity === "Instalare" ? "RID10482" : "RID + Request ID"}</strong><small>Dosarul lucrării</small></div></div>
-              {activity === "Instalare" && Object.entries(sections).map(([section, name]) => <div className="drive-tree-section drive-tree-nested" key={section}><span>▰</span><div><strong>{name}</strong><small>{sectionLabels[section]}</small></div></div>)}
+              {Object.entries(activitySections[activity] ?? {}).map(([section, name]) => <div className="drive-tree-section drive-tree-nested" key={section}><span>▰</span><div><strong>{name}</strong><small>{sectionLabels[section] ?? "Documentele lucrării"}</small></div></div>)}
             </div>)}
           </div>
         </section>
