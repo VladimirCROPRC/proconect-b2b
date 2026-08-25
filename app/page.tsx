@@ -1342,6 +1342,7 @@ export default function Home() {
           driveFolderUrl={driveStatus?.folders[activeProject.id]}
           canEdit={canManageDocuments}
           onEdit={() => openProjectEditor(activeProject)}
+          onSectionChange={(section) => goTo(section === "assessment" ? "intervention-workspace" : section === "execution" ? "intervention-execution" : "intervention-documentation")}
           onNotify={showToast}
           onSaved={saveInterventionSummary}
         />}

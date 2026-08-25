@@ -15,6 +15,7 @@ type InterventionOperationsProps = {
   driveFolderUrl?: string;
   canEdit: boolean;
   onEdit: () => void;
+  onSectionChange: (section: InterventionSection) => void;
   onNotify: (message: string) => void;
   onSaved: (summary: InterventionFieldSummary) => Promise<void>;
 };
@@ -64,6 +65,7 @@ export function InterventionOperationsSection({
   driveFolderUrl,
   canEdit,
   onEdit,
+  onSectionChange,
   onNotify,
   onSaved,
 }: InterventionOperationsProps) {
@@ -184,6 +186,18 @@ export function InterventionOperationsSection({
         </div>
         {canEdit && <button className="primary-button" onClick={onEdit}>Editează lucrarea <span>→</span></button>}
       </section>
+
+      <nav className="intervention-stage-nav" aria-label="Etapele intervenției">
+        <button type="button" className={section === "assessment" ? "active" : ""} onClick={() => onSectionChange("assessment")}>
+          <span>1</span><div><strong>Constatare</strong><small>Avarie și fotografii inițiale</small></div>
+        </button>
+        <button type="button" className={section === "execution" ? "active" : ""} onClick={() => onSectionChange("execution")}>
+          <span>2</span><div><strong>Execuție</strong><small>Activități și hartă Optix</small></div>
+        </button>
+        <button type="button" className={section === "documentation" ? "active" : ""} onClick={() => onSectionChange("documentation")}>
+          <span>3</span><div><strong>Documentare</strong><small>Închiderea intervenției</small></div>
+        </button>
+      </nav>
 
       <div className="activity-workspace-grid intervention-brief-grid">
         <section className="project-card activity-brief-card">

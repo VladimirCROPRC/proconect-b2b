@@ -8096,6 +8096,78 @@ td > small {
   margin-top: 18px;
 }
 
+.intervention-stage-nav {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.intervention-stage-nav > button {
+  display: grid;
+  min-width: 0;
+  min-height: 70px;
+  grid-template-columns: 32px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 11px 13px;
+  border: 1px solid #dfe4ed;
+  border-radius: 8px;
+  color: #5f6b7d;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(31, 42, 82, .035);
+}
+
+.intervention-stage-nav > button > span {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 50%;
+  color: #53608d;
+  background: #e9edf8;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.intervention-stage-nav > button > div {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.intervention-stage-nav strong {
+  color: #35405a;
+  font-size: 12px;
+}
+
+.intervention-stage-nav small {
+  overflow: hidden;
+  color: #7d8796;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.intervention-stage-nav > button.active {
+  border-color: #3b4984;
+  color: #fff;
+  background: #3b4984;
+  box-shadow: 0 7px 17px rgba(59, 73, 132, .2);
+}
+
+.intervention-stage-nav > button.active > span {
+  color: #3b4984;
+  background: #fff;
+}
+
+.intervention-stage-nav > button.active strong,
+.intervention-stage-nav > button.active small {
+  color: #fff;
+}
+
 .intervention-assessment-content {
   display: grid;
   gap: 22px;
@@ -8867,6 +8939,32 @@ td > small {
   .intervention-assessment-content {
     gap: 19px;
     padding: 17px 16px 19px;
+  }
+
+  .intervention-stage-nav {
+    gap: 6px;
+    margin-top: 14px;
+  }
+
+  .intervention-stage-nav > button {
+    min-height: 64px;
+    grid-template-columns: 26px minmax(0, 1fr);
+    gap: 7px;
+    padding: 9px 8px;
+  }
+
+  .intervention-stage-nav > button > span {
+    width: 25px;
+    height: 25px;
+    font-size: 10px;
+  }
+
+  .intervention-stage-nav strong {
+    font-size: 11px;
+  }
+
+  .intervention-stage-nav small {
+    font-size: 9px;
   }
 
   .intervention-damage-field > select,
