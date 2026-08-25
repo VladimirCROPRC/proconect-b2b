@@ -7,7 +7,7 @@ import { SiteOperationsSection } from "./site-operations";
 import { ProjectDocumentsSection } from "./project-documents";
 import { GoogleDriveSettings, type GoogleDriveStatus } from "./google-drive-settings";
 import { fetchProjectFiles, formatCapturedAt, uploadProjectFile } from "./client-storage";
-import { initialCpeCatalog, type ProjectRecord } from "./project-data";
+import { initialCpeCatalog, type ProjectActivityType, type ProjectRecord } from "./project-data";
 import type { ClientFieldSummary, ProjectFieldDocumentation, RouteFieldSummary, SiteFieldSummary, SpliceFieldSummary } from "./field-documentation";
 
 type View = "projects" | "team" | "cpe" | "drive" | "documents" | "client" | "route" | "splices" | "site";
@@ -78,6 +78,7 @@ const initialAccounts: Account[] = [
 
 const emptyProject: Project = {
   id: "",
+  activityType: "Instalare",
   client: "",
   address: "",
   contact: "",
@@ -129,6 +130,7 @@ export default function Home() {
   const [cpeSearch, setCpeSearch] = useState("");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("Toate statusurile");
+  const [activityFilter, setActivityFilter] = useState("Toate activitățile");
   const [selected, setSelected] = useState<Project | null>(null);
   const [toast, setToast] = useState("");
   const [ipwoName, setIpwoName] = useState("");
@@ -296,13 +298,14 @@ export default function Home() {
     return projects.filter((project) => {
       const matchesSearch =
         !query ||
-        `${project.id} ${project.client} ${project.address} ${project.technician} ${project.requirements}`
+        `${project.id} ${project.activityType} ${project.client} ${project.address} ${project.technician} ${project.requirements}`
           .toLowerCase()
           .includes(query);
       const matchesTechnician = currentAccount.role !== "Tehnician" || project.technician === currentAccount.name;
-      return matchesSearch && matchesTechnician && (filter === "Toate statusurile" || project.status === filter);
+      const matchesActivity = activityFilter === "Toate activitățile" || project.activityType === activityFilter;
+      return matchesSearch && matchesTechnician && matchesActivity && (filter === "Toate statusurile" || project.status === filter);
     });
-  }, [currentAccount.name, currentAccount.role, filter, projects, search]);
+  }, [activityFilter, currentAccount.name, currentAccount.role, filter, projects, search]);
   const projectMetrics = useMemo(() => {
     const today = new Date();
     const day = String(today.getDate());
@@ -460,6 +463,7 @@ export default function Home() {
     }
     const project: Project = {
       id,
+      activityType: String(form.get("activityType") || "Instalare") as ProjectActivityType,
       client: String(form.get("client")),
       address: String(form.get("address")),
       contact: String(form.get("contact")),
@@ -510,6 +514,7 @@ export default function Home() {
     const form = new FormData(event.currentTarget);
     const project: Project = {
       ...editingProject,
+      activityType: String(form.get("activityType") || editingProject.activityType) as ProjectActivityType,
       client: String(form.get("client") || ""),
       address: String(form.get("address") || ""),
       contact: String(form.get("contact") || ""),
@@ -989,7 +994,7 @@ export default function Home() {
             </label>
             <div className="active-project-summary">
               <span>{initials(activeProject.client)}</span>
-              <div><small>CLIENT ȘI LOCAȚIE</small><strong>{activeProject.client}</strong><p>{activeProject.address}</p></div>
+              <div><small>{activeProject.activityType.toUpperCase()} · CLIENT ȘI LOCAȚIE</small><strong>{activeProject.client}</strong><p>{activeProject.address}</p></div>
               <em className={statusClass[activeProject.status]}><i />{activeProject.status}</em>
             </div>
             <nav className="project-operation-tabs" aria-label="Operațiunile proiectului activ">
@@ -1022,26 +1027,30 @@ export default function Home() {
 
             <section className="project-card">
               <div className="card-heading">
-                <div><h2>Proiecte recente</h2><p>Gestionează și urmărește lucrările de instalare.</p></div>
+                <div><h2>Proiecte recente</h2><p>Gestionează lucrările de instalare, intervențiile și activitățile Survey.</p></div>
                 <div className="view-controls"><button className="icon-toggle active" aria-label="Vizualizare listă">☷</button><button className="icon-toggle" aria-label="Vizualizare grilă">▦</button></div>
               </div>
               <div className="toolbar">
                 <label className="search-box"><span>⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Caută după RID, client, adresă..." /></label>
                 <div className="filters">
+                  <select value={activityFilter} onChange={(event) => setActivityFilter(event.target.value)} aria-label="Filtru activitate">
+                    <option>Toate activitățile</option><option>Instalare</option><option>Intervenție</option><option>Survey</option>
+                  </select>
                   <select value={filter} onChange={(event) => setFilter(event.target.value)} aria-label="Filtru status">
                     <option>Toate statusurile</option><option>Planificat</option><option>În desfășurare</option><option>De verificat</option><option>Finalizat</option>
                   </select>
-                  <button onClick={() => { setSearch(""); setFilter("Toate statusurile"); }}>↻ <span>Resetează</span></button>
+                  <button onClick={() => { setSearch(""); setFilter("Toate statusurile"); setActivityFilter("Toate activitățile"); }}>↻ <span>Resetează</span></button>
                 </div>
               </div>
 
               <div className="table-wrap">
                 <table>
-                  <thead><tr><th>REQUEST ID</th><th>CLIENT / ADRESĂ</th><th>TEHNICIAN</th><th>STATUS</th><th>PROGRAMARE</th><th /></tr></thead>
+                  <thead><tr><th>REQUEST ID</th><th>ACTIVITATE</th><th>CLIENT / ADRESĂ</th><th>TEHNICIAN</th><th>STATUS</th><th>PROGRAMARE</th><th /></tr></thead>
                   <tbody>
                     {filteredProjects.map((project) => (
                       <tr className={project.id === activeProject.id ? "active-project-row" : ""} key={project.id} onClick={() => setSelected(project)} tabIndex={0} onKeyDown={(event) => event.key === "Enter" && setSelected(project)}>
                         <td><strong className="rid">{project.id}</strong><small>{project.id === activeProject.id ? "Proiect activ" : "Salvat permanent"}</small></td>
+                        <td><strong>{project.activityType}</strong><small>Tip activitate</small></td>
                         <td><strong>{project.client}</strong><small>{project.address}</small></td>
                         <td><div className="technician"><span className="avatar">{initials(project.technician)}</span><strong>{project.technician}</strong></div></td>
                         <td><span className={statusClass[project.status]}><i />{project.status}</span></td>
@@ -1236,6 +1245,7 @@ export default function Home() {
             <div className="modal-body">
               <div className="form-section"><h3><span>1</span> Date proiect și client</h3><div className="form-grid">
                 <label><span>Request ID *</span><div className="prefix-input"><b>RID</b><input name="requestId" required readOnly={Boolean(editingProject)} defaultValue={editingProject?.id.replace(/^RID/i, "")} inputMode="numeric" placeholder="ex. 10483" /></div></label>
+                <label><span>Tip activitate *</span><select name="activityType" required defaultValue={editingProject?.activityType || "Instalare"}><option>Instalare</option><option>Intervenție</option><option>Survey</option></select></label>
                 <label><span>Nume client *</span><input name="client" required defaultValue={editingProject?.client} placeholder="Denumirea companiei" /></label>
                 <label className="wide"><span>Adresă instalare *</span><input name="address" required defaultValue={editingProject?.address} placeholder="Stradă, număr, localitate" /></label>
                 <label><span>Persoană de contact *</span><input name="contact" required defaultValue={editingProject?.contact} placeholder="Nume și prenume" /></label>
@@ -1295,7 +1305,7 @@ export default function Home() {
       </div>}
 
       {selected && <div className="drawer-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setSelected(null)}><aside className="detail-drawer">
-        <div className="drawer-head"><div><span className={statusClass[selected.status]}><i />{selected.status}</span><h2>{selected.id}</h2><p>{selected.client}</p></div><button onClick={() => setSelected(null)} aria-label="Închide">×</button></div>
+        <div className="drawer-head"><div><span className={statusClass[selected.status]}><i />{selected.status}</span><h2>{selected.id}</h2><p>{selected.activityType} · {selected.client}</p></div><button onClick={() => setSelected(null)} aria-label="Închide">×</button></div>
         <div className="drawer-section"><small>LOCAȚIE ȘI CONTACT</small><strong>{selected.address}</strong><p>{selected.contact} · {selected.phone}</p><p>{selected.email}</p></div>
         <div className="drawer-section"><small>CERINȚELE LUCRĂRII</small><p className="requirements-text">{selected.requirements}</p></div>
         <div className="drawer-section"><small>TEHNICIAN ALOCAT</small><div className="technician large"><span className="avatar">{initials(selected.technician)}</span><div><strong>{selected.technician}</strong><p>Programare: {selected.date}</p></div></div></div>

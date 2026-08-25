@@ -35,6 +35,7 @@ export const appSessions = sqliteTable(
 
 export const projects = sqliteTable("projects", {
   id: text("id").primaryKey(),
+  activityType: text("activity_type").notNull().default("Instalare"),
   client: text("client").notNull(),
   address: text("address").notNull(),
   contact: text("contact").notNull(),

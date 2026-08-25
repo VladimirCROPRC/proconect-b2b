@@ -1,7 +1,10 @@
 import type { ProjectFieldDocumentation } from "./field-documentation";
 
+export type ProjectActivityType = "Instalare" | "Intervenție" | "Survey";
+
 export type ProjectRecord = {
   id: string;
+  activityType: ProjectActivityType;
   client: string;
   address: string;
   contact: string;
@@ -22,6 +25,7 @@ export type ProjectRecord = {
 export const initialProjects: ProjectRecord[] = [
   {
     id: "RID10482",
+    activityType: "Instalare",
     client: "Novatel Systems SRL",
     address: "Șos. Pipera 42, București",
     contact: "Marius Dinu",
@@ -40,6 +44,7 @@ export const initialProjects: ProjectRecord[] = [
   },
   {
     id: "RID10479",
+    activityType: "Instalare",
     client: "Medica Distribution",
     address: "Str. Fabricii 18, Cluj-Napoca",
     contact: "Irina Pavel",
@@ -58,6 +63,7 @@ export const initialProjects: ProjectRecord[] = [
   },
   {
     id: "RID10471",
+    activityType: "Instalare",
     client: "Logistic Hub Vest",
     address: "Calea Aradului 71, Timișoara",
     contact: "Vlad Roșu",
@@ -76,6 +82,7 @@ export const initialProjects: ProjectRecord[] = [
   },
   {
     id: "RID10465",
+    activityType: "Instalare",
     client: "Nordic Office Park",
     address: "Bd. Dimitrie Pompeiu 9, București",
     contact: "Elena Matei",

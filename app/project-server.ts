@@ -1,11 +1,12 @@
 import { env } from "cloudflare:workers";
 import { getRawDb } from "../db";
 import type { ProjectFieldDocumentation } from "./field-documentation";
-import { initialCpeCatalog, initialFieldDocumentation, initialProjects, type ProjectRecord } from "./project-data";
+import { initialCpeCatalog, initialFieldDocumentation, initialProjects, type ProjectActivityType, type ProjectRecord } from "./project-data";
 import type { AuthenticatedAccount } from "./server-auth";
 
 type ProjectRow = {
   id: string;
+  activity_type: ProjectActivityType;
   client: string;
   address: string;
   contact: string;
@@ -58,6 +59,7 @@ export function isManagementRole(account: AuthenticatedAccount) {
 function projectRowToRecord(row: ProjectRow): ProjectRecord {
   return {
     id: row.id,
+    activityType: row.activity_type,
     client: row.client,
     address: row.address,
     contact: row.contact,
@@ -79,10 +81,11 @@ function projectRowToRecord(row: ProjectRow): ProjectRecord {
 function insertProjectStatement(project: ProjectRecord, technicianUsername: string, createdBy: string, createdAt = Date.now()) {
   return getRawDb()
     .prepare(
-      "INSERT INTO projects (id, client, address, contact, phone, email, requirements, technician, technician_username, cpe, sfp, mc, terminal_box, status, scheduled_label, ipwo, splice, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO projects (id, activity_type, client, address, contact, phone, email, requirements, technician, technician_username, cpe, sfp, mc, terminal_box, status, scheduled_label, ipwo, splice, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(
       project.id,
+      project.activityType,
       project.client,
       project.address,
       project.contact,
@@ -179,6 +182,7 @@ export async function createProject(input: ProjectRecord, createdBy: Authenticat
   const project: ProjectRecord = {
     ...input,
     id: input.id.toUpperCase(),
+    activityType: ["Instalare", "Intervenție", "Survey"].includes(input.activityType) ? input.activityType : "Instalare",
     client: input.client.trim(),
     address: input.address.trim(),
     contact: input.contact.trim(),
@@ -221,6 +225,7 @@ export async function updateProject(input: ProjectRecord) {
   const project: ProjectRecord = {
     ...input,
     id: existing.id,
+    activityType: ["Instalare", "Intervenție", "Survey"].includes(input.activityType) ? input.activityType : existing.activity_type,
     client: input.client.trim(),
     address: input.address.trim(),
     contact: input.contact.trim(),
@@ -239,8 +244,9 @@ export async function updateProject(input: ProjectRecord) {
   const now = Date.now();
   const statements = [
     getRawDb().prepare(
-      "UPDATE projects SET client = ?, address = ?, contact = ?, phone = ?, email = ?, requirements = ?, technician = ?, technician_username = ?, cpe = ?, sfp = ?, mc = ?, terminal_box = ?, status = ?, scheduled_label = ?, ipwo = ?, splice = ?, updated_at = ? WHERE id = ?",
+      "UPDATE projects SET activity_type = ?, client = ?, address = ?, contact = ?, phone = ?, email = ?, requirements = ?, technician = ?, technician_username = ?, cpe = ?, sfp = ?, mc = ?, terminal_box = ?, status = ?, scheduled_label = ?, ipwo = ?, splice = ?, updated_at = ? WHERE id = ?",
     ).bind(
+      project.activityType,
       project.client,
       project.address,
       project.contact,
