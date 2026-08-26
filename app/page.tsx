@@ -11,6 +11,7 @@ import { fetchProjectFiles, formatCapturedAt, uploadProjectFile } from "./client
 import { initialCpeCatalog, type ProjectActivityType, type ProjectRecord } from "./project-data";
 import type { ClientFieldSummary, InterventionFieldSummary, ProjectFieldDocumentation, RouteFieldSummary, SiteFieldSummary, SpliceFieldSummary } from "./field-documentation";
 import { TechnicianProjectSafety, type ProjectSafetyStatus } from "./technician-project-safety";
+import { NoInterventionControl } from "./no-intervention-control";
 
 type View = "projects" | "interventions" | "surveys" | "intervention-workspace" | "intervention-execution" | "intervention-documentation" | "survey-workspace" | "team" | "cpe" | "drive" | "documents" | "client" | "route" | "splices" | "site";
 type ActivityListView = "projects" | "interventions" | "surveys";
@@ -171,6 +172,8 @@ export default function Home() {
   const [projectDataReady, setProjectDataReady] = useState(false);
   const [activeProjectId, setActiveProjectId] = useState("");
   const [clientService, setClientService] = useState<ServiceType>("Internet");
+  const [clientNoIntervention, setClientNoIntervention] = useState(false);
+  const [clientNoInterventionReason, setClientNoInterventionReason] = useState("");
   const [clientPhotos, setClientPhotos] = useState<Partial<Record<ClientPhotoKey, ClientPhoto[]>>>({});
   const [fieldDocumentation, setFieldDocumentation] = useState<Record<string, ProjectFieldDocumentation>>({});
   const [driveStatus, setDriveStatus] = useState<GoogleDriveStatus | null>(null);
@@ -310,6 +313,15 @@ export default function Home() {
     };
   }, [activeProjectId, authenticatedAccount, projectDataReady]);
 
+  useEffect(() => {
+    const summary = fieldDocumentation[activeProjectId]?.client;
+    queueMicrotask(() => {
+      setClientService(summary?.service ?? "Internet");
+      setClientNoIntervention(Boolean(summary?.noIntervention));
+      setClientNoInterventionReason(summary?.noInterventionReason ?? "");
+    });
+  }, [activeProjectId, fieldDocumentation]);
+
   const technicians = accounts.filter((account) => account.role === "Tehnician" && account.active);
   const currentAccount = authenticatedAccount ?? accounts[0];
   const canManageDocuments = currentAccount?.role === "Admin" || currentAccount?.role === "Manager" || currentAccount?.role === "Coordonator";
@@ -337,9 +349,7 @@ export default function Home() {
     "report",
     ...(clientService === "Internet" || clientService === "Internet+OL" ? (["speed"] as ClientPhotoKey[]) : []),
     ...(clientService === "OL" || clientService === "Internet+OL" ? (["olTest"] as ClientPhotoKey[]) : []),
-    "overview",
-    "detail",
-    "labels",
+    ...(!clientNoIntervention ? (["overview", "detail", "labels"] as ClientPhotoKey[]) : []),
   ];
   const completedClientPhotos = requiredClientPhotoKeys.filter((key) => (clientPhotos[key]?.length ?? 0) > 0).length;
   const clientProgress = Math.round((completedClientPhotos / requiredClientPhotoKeys.length) * 100);
@@ -860,14 +870,20 @@ export default function Home() {
   }
 
   async function submitClientDocumentation() {
+    if (clientNoIntervention && !clientNoInterventionReason.trim()) {
+      showToast("Completează motivul pentru care nu s-a intervenit la client.");
+      return;
+    }
     const missing = requiredClientPhotoKeys.filter((key) => !(clientPhotos[key]?.length));
     if (missing.length) {
       showToast(`Mai trebuie încărcate ${missing.length} fotografii obligatorii.`);
       return;
     }
     const clientSummary: ClientFieldSummary = {
+      noIntervention: clientNoIntervention,
+      noInterventionReason: clientNoIntervention ? clientNoInterventionReason.trim() : "",
       service: clientService,
-      equipment: [
+      equipment: clientNoIntervention ? [] : [
         activeProject.cpe,
         ...(activeProject.sfp ? ["SFP optic"] : []),
         ...(activeProject.mc ? ["Media Converter"] : []),
@@ -1285,7 +1301,15 @@ export default function Home() {
                   </div>
                 </section>
 
-                <section className="client-card">
+                <NoInterventionControl
+                  sectionLabel="secțiunea Client"
+                  noIntervention={clientNoIntervention}
+                  reason={clientNoInterventionReason}
+                  onSelectionChange={setClientNoIntervention}
+                  onReasonChange={setClientNoInterventionReason}
+                />
+
+                {!clientNoIntervention && <section className="client-card">
                   <div className="client-card-head">
                     <span className="step-number">2</span>
                     <div><h2>Echipamente de instalat</h2><p>Lista este preluată automat din proiect.</p></div>
@@ -1301,12 +1325,12 @@ export default function Home() {
                     {activeProject.mc && <article className="install-equipment"><span className="equipment-symbol">MC</span><div><small>MEDIA CONVERTER</small><strong>MC conform proiectului</strong></div><span className="install-state">De instalat</span></article>}
                     {activeProject.terminalBox && <article className="install-equipment"><span className="equipment-symbol">TB</span><div><small>TERMINAȚIE</small><strong>Terminal Box</strong></div><span className="install-state">De instalat</span></article>}
                   </div>
-                </section>
+                </section>}
 
                 <section className="client-card">
                   <div className="client-card-head">
                     <span className="step-number">3</span>
-                    <div><h2>Documentare foto</h2><p>Fotografiile sunt asociate cu ora și locația curentă.</p></div>
+                    <div><h2>Documentare foto</h2><p>{clientNoIntervention ? "Procesul-verbal și testele aplicabile rămân obligatorii." : "Fotografiile sunt asociate cu ora și locația curentă."}</p></div>
                     <span className="photo-progress">{completedClientPhotos}/{requiredClientPhotoKeys.length} încărcate</span>
                   </div>
                   <div className="client-card-body">

@@ -75,21 +75,27 @@ function getRouteCatalogItem(method: RouteMethod, cableType: string) {
 }
 
 function buildReport(project: DocumentProject, fieldData: ProjectFieldDocumentation): ReportDraft {
-  const siteLines = fieldData.site
+  const siteLines = fieldData.site?.noIntervention
+    ? [`Nu s-a intervenit în secțiunea Site. Motiv: ${fieldData.site.noInterventionReason}.`]
+    : fieldData.site
     ? [
         `S-a cablat portul ${fieldData.site.etnPort} din switch ${fieldData.site.etn}.`,
         `Conexiunea a fost realizată în ODF ${fieldData.site.odf}, portul ${fieldData.site.odfPort}.`,
       ]
     : ["Datele pentru ODF și eTN nu au fost încă salvate din teren."];
 
-  const routeLines = fieldData.route?.segments.length
+  const routeLines = fieldData.route?.noIntervention
+    ? [`Nu s-a intervenit la traseul FO. Motiv: ${fieldData.route.noInterventionReason}.`]
+    : fieldData.route?.segments.length
     ? [
         `S-a instalat un traseu FO între ${fieldData.route.junction.label} și locația clientului, în lungime de ${fieldData.route.totalLengthMeters.toLocaleString("ro-RO")} m, din care ${fieldData.route.segments.map((segment) => `${segment.lengthMeters.toLocaleString("ro-RO")} m ${segment.label.toLocaleLowerCase("ro-RO")}`).join(", ")}.`,
         `Tipuri de cablu utilizate: ${fieldData.route.segments.map((segment) => `${segment.cableType} (${segment.label.toLocaleLowerCase("ro-RO")})`).join(", ")}.`,
       ]
     : ["Traseul FO nu a fost încă salvat din teren."];
 
-  if (fieldData.splices?.count) {
+  if (fieldData.splices?.noIntervention) {
+    routeLines.push(`Nu s-a intervenit la sudurile FO. Motiv: ${fieldData.splices.noInterventionReason}.`);
+  } else if (fieldData.splices?.count) {
     const junctions = [...new Set(fieldData.splices.junctions.map((junction) => junction.label))].join(", ");
     routeLines.push(`S-au executat ${fieldData.splices.count} ${fieldData.splices.count === 1 ? "sudură FO" : "suduri FO"}${junctions ? ` în ${junctions}` : ""}.`);
   }
@@ -100,10 +106,12 @@ function buildReport(project: DocumentProject, fieldData: ProjectFieldDocumentat
     ...(project.mc ? ["Media Converter"] : []),
     ...(project.terminalBox ? ["Terminal Box"] : []),
   ];
-  const clientLines = [
-    `S-a instalat și configurat echipamentul ${equipment[0] || project.cpe}.`,
-    ...equipment.slice(1).map((item) => `S-a instalat ${item}.`),
-  ];
+  const clientLines = fieldData.client?.noIntervention
+    ? [`Nu s-a intervenit la client. Motiv: ${fieldData.client.noInterventionReason}.`]
+    : [
+        `S-a instalat și configurat echipamentul ${equipment[0] || project.cpe}.`,
+        ...equipment.slice(1).map((item) => `S-a instalat ${item}.`),
+      ];
   if (fieldData.client?.service) clientLines.push(`Serviciul documentat: ${fieldData.client.service}.`);
 
   return {
@@ -300,10 +308,10 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
           <aside className="report-status-card">
             <div className="summary-title"><span>DOC</span><div><h2>Stare raport</h2><p>{project.id} · {project.client}</p></div></div>
             <div className="report-source-list">
-              <div className={fieldData.site ? "complete" : ""}><span>{fieldData.site ? "✓" : "○"}</span><p><strong>Operațiuni site</strong><small>{fieldData.site ? "ODF și eTN preluate" : "Date nesalvate"}</small></p></div>
-              <div className={fieldData.route ? "complete" : ""}><span>{fieldData.route ? "✓" : "○"}</span><p><strong>Traseu FO</strong><small>{fieldData.route ? `${fieldData.route.totalLengthMeters} m preluați` : "Date nesalvate"}</small></p></div>
-              <div className={fieldData.splices ? "complete" : ""}><span>{fieldData.splices ? "✓" : "○"}</span><p><strong>Suduri FO</strong><small>{fieldData.splices ? `${fieldData.splices.count} înregistrări` : "Date nesalvate"}</small></p></div>
-              <div className={fieldData.client ? "complete" : ""}><span>{fieldData.client ? "✓" : "○"}</span><p><strong>Client</strong><small>{fieldData.client ? fieldData.client.service : "Date nesalvate"}</small></p></div>
+              <div className={fieldData.site ? "complete" : ""}><span>{fieldData.site ? "✓" : "○"}</span><p><strong>Operațiuni site</strong><small>{fieldData.site ? fieldData.site.noIntervention ? "Nu s-a intervenit" : "ODF și eTN preluate" : "Date nesalvate"}</small></p></div>
+              <div className={fieldData.route ? "complete" : ""}><span>{fieldData.route ? "✓" : "○"}</span><p><strong>Traseu FO</strong><small>{fieldData.route ? fieldData.route.noIntervention ? "Nu s-a intervenit" : `${fieldData.route.totalLengthMeters} m preluați` : "Date nesalvate"}</small></p></div>
+              <div className={fieldData.splices ? "complete" : ""}><span>{fieldData.splices ? "✓" : "○"}</span><p><strong>Suduri FO</strong><small>{fieldData.splices ? fieldData.splices.noIntervention ? "Nu s-a intervenit" : `${fieldData.splices.count} înregistrări` : "Date nesalvate"}</small></p></div>
+              <div className={fieldData.client ? "complete" : ""}><span>{fieldData.client ? "✓" : "○"}</span><p><strong>Client</strong><small>{fieldData.client ? fieldData.client.noIntervention ? `Nu s-a intervenit · ${fieldData.client.service}` : fieldData.client.service : "Date nesalvate"}</small></p></div>
             </div>
             <div className="report-save-state"><span>{savedAt ? "✓" : "i"}</span><p><strong>{savedAt ? `Versiune salvată la ${savedAt}` : "Raport editabil"}</strong><small>Modificările administratorului nu schimbă datele tehnicianului.</small></p></div>
             <button className="secondary-button report-export" onClick={() => onNotify("Raportul va fi exportat în format DOCX după confirmarea administratorului.")}>Exportă DOCX <span>↗</span></button>

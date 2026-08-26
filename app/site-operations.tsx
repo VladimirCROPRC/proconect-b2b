@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { fetchProjectFiles, uploadProjectFile } from "./client-storage";
 import type { SiteFieldSummary } from "./field-documentation";
+import { NoInterventionControl } from "./no-intervention-control";
 
 type SiteProject = {
   id: string;
@@ -46,7 +47,9 @@ const sitePhotoCatalog: Array<{ key: SitePhotoKey; badge: string; title: string;
 export function SiteOperationsSection({ project: projectItem, initialSummary, onNotify, onSaved }: Props) {
   const [operation, setOperation] = useState<SiteOperation>(emptyOperation);
   const [savedOperations, setSavedOperations] = useState<Record<string, SiteOperation>>({});
-  const requiredItems = [operation.odf, operation.odfPort, operation.etn, operation.etnPort, ...Object.values(operation.photos)];
+  const [noIntervention, setNoIntervention] = useState(false);
+  const [noInterventionReason, setNoInterventionReason] = useState("");
+  const requiredItems = noIntervention ? [noInterventionReason] : [operation.odf, operation.odfPort, operation.etn, operation.etnPort, ...Object.values(operation.photos)];
   const completedItems = requiredItems.filter((value) => value.trim()).length;
   const progress = Math.round((completedItems / requiredItems.length) * 100);
   const ready = completedItems === requiredItems.length;
@@ -62,7 +65,11 @@ export function SiteOperationsSection({ project: projectItem, initialSummary, on
     } : emptyOperation);
     let active = true;
     queueMicrotask(() => {
-      if (active) setOperation(restored);
+      if (active) {
+        setOperation(restored);
+        setNoIntervention(Boolean(initialSummary?.noIntervention));
+        setNoInterventionReason(initialSummary?.noInterventionReason ?? "");
+      }
     });
     fetchProjectFiles(projectItem.id, "site")
       .then((files) => {
@@ -102,6 +109,29 @@ export function SiteOperationsSection({ project: projectItem, initialSummary, on
   }
 
   async function saveOperation() {
+    if (noIntervention) {
+      const reason = noInterventionReason.trim();
+      if (!reason) {
+        onNotify("Completează motivul pentru care nu s-a intervenit la site.");
+        return;
+      }
+      try {
+        await onSaved?.({
+          noIntervention: true,
+          noInterventionReason: reason,
+          odf: "",
+          odfPort: "",
+          etn: "",
+          etnPort: "",
+          photos: { odfPort: "", etn: "", overview: "" },
+        });
+        setSavedOperations((current) => ({ ...current, [projectItem.id]: emptyOperation }));
+        onNotify(`Operațiunile de la site pentru ${projectItem.id} au fost salvate ca „Nu s-a intervenit”.`);
+      } catch (error) {
+        onNotify(error instanceof Error ? error.message : "Operațiunile site nu au putut fi salvate.");
+      }
+      return;
+    }
     if (!operation.odf.trim()) {
       onNotify("Completează identificatorul ODF.");
       return;
@@ -131,7 +161,7 @@ export function SiteOperationsSection({ project: projectItem, initialSummary, on
       photos: { ...operation.photos },
     };
     try {
-      await onSaved?.({ odf: normalized.odf, odfPort: normalized.odfPort, etn: normalized.etn, etnPort: normalized.etnPort, photos: normalized.photos });
+      await onSaved?.({ noIntervention: false, noInterventionReason: "", odf: normalized.odf, odfPort: normalized.odfPort, etn: normalized.etn, etnPort: normalized.etnPort, photos: normalized.photos });
       setOperation(normalized);
       setSavedOperations((current) => ({ ...current, [projectItem.id]: normalized }));
       onNotify(`Operațiunile de la site pentru ${projectItem.id} au fost salvate permanent.`);
@@ -168,7 +198,21 @@ export function SiteOperationsSection({ project: projectItem, initialSummary, on
         <div className={saved ? "saved" : ""}><span>{saved ? "✓" : "○"}</span><p><small>STATUS FIȘĂ</small><strong>{saved ? "Documentație salvată" : "În curs de completare"}</strong></p></div>
       </section>
 
-      <div className="site-operation-layout">
+      <NoInterventionControl
+        sectionLabel="Operațiuni site"
+        noIntervention={noIntervention}
+        reason={noInterventionReason}
+        onSelectionChange={setNoIntervention}
+        onReasonChange={setNoInterventionReason}
+      />
+
+      {noIntervention ? (
+        <section className="no-intervention-save-card">
+          <span>—</span>
+          <div><strong>Site fără intervenție</strong><p>Nu sunt necesare datele ODF/eTN sau fotografiile de execuție. Motivul introdus va fi inclus în raportul lucrării.</p></div>
+          <button className="primary-button" onClick={saveOperation}>{saved ? "Actualizează secțiunea" : "Salvează secțiunea"} <span>→</span></button>
+        </section>
+      ) : <div className="site-operation-layout">
         <section className="site-operation-card">
           <div className="site-operation-head">
             <div><span>↔</span><p><small>LEGĂTURĂ ÎN SITE</small><strong>ODF și echipament eTN</strong></p></div>
@@ -243,7 +287,7 @@ export function SiteOperationsSection({ project: projectItem, initialSummary, on
           <div className={`site-operation-status ${ready ? "ready" : ""}`}><span>{ready ? "✓" : "i"}</span><p><strong>{ready ? "Fișă pregătită pentru salvare" : "Completează datele și cele 3 fotografii"}</strong><small>Portul ODF, eTN-ul și fotografia de ansamblu sunt obligatorii.</small></p></div>
           <button className="primary-button site-operation-save" onClick={saveOperation}>{saved ? "Actualizează documentația" : "Salvează documentația"} <span>→</span></button>
         </aside>
-      </div>
+      </div>}
     </div>
   );
 }

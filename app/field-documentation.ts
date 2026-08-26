@@ -8,6 +8,8 @@ export type RouteSegmentSummary = {
 };
 
 export type RouteFieldSummary = {
+  noIntervention?: boolean;
+  noInterventionReason?: string;
   segments: RouteSegmentSummary[];
   totalLengthMeters: number;
   junction: {
@@ -30,6 +32,8 @@ export type RouteFieldSummary = {
 };
 
 export type SpliceFieldSummary = {
+  noIntervention?: boolean;
+  noInterventionReason?: string;
   count: number;
   junctions: Array<{
     label: string;
@@ -51,6 +55,8 @@ export type SpliceFieldSummary = {
 };
 
 export type SiteFieldSummary = {
+  noIntervention?: boolean;
+  noInterventionReason?: string;
   odf: string;
   odfPort: string;
   etn: string;
@@ -59,6 +65,8 @@ export type SiteFieldSummary = {
 };
 
 export type ClientFieldSummary = {
+  noIntervention?: boolean;
+  noInterventionReason?: string;
   service: "Internet" | "VPN" | "Internet+OL" | "OL";
   equipment: string[];
 };

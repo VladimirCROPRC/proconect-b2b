@@ -398,6 +398,38 @@ export async function saveFieldDocumentation(projectId: string, section: string,
   }
   let finalizedProject: ProjectRecord | undefined;
 
+  if (section !== "intervention") {
+    const fieldContent = content as { noIntervention?: unknown; noInterventionReason?: unknown; service?: unknown };
+    if (fieldContent.noIntervention === true) {
+      const reason = typeof fieldContent.noInterventionReason === "string" ? fieldContent.noInterventionReason.trim() : "";
+      if (!reason || reason.length > 2_000) {
+        return { error: "Completează motivul pentru care nu s-a intervenit în această secțiune.", status: 400 as const };
+      }
+    }
+
+    if (section === "client") {
+      const service = typeof fieldContent.service === "string" ? fieldContent.service : "";
+      if (!["Internet", "VPN", "Internet+OL", "OL"].includes(service)) {
+        return { error: "Selectează serviciul documentat la client.", status: 400 as const };
+      }
+      const requiredCategories = [
+        "report",
+        ...(service === "Internet" || service === "Internet+OL" ? ["speed"] : []),
+        ...(service === "OL" || service === "Internet+OL" ? ["olTest"] : []),
+        ...(fieldContent.noIntervention === true ? [] : ["overview", "detail", "labels"]),
+      ];
+      const photoRows = await getRawDb()
+        .prepare("SELECT DISTINCT category FROM project_files WHERE project_id = ? AND section = 'client'")
+        .bind(projectId)
+        .all<{ category: string }>();
+      const availableCategories = new Set((photoRows.results ?? []).map((photo) => photo.category));
+      const missingCategories = requiredCategories.filter((category) => !availableCategories.has(category));
+      if (missingCategories.length) {
+        return { error: `Lipsesc ${missingCategories.length} fotografii obligatorii: procesul-verbal, testele aplicabile sau documentarea execuției.`, status: 400 as const };
+      }
+    }
+  }
+
   if (section === "intervention") {
     if (project.activity_type !== "Intervenție") {
       return { error: "Constatarea este disponibilă numai pentru intervenții.", status: 400 as const };

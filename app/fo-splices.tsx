@@ -3,6 +3,7 @@
 import { useDeferredValue, useEffect, useMemo, useState, type MouseEvent } from "react";
 import { fetchProjectFiles, uploadProjectFile } from "./client-storage";
 import type { SpliceFieldSummary } from "./field-documentation";
+import { NoInterventionControl } from "./no-intervention-control";
 
 type Coordinate = { lat: number; lon: number };
 type OptixSiteRow = [code: string, description: string, region: string, lat: number, lon: number];
@@ -166,6 +167,8 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
   const [draftId, setDraftId] = useState(() => crypto.randomUUID());
   const [search, setSearch] = useState("");
   const [records, setRecords] = useState<SpliceRecord[]>([]);
+  const [noIntervention, setNoIntervention] = useState(false);
+  const [noInterventionReason, setNoInterventionReason] = useState("");
   const deferredSearch = useDeferredValue(search);
   useEffect(() => {
     let active = true;
@@ -190,6 +193,8 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
       resetDraft();
       setCreating(false);
       setRecords(initialSummary?.records ?? []);
+      setNoIntervention(Boolean(initialSummary?.noIntervention));
+      setNoInterventionReason(initialSummary?.noInterventionReason ?? "");
     });
     return () => {
       active = false;
@@ -400,6 +405,8 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
     };
     const nextProjectRecords = [...projectRecords, newRecord];
     const summary: SpliceFieldSummary = {
+      noIntervention: false,
+      noInterventionReason: "",
       count: nextProjectRecords.length,
       junctions: nextProjectRecords.map((record) => ({
         label: record.junction.documented ? `${record.junction.code} · ${record.junction.name}` : "Joncțiune nedocumentată",
@@ -418,6 +425,29 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
     }
   }
 
+  async function saveNoIntervention() {
+    const reason = noInterventionReason.trim();
+    if (!reason) {
+      onNotify("Completează motivul pentru care nu s-a intervenit la sudurile FO.");
+      return;
+    }
+    const summary: SpliceFieldSummary = {
+      noIntervention: true,
+      noInterventionReason: reason,
+      count: 0,
+      junctions: [],
+      records: [],
+    };
+    try {
+      await onSaved?.(summary);
+      setRecords([]);
+      setCreating(false);
+      onNotify(`Secțiunea Suduri FO pentru ${projectItem.id} a fost salvată ca „Nu s-a intervenit”.`);
+    } catch (error) {
+      onNotify(error instanceof Error ? error.message : "Secțiunea Suduri FO nu a putut fi salvată.");
+    }
+  }
+
   return (
     <div className="page-wrap splice-page">
       <section className="page-heading client-heading">
@@ -426,7 +456,7 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
           <h1>Suduri FO</h1>
           <p>Alege joncțiunea și documentează continuitatea fibrei între site și client.</p>
         </div>
-        <button className="primary-button" onClick={startNewSplice}><span>＋</span> Sudură nouă</button>
+        {!noIntervention && <button className="primary-button" onClick={startNewSplice}><span>＋</span> Sudură nouă</button>}
       </section>
 
       <section className="splice-project-bar">
@@ -439,7 +469,21 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
         </div>
       </section>
 
-      <div className="splice-layout">
+      <NoInterventionControl
+        sectionLabel="Suduri FO"
+        noIntervention={noIntervention}
+        reason={noInterventionReason}
+        onSelectionChange={(value) => { setNoIntervention(value); if (value) { resetDraft(); setCreating(false); } }}
+        onReasonChange={setNoInterventionReason}
+      />
+
+      {noIntervention ? (
+        <section className="no-intervention-save-card">
+          <span>—</span>
+          <div><strong>Suduri FO fără intervenție</strong><p>Nu sunt necesare selectarea joncțiunii, culorile fibrelor sau fotografiile de execuție. Motivul va fi inclus în raportul lucrării.</p></div>
+          <button className="primary-button" onClick={saveNoIntervention}>Salvează secțiunea <span>→</span></button>
+        </section>
+      ) : <div className="splice-layout">
         <section className="splice-map-card">
           <div className="splice-map-head">
             <div><small>SELECTARE JONCȚIUNE</small><strong>{mode === "documented" ? "Punct documentat din registru" : "Punct nedocumentat pe hartă"}</strong></div>
@@ -539,7 +583,7 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
             {projectRecords.length ? <div className="splice-record-list">{projectRecords.map((record, index) => <article key={record.id}><span>{index + 1}</span><div><strong>{record.junction.documented ? `${record.junction.code} · ${record.junction.name}` : `Fără cod · ${record.junctionKind === "existing" ? "existentă" : "nou instalată"}`}</strong><small>{record.junction.documented ? "Joncțiune documentată" : record.network === "mobile" ? "Vodafone Mobil" : "Vodafone Fixed"} · 3 fotografii</small><p><b style={{ background: colorHex[record.siteBuffer] }} />{record.siteBuffer}/{record.siteFiber} <i>→</i> <b style={{ background: colorHex[record.clientBuffer] }} />{record.clientBuffer}/{record.clientFiber}</p></div><em>Salvată</em></article>)}</div> : <div className="splice-no-records"><span>○</span><p>Nicio sudură salvată pentru această lucrare.</p></div>}
           </section>
         </aside>
-      </div>
+      </div>}
     </div>
   );
 }

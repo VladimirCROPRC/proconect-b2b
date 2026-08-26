@@ -11,6 +11,7 @@ import {
 } from "react";
 import { deleteProjectFile, fetchProjectFiles, formatCapturedAt, uploadProjectFile } from "./client-storage";
 import type { RouteFieldSummary } from "./field-documentation";
+import { NoInterventionControl } from "./no-intervention-control";
 
 type Coordinate = { lat: number; lon: number };
 type MapMode = "pan" | "client" | "route" | "undocumented";
@@ -251,6 +252,8 @@ export function FoRouteSection({ project: projectItem, initialSummary, onNotify,
     armorod: "",
   });
   const [routePhotos, setRoutePhotos] = useState<RoutePhoto[]>([]);
+  const [noIntervention, setNoIntervention] = useState(false);
+  const [noInterventionReason, setNoInterventionReason] = useState("");
   const dragRef = useRef<{
     pointerId: number;
     startX: number;
@@ -284,6 +287,8 @@ export function FoRouteSection({ project: projectItem, initialSummary, onNotify,
     queueMicrotask(() => {
       if (!active) return;
       resetRoute();
+      setNoIntervention(Boolean(initialSummary?.noIntervention));
+      setNoInterventionReason(initialSummary?.noInterventionReason ?? "");
       if (!initialSummary) return;
       setSelectedInstallationMethods(initialSummary.segments.map((segment) => segment.method));
       setCableTypes((current) => ({ ...current, ...Object.fromEntries(initialSummary.segments.map((segment) => [segment.method, segment.cableType])) }));
@@ -672,6 +677,29 @@ export function FoRouteSection({ project: projectItem, initialSummary, onNotify,
   }
 
   async function saveRoute() {
+    if (noIntervention) {
+      const reason = noInterventionReason.trim();
+      if (!reason) {
+        onNotify("Completează motivul pentru care nu s-a intervenit la traseul FO.");
+        return;
+      }
+      const summary: RouteFieldSummary = {
+        noIntervention: true,
+        noInterventionReason: reason,
+        segments: [],
+        totalLengthMeters: 0,
+        junction: { label: "Nu s-a intervenit", documented: true, kind: "documented" },
+        aerialMaterials: { boat: 0, stainlessClamp: 0, hook: 0, armorod: 0 },
+        routePoints: [],
+      };
+      try {
+        await onSaved?.(summary);
+        onNotify(`Traseul FO pentru ${projectItem.id} a fost salvat ca „Nu s-a intervenit”.`);
+      } catch (error) {
+        onNotify(error instanceof Error ? error.message : "Traseul FO nu a putut fi salvat.");
+      }
+      return;
+    }
     if (!endA || !endB) {
       onNotify("Completează capătul A și capătul B înainte de salvare.");
       return;
@@ -713,6 +741,8 @@ export function FoRouteSection({ project: projectItem, initialSummary, onNotify,
       ? ""
       : ` · ${undocumentedJunctionNetwork === "mobile" ? "Vodafone Mobil" : "Vodafone Fixed"}`;
     const summary: RouteFieldSummary = {
+      noIntervention: false,
+      noInterventionReason: "",
       segments: selectedInstallationMethods.map((method) => ({
         method,
         label: installationCatalog[method].title,
@@ -785,7 +815,21 @@ export function FoRouteSection({ project: projectItem, initialSummary, onNotify,
         </div>
       </section>
 
-      <div className="fo-route-layout">
+      <NoInterventionControl
+        sectionLabel="Traseu FO"
+        noIntervention={noIntervention}
+        reason={noInterventionReason}
+        onSelectionChange={setNoIntervention}
+        onReasonChange={setNoInterventionReason}
+      />
+
+      {noIntervention ? (
+        <section className="no-intervention-save-card">
+          <span>—</span>
+          <div><strong>Traseu FO fără intervenție</strong><p>Nu sunt necesare traseul pe hartă, materialele, lungimile sau fotografiile de execuție. Motivul introdus va apărea în raport.</p></div>
+          <button className="primary-button" onClick={saveRoute}>Salvează secțiunea <span>→</span></button>
+        </section>
+      ) : <div className="fo-route-layout">
         <div className="fo-map-column">
           <section className="fo-map-card">
             <div className="fo-map-head">
@@ -1140,7 +1184,7 @@ export function FoRouteSection({ project: projectItem, initialSummary, onNotify,
             <button className="primary-button fo-save-route" onClick={saveRoute}>Salvează traseul FO <span>→</span></button>
           </section>
         </aside>
-      </div>
+      </div>}
     </div>
   );
 }
