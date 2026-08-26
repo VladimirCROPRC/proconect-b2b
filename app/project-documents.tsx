@@ -113,6 +113,9 @@ function buildReport(project: DocumentProject, fieldData: ProjectFieldDocumentat
         ...equipment.slice(1).map((item) => `S-a instalat ${item}.`),
       ];
   if (fieldData.client?.service) clientLines.push(`Serviciul documentat: ${fieldData.client.service}.`);
+  if (fieldData.client?.clientHasNoGroundingSystem) {
+    clientLines.push("Clientul declară că locația nu dispune de sistem de împământare, iar echipamentul nu a putut fi conectat la împământare.");
+  }
 
   return {
     title: "Raport acceptanță",

@@ -8,7 +8,7 @@ import { InterventionOperationsSection } from "./intervention-operations";
 import { ProjectDocumentsSection } from "./project-documents";
 import { GoogleDriveSettings, type GoogleDriveStatus } from "./google-drive-settings";
 import { fetchProjectFiles, formatCapturedAt, uploadProjectFile } from "./client-storage";
-import { initialCpeCatalog, type ProjectActivityType, type ProjectRecord } from "./project-data";
+import { initialCpeCatalog, type CpeCatalogItem, type ProjectActivityType, type ProjectRecord } from "./project-data";
 import type { ClientFieldSummary, InterventionFieldSummary, ProjectFieldDocumentation, RouteFieldSummary, SiteFieldSummary, SpliceFieldSummary } from "./field-documentation";
 import { TechnicianProjectSafety, type ProjectSafetyStatus } from "./technician-project-safety";
 import { NoInterventionControl } from "./no-intervention-control";
@@ -17,7 +17,7 @@ type View = "projects" | "interventions" | "surveys" | "intervention-workspace" 
 type ActivityListView = "projects" | "interventions" | "surveys";
 type Modal = "project" | "edit-project" | "delete-project" | "account" | "cpe" | "edit-cpe" | null;
 type ServiceType = "Internet" | "VPN" | "Internet+OL" | "OL";
-type ClientPhotoKey = "report" | "speed" | "olTest" | "overview" | "detail" | "labels";
+type ClientPhotoKey = "report" | "speed" | "olTest" | "overview" | "detail" | "labels" | "grounding";
 
 const proconectLogoUrl = "https://www.en.proconect.ro/wp-content/uploads/2021/05/logo-transparent.png";
 
@@ -61,6 +61,11 @@ const clientPhotoCatalog: Record<ClientPhotoKey, { title: string; description: s
     description: "Etichetele echipamentelor și ale conexiunilor să fie lizibile.",
     badge: "ET",
   },
+  grounding: {
+    title: "Împământare echipament",
+    description: "Fotografia trebuie să arate clar conectarea echipamentului la sistemul de împământare.",
+    badge: "PE",
+  },
 };
 
 type Project = ProjectRecord;
@@ -91,6 +96,7 @@ const emptyProject: Project = {
   requirements: "",
   technician: "",
   cpe: "",
+  cpeRequiresGrounding: false,
   sfp: false,
   mc: false,
   terminalBox: false,
@@ -156,6 +162,7 @@ export default function Home() {
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [projectDeleting, setProjectDeleting] = useState(false);
   const [editingCpe, setEditingCpe] = useState("");
+  const [editingCpeRequiresGrounding, setEditingCpeRequiresGrounding] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
   const [accounts, setAccounts] = useState(initialAccounts);
   const [cpeList, setCpeList] = useState(initialCpeCatalog);
@@ -174,6 +181,7 @@ export default function Home() {
   const [clientService, setClientService] = useState<ServiceType>("Internet");
   const [clientNoIntervention, setClientNoIntervention] = useState(false);
   const [clientNoInterventionReason, setClientNoInterventionReason] = useState("");
+  const [clientHasNoGroundingSystem, setClientHasNoGroundingSystem] = useState(false);
   const [clientPhotos, setClientPhotos] = useState<Partial<Record<ClientPhotoKey, ClientPhoto[]>>>({});
   const [fieldDocumentation, setFieldDocumentation] = useState<Record<string, ProjectFieldDocumentation>>({});
   const [driveStatus, setDriveStatus] = useState<GoogleDriveStatus | null>(null);
@@ -264,7 +272,7 @@ export default function Home() {
         const payload = (await response.json()) as {
           projects?: Project[];
           fieldDocumentation?: Record<string, ProjectFieldDocumentation>;
-          cpe?: string[];
+          cpe?: CpeCatalogItem[];
           safetyChecks?: Record<string, ProjectSafetyStatus>;
           error?: string;
         };
@@ -319,6 +327,7 @@ export default function Home() {
       setClientService(summary?.service ?? "Internet");
       setClientNoIntervention(Boolean(summary?.noIntervention));
       setClientNoInterventionReason(summary?.noInterventionReason ?? "");
+      setClientHasNoGroundingSystem(Boolean(summary?.clientHasNoGroundingSystem));
     });
   }, [activeProjectId, fieldDocumentation]);
 
@@ -350,6 +359,7 @@ export default function Home() {
     ...(clientService === "Internet" || clientService === "Internet+OL" ? (["speed"] as ClientPhotoKey[]) : []),
     ...(clientService === "OL" || clientService === "Internet+OL" ? (["olTest"] as ClientPhotoKey[]) : []),
     ...(!clientNoIntervention ? (["overview", "detail", "labels"] as ClientPhotoKey[]) : []),
+    ...(activeProject.cpeRequiresGrounding && !clientNoIntervention && !clientHasNoGroundingSystem ? (["grounding"] as ClientPhotoKey[]) : []),
   ];
   const completedClientPhotos = requiredClientPhotoKeys.filter((key) => (clientPhotos[key]?.length ?? 0) > 0).length;
   const clientProgress = Math.round((completedClientPhotos / requiredClientPhotoKeys.length) * 100);
@@ -493,6 +503,7 @@ export default function Home() {
     setDeletingProject(null);
     setDeleteConfirmation("");
     setEditingCpe("");
+    setEditingCpeRequiresGrounding(false);
     setIpwoName("");
     setSpliceName("");
     setIpwoFile(null);
@@ -522,6 +533,8 @@ export default function Home() {
     const activityType = String(form.get("activityType") || "Instalare") as ProjectActivityType;
     const rawId = String(form.get("requestId") || "").trim();
     const id = activityType === "Intervenție" ? rawId.toUpperCase() : `RID${rawId.replace(/^RID/i, "")}`.toUpperCase();
+    const cpeName = String(form.get("cpe") || "");
+    const selectedCpe = cpeList.find((item) => item.name === cpeName);
     if (projects.some((project) => project.id === id)) {
       showToast(activityType === "Intervenție" ? "Numărul tichetului există deja. Verifică valoarea introdusă." : "Request ID există deja. Verifică numărul introdus.");
       return;
@@ -536,7 +549,8 @@ export default function Home() {
       email: String(form.get("email")),
       requirements: String(form.get("requirements")),
       technician: String(form.get("technician")),
-      cpe: String(form.get("cpe") || ""),
+      cpe: cpeName,
+      cpeRequiresGrounding: Boolean(selectedCpe?.requiresGrounding),
       sfp: form.get("sfp") === "on",
       mc: form.get("mc") === "on",
       terminalBox: form.get("terminalBox") === "on",
@@ -578,6 +592,8 @@ export default function Home() {
     event.preventDefault();
     if (!editingProject) return;
     const form = new FormData(event.currentTarget);
+    const cpeName = String(form.get("cpe") || editingProject.cpe || "");
+    const selectedCpe = cpeList.find((item) => item.name === cpeName);
     const project: Project = {
       ...editingProject,
       activityType: String(form.get("activityType") || editingProject.activityType) as ProjectActivityType,
@@ -588,7 +604,8 @@ export default function Home() {
       email: String(form.get("email") || ""),
       requirements: String(form.get("requirements") || ""),
       technician: String(form.get("technician") || ""),
-      cpe: String(form.get("cpe") || editingProject.cpe || ""),
+      cpe: cpeName,
+      cpeRequiresGrounding: selectedCpe?.requiresGrounding ?? editingProject.cpeRequiresGrounding,
       sfp: form.get("sfp") === "on",
       mc: form.get("mc") === "on",
       terminalBox: form.get("terminalBox") === "on",
@@ -722,8 +739,8 @@ export default function Home() {
     }
   }
 
-  async function addCpeByName(name: string) {
-    if (!name || cpeList.includes(name)) {
+  async function addCpeByName(name: string, requiresGrounding: boolean) {
+    if (!name || cpeList.some((item) => item.name === name)) {
       showToast("Echipamentul există deja sau denumirea este incompletă.");
       return;
     }
@@ -732,11 +749,11 @@ export default function Home() {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name, requiresGrounding }),
       });
-      const payload = (await response.json()) as { name?: string; error?: string };
+      const payload = (await response.json()) as { name?: string; requiresGrounding?: boolean; error?: string };
       if (!response.ok || !payload.name) throw new Error(payload.error || "Echipamentul nu a putut fi salvat.");
-      setCpeList((current) => [...current, payload.name!]);
+      setCpeList((current) => [...current, { name: payload.name!, requiresGrounding: Boolean(payload.requiresGrounding) }]);
       showToast(`${payload.name} a fost salvat în catalogul CPE.`);
       return true;
     } catch (error) {
@@ -748,7 +765,7 @@ export default function Home() {
   async function createCpe(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    if (await addCpeByName(String(form.get("cpeName")).trim())) closeModal();
+    if (await addCpeByName(String(form.get("cpeName")).trim(), form.get("requiresGrounding") === "on")) closeModal();
   }
 
   async function saveCpeChanges(event: FormEvent<HTMLFormElement>) {
@@ -756,18 +773,19 @@ export default function Home() {
     if (!editingCpe) return;
     const form = new FormData(event.currentTarget);
     const name = String(form.get("cpeName") || "").trim();
+    const requiresGrounding = form.get("requiresGrounding") === "on";
     try {
       const response = await fetch("/api/catalog", {
         method: "PATCH",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ previousName: editingCpe, name }),
+        body: JSON.stringify({ previousName: editingCpe, name, requiresGrounding }),
       });
-      const payload = (await response.json()) as { previousName?: string; name?: string; error?: string };
+      const payload = (await response.json()) as { previousName?: string; name?: string; requiresGrounding?: boolean; error?: string };
       if (!response.ok || !payload.name || !payload.previousName) throw new Error(payload.error || "Echipamentul nu a putut fi actualizat.");
-      setCpeList((current) => current.map((item) => item === payload.previousName ? payload.name! : item));
-      setProjects((current) => current.map((project) => project.cpe === payload.previousName ? { ...project, cpe: payload.name! } : project));
-      setSelected((current) => current && current.cpe === payload.previousName ? { ...current, cpe: payload.name! } : current);
+      setCpeList((current) => current.map((item) => item.name === payload.previousName ? { name: payload.name!, requiresGrounding: Boolean(payload.requiresGrounding) } : item));
+      setProjects((current) => current.map((project) => project.cpe === payload.previousName ? { ...project, cpe: payload.name!, cpeRequiresGrounding: Boolean(payload.requiresGrounding) } : project));
+      setSelected((current) => current && current.cpe === payload.previousName ? { ...current, cpe: payload.name!, cpeRequiresGrounding: Boolean(payload.requiresGrounding) } : current);
       closeModal();
       showToast(`${payload.name} a fost actualizat în catalog și în proiectele asociate.`);
     } catch (error) {
@@ -882,6 +900,7 @@ export default function Home() {
     const clientSummary: ClientFieldSummary = {
       noIntervention: clientNoIntervention,
       noInterventionReason: clientNoIntervention ? clientNoInterventionReason.trim() : "",
+      clientHasNoGroundingSystem: !clientNoIntervention && activeProject.cpeRequiresGrounding && clientHasNoGroundingSystem,
       service: clientService,
       equipment: clientNoIntervention ? [] : [
         activeProject.cpe,
@@ -1277,8 +1296,9 @@ export default function Home() {
             <section className="project-card cpe-section">
               <div className="card-heading"><div><h2>Catalog CPE</h2><p>{cpeList.length} echipamente configurate</p></div><label className="search-box small"><span>⌕</span><input value={cpeSearch} onChange={(event) => setCpeSearch(event.target.value)} placeholder="Caută echipament..." /></label></div>
               <div className="cpe-grid">
-                {cpeList.filter((cpe) => cpe.toLowerCase().includes(cpeSearch.trim().toLowerCase())).map((cpe) => (
-                  <article className="cpe-card" key={cpe}><div className="device-icon"><i /><i /><i /></div><div><strong>{cpe}</strong><small>Disponibil pentru proiecte</small></div><span>{projects.filter((project) => project.cpe === cpe).length} utilizări</span><button className="more" aria-label={`Editează ${cpe}`} title={`Editează ${cpe}`} onClick={() => { setEditingCpe(cpe); setModal("edit-cpe"); }}>Editează</button></article>
+                {!cpeList.length && <div className="cpe-empty-state"><strong>Catalogul este gol</strong><p>Adaugă primul echipament și precizează dacă necesită împământare.</p><button className="secondary-button" onClick={() => setModal("cpe")}>Adaugă echipament</button></div>}
+                {cpeList.filter((cpe) => cpe.name.toLowerCase().includes(cpeSearch.trim().toLowerCase())).map((cpe) => (
+                  <article className="cpe-card" key={cpe.name}><div className="device-icon"><i /><i /><i /></div><div><strong>{cpe.name}</strong><small className={cpe.requiresGrounding ? "grounding-status required" : "grounding-status"}>{cpe.requiresGrounding ? "Necesită împământare" : "Nu necesită împământare"}</small></div><span>{projects.filter((project) => project.cpe === cpe.name).length} utilizări</span><button className="more" aria-label={`Editează ${cpe.name}`} title={`Editează ${cpe.name}`} onClick={() => { setEditingCpe(cpe.name); setEditingCpeRequiresGrounding(cpe.requiresGrounding); setModal("edit-cpe"); }}>Editează</button></article>
                 ))}
               </div>
             </section>
@@ -1346,6 +1366,11 @@ export default function Home() {
                     {activeProject.sfp && <article className="install-equipment"><span className="equipment-symbol">SFP</span><div><small>MODUL OPTIC</small><strong>SFP conform proiectului</strong></div><span className="install-state">De instalat</span></article>}
                     {activeProject.mc && <article className="install-equipment"><span className="equipment-symbol">MC</span><div><small>MEDIA CONVERTER</small><strong>MC conform proiectului</strong></div><span className="install-state">De instalat</span></article>}
                     {activeProject.terminalBox && <article className="install-equipment"><span className="equipment-symbol">TB</span><div><small>TERMINAȚIE</small><strong>Terminal Box</strong></div><span className="install-state">De instalat</span></article>}
+                    {activeProject.cpeRequiresGrounding && <div className={clientHasNoGroundingSystem ? "grounding-requirement exception" : "grounding-requirement"}>
+                      <div><span className="grounding-icon">PE</span><p><strong>Împământare obligatorie</strong><small>{clientHasNoGroundingSystem ? "Excepția va fi inclusă automat în procesul-verbal." : "Conectează echipamentul și fotografiază clar împământarea."}</small></p></div>
+                      <label><input type="checkbox" checked={clientHasNoGroundingSystem} onChange={(event) => setClientHasNoGroundingSystem(event.target.checked)} /><span>Clientul nu dispune de sistem de împământare</span></label>
+                      {clientHasNoGroundingSystem && <p className="grounding-warning">Mențiunea trebuie să apară în procesul-verbal înainte ca documentul să fie semnat de client.</p>}
+                    </div>}
                   </div>
                 </section>}
 
@@ -1480,7 +1505,7 @@ export default function Home() {
               </div></div>
               <div className="form-section"><h3><span>2</span> {isInstallationForm ? "Alocare și echipamente" : "Alocare tehnician"}</h3><div className="form-grid">
                 <label><span>Tehnician alocat *</span><select name="technician" required defaultValue={editingProject?.technician || ""}><option value="" disabled>Selectează tehnicianul</option>{technicians.map((tech) => <option key={tech.username}>{tech.name}</option>)}</select></label>
-                {isInstallationForm && <label><span>Tip CPE *</span><div className="select-plus"><select name="cpe" required defaultValue={editingProject?.cpe || ""}><option value="" disabled>Selectează echipamentul</option>{cpeList.map((cpe) => <option key={cpe}>{cpe}</option>)}</select><button type="button" onClick={() => { const value = window.prompt("Denumirea echipamentului CPE"); if (value?.trim()) void addCpeByName(value.trim()); }} aria-label="Adaugă CPE">＋</button></div></label>}
+                {isInstallationForm && <label><span>Tip CPE *</span><select name="cpe" required defaultValue={editingProject?.cpe || ""}><option value="" disabled>{cpeList.length ? "Selectează echipamentul" : "Catalogul CPE este gol"}</option>{editingProject?.cpe && !cpeList.some((cpe) => cpe.name === editingProject.cpe) && <option value={editingProject.cpe}>{editingProject.cpe} (echipament istoric)</option>}{cpeList.map((cpe) => <option key={cpe.name} value={cpe.name}>{cpe.name}{cpe.requiresGrounding ? " · necesită împământare" : ""}</option>)}</select><small>Adaugă și configurează echipamentele din secțiunea CPE.</small></label>}
                 {editingProject && <><label><span>Status proiect *</span><select name="status" required defaultValue={editingProject.status}><option>Planificat</option><option>În desfășurare</option><option>De verificat</option><option>Finalizat</option></select></label><label><span>Programare *</span><input name="date" required defaultValue={editingProject.date} placeholder="ex. 26 aug, 09:30" /></label></>}
                 {isInstallationForm && <div className="wide"><span className="field-label">Echipamente suplimentare</span><div className="switch-row">
                   <label className="switch-card"><span><b>SFP</b><small>Modul optic</small></span><input type="checkbox" name="sfp" defaultChecked={editingProject ? editingProject.sfp : true} /><i /></label>
@@ -1523,7 +1548,7 @@ export default function Home() {
         {(modal === "cpe" || modal === "edit-cpe") && (
           <form className="modal small-modal" onSubmit={modal === "edit-cpe" ? saveCpeChanges : createCpe}>
             <div className="modal-head"><div><span className="modal-kicker">CATALOG CPE</span><h2>{editingCpe ? "Editează echipamentul" : "Echipament nou"}</h2><p>{editingCpe ? "Modificarea se aplică și proiectelor care folosesc acest echipament." : "Va apărea imediat în formularul de proiect."}</p></div><button type="button" onClick={closeModal}>×</button></div>
-            <div className="modal-body stacked-form"><label><span>Producător și model *</span><input name="cpeName" required defaultValue={editingCpe} placeholder="ex. Cisco C1111-8P" autoFocus /></label><div className="info-note"><b>i</b><p>Folosește denumirea comercială completă pentru identificare rapidă în teren.</p></div></div>
+            <div className="modal-body stacked-form"><label><span>Producător și model *</span><input name="cpeName" required defaultValue={editingCpe} placeholder="ex. Cisco C1111-8P" autoFocus /></label><label className="grounding-switch"><span><b>Necesită împământare</b><small>Activează dacă echipamentul trebuie conectat la sistemul de protecție al clientului.</small></span><input type="checkbox" name="requiresGrounding" defaultChecked={editingCpeRequiresGrounding} /><i /></label><div className="info-note"><b>i</b><p>Pentru echipamentele cu împământare, tehnicianul va trebui să încarce fotografia conexiunii sau să declare lipsa sistemului la client.</p></div></div>
             <div className="modal-actions"><button type="button" className="secondary-button" onClick={closeModal}>Anulează</button><button className="primary-button" type="submit">{editingCpe ? "Salvează modificările" : "Adaugă echipamentul"}</button></div>
           </form>
         )}
@@ -1535,7 +1560,7 @@ export default function Home() {
         {!selectedSafetyComplete && <div className="drawer-safety-lock"><span>🔒</span><div><strong>Lucrare blocată</strong><p>Încarcă fotografia Pretask și fotografia cu echipamentul individual de protecție pentru a vedea cerințele și operațiunile.</p></div></div>}
         {selectedSafetyComplete && <><div className="drawer-section"><small>CERINȚELE LUCRĂRII</small><p className="requirements-text">{selected.requirements}</p></div>
         <div className="drawer-section"><small>TEHNICIAN ALOCAT</small><div className="technician large"><span className="avatar">{initials(selected.technician)}</span><div><strong>{selected.technician}</strong><p>Programare: {selected.date}</p></div></div></div>
-        {selected.activityType === "Instalare" && <div className="drawer-section"><small>ECHIPAMENTE</small><strong>{selected.cpe}</strong><div className="tag-row">{selected.sfp && <span>SFP</span>}{selected.mc && <span>MC</span>}{selected.terminalBox && <span>Terminal Box</span>}</div></div>}
+        {selected.activityType === "Instalare" && <div className="drawer-section"><small>ECHIPAMENTE</small><strong>{selected.cpe}</strong><div className="tag-row">{selected.cpeRequiresGrounding && <span>Împământare obligatorie</span>}{selected.sfp && <span>SFP</span>}{selected.mc && <span>MC</span>}{selected.terminalBox && <span>Terminal Box</span>}</div></div>}
         {selected.activityType === "Instalare" && <div className="drawer-section"><small>DOCUMENTE</small><button className="file-row" onClick={() => void openProjectFile(selected.id, "ipwo")}><span>PDF</span><div><strong>{selected.ipwo}</strong><small>IPWO</small></div><b>↗</b></button><button className="file-row" onClick={() => void openProjectFile(selected.id, "splice-diagram")}><span>FO</span><div><strong>{selected.splice}</strong><small>Diagramă suduri</small></div><b>↗</b></button></div>}
         <div className="drive-folder"><span className="folder-icon">▰</span><div><small>{driveStatus?.folders[selected.id] ? "GOOGLE DRIVE" : "STOCARE SECURIZATĂ"}</small><strong>Dosar {selected.id}</strong></div>{driveStatus?.folders[selected.id] ? <a className="drive-folder-open" href={driveStatus.folders[selected.id]} target="_blank" rel="noreferrer" aria-label={`Deschide dosarul Google Drive ${selected.id}`}>↗</a> : <span>✓</span>}</div></>}
         <div className="drawer-project-actions">

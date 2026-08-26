@@ -67,6 +67,7 @@ export type SiteFieldSummary = {
 export type ClientFieldSummary = {
   noIntervention?: boolean;
   noInterventionReason?: string;
+  clientHasNoGroundingSystem?: boolean;
   service: "Internet" | "VPN" | "Internet+OL" | "OL";
   equipment: string[];
 };

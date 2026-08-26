@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { getRawDb } from "../db";
 import { requiredInterventionCablePhotos, type InterventionDocumentationSummary, type InterventionExecutionActivity, type InterventionExecutionSummary, type InterventionJunction, type ProjectFieldDocumentation } from "./field-documentation";
-import { initialCpeCatalog, initialFieldDocumentation, initialProjects, type ProjectActivityType, type ProjectRecord } from "./project-data";
+import { initialCpeCatalog, initialFieldDocumentation, initialProjects, type CpeCatalogItem, type ProjectActivityType, type ProjectRecord } from "./project-data";
 import type { AuthenticatedAccount } from "./server-auth";
 
 type ProjectRow = {
@@ -16,6 +16,7 @@ type ProjectRow = {
   technician: string;
   technician_username: string;
   cpe: string;
+  cpe_requires_grounding: number;
   sfp: number;
   mc: number;
   terminal_box: number;
@@ -88,6 +89,7 @@ function projectRowToRecord(row: ProjectRow): ProjectRecord {
     requirements: row.requirements,
     technician: row.technician,
     cpe: row.cpe,
+    cpeRequiresGrounding: Boolean(row.cpe_requires_grounding),
     sfp: Boolean(row.sfp),
     mc: Boolean(row.mc),
     terminalBox: Boolean(row.terminal_box),
@@ -101,7 +103,7 @@ function projectRowToRecord(row: ProjectRow): ProjectRecord {
 function insertProjectStatement(project: ProjectRecord, technicianUsername: string, createdBy: string, createdAt = Date.now()) {
   return getRawDb()
     .prepare(
-      "INSERT INTO projects (id, activity_type, client, address, contact, phone, email, requirements, technician, technician_username, cpe, sfp, mc, terminal_box, status, scheduled_label, ipwo, splice, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO projects (id, activity_type, client, address, contact, phone, email, requirements, technician, technician_username, cpe, cpe_requires_grounding, sfp, mc, terminal_box, status, scheduled_label, ipwo, splice, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(
       project.id,
@@ -115,6 +117,7 @@ function insertProjectStatement(project: ProjectRecord, technicianUsername: stri
       project.technician,
       technicianUsername,
       project.cpe,
+      project.cpeRequiresGrounding ? 1 : 0,
       project.sfp ? 1 : 0,
       project.mc ? 1 : 0,
       project.terminalBox ? 1 : 0,
@@ -144,8 +147,8 @@ export async function ensureProjectData() {
         .bind(projectId, JSON.stringify(documentation), "vladimir.carlan", now),
     );
   }
-  for (const name of initialCpeCatalog) {
-    statements.push(getRawDb().prepare("INSERT OR IGNORE INTO cpe_catalog (id, name, created_at) VALUES (?, ?, ?)").bind(crypto.randomUUID(), name, now));
+  for (const equipment of initialCpeCatalog) {
+    statements.push(getRawDb().prepare("INSERT OR IGNORE INTO cpe_catalog (id, name, requires_grounding, created_at) VALUES (?, ?, ?, ?)").bind(crypto.randomUUID(), equipment.name, equipment.requiresGrounding ? 1 : 0, now));
   }
   await getRawDb().batch(statements);
 }
@@ -200,8 +203,8 @@ export async function listProjectData(account: AuthenticatedAccount) {
     }
   }
 
-  const cpeRows = await getRawDb().prepare("SELECT name FROM cpe_catalog ORDER BY created_at ASC").all<{ name: string }>();
-  const cpe = (cpeRows.results ?? []).map((row: { name: string }) => row.name);
+  const cpeRows = await getRawDb().prepare("SELECT name, requires_grounding FROM cpe_catalog ORDER BY created_at ASC").all<{ name: string; requires_grounding: number }>();
+  const cpe: CpeCatalogItem[] = (cpeRows.results ?? []).map((row) => ({ name: row.name, requiresGrounding: Boolean(row.requires_grounding) }));
   return { projects, fieldDocumentation, cpe, safetyChecks };
 }
 
@@ -246,6 +249,14 @@ export async function createProject(input: ProjectRecord, createdBy: Authenticat
     .first<{ username: string; name: string }>();
   if (!technician) return { error: "Tehnicianul selectat nu este disponibil.", status: 400 as const };
 
+  const normalizedCpe = typeof input.cpe === "string" ? input.cpe.trim() : "";
+  const catalogItem = activityType === "Instalare"
+    ? await getRawDb().prepare("SELECT name, requires_grounding FROM cpe_catalog WHERE name = ? LIMIT 1").bind(normalizedCpe).first<{ name: string; requires_grounding: number }>()
+    : undefined;
+  if (activityType === "Instalare" && !catalogItem) {
+    return { error: "Selectează un echipament disponibil în catalogul CPE.", status: 400 as const };
+  }
+
   const project: ProjectRecord = {
     ...input,
     id: workId,
@@ -257,7 +268,8 @@ export async function createProject(input: ProjectRecord, createdBy: Authenticat
     email: input.email.trim(),
     requirements: input.requirements.trim(),
     technician: technician.name,
-    cpe: typeof input.cpe === "string" ? input.cpe.trim() : "",
+    cpe: catalogItem?.name ?? "",
+    cpeRequiresGrounding: Boolean(catalogItem?.requires_grounding),
     status: "Planificat",
     date: input.date || "Astăzi",
     ipwo: input.ipwo || "Fișier neîncărcat",
@@ -292,6 +304,14 @@ export async function updateProject(input: ProjectRecord) {
     .first<{ username: string; name: string }>();
   if (!technician) return { error: "Tehnicianul selectat nu este disponibil.", status: 400 as const };
 
+  const normalizedCpe = typeof input.cpe === "string" ? input.cpe.trim() : "";
+  const catalogItem = activityType === "Instalare" && normalizedCpe !== existing.cpe
+    ? await getRawDb().prepare("SELECT name, requires_grounding FROM cpe_catalog WHERE name = ? LIMIT 1").bind(normalizedCpe).first<{ name: string; requires_grounding: number }>()
+    : undefined;
+  if (activityType === "Instalare" && normalizedCpe !== existing.cpe && !catalogItem) {
+    return { error: "Selectează un echipament disponibil în catalogul CPE.", status: 400 as const };
+  }
+
   const project: ProjectRecord = {
     ...input,
     id: existing.id,
@@ -303,7 +323,8 @@ export async function updateProject(input: ProjectRecord) {
     email: typeof input.email === "string" ? input.email.trim() : "",
     requirements: input.requirements.trim(),
     technician: technician.name,
-    cpe: typeof input.cpe === "string" ? input.cpe.trim() : "",
+    cpe: activityType === "Instalare" ? (catalogItem?.name ?? existing.cpe) : "",
+    cpeRequiresGrounding: activityType === "Instalare" ? Boolean(catalogItem ? catalogItem.requires_grounding : existing.cpe_requires_grounding) : false,
     sfp: Boolean(input.sfp),
     mc: Boolean(input.mc),
     terminalBox: Boolean(input.terminalBox),
@@ -314,7 +335,7 @@ export async function updateProject(input: ProjectRecord) {
   const now = Date.now();
   const statements = [
     getRawDb().prepare(
-      "UPDATE projects SET activity_type = ?, client = ?, address = ?, contact = ?, phone = ?, email = ?, requirements = ?, technician = ?, technician_username = ?, cpe = ?, sfp = ?, mc = ?, terminal_box = ?, status = ?, scheduled_label = ?, ipwo = ?, splice = ?, updated_at = ? WHERE id = ?",
+      "UPDATE projects SET activity_type = ?, client = ?, address = ?, contact = ?, phone = ?, email = ?, requirements = ?, technician = ?, technician_username = ?, cpe = ?, cpe_requires_grounding = ?, sfp = ?, mc = ?, terminal_box = ?, status = ?, scheduled_label = ?, ipwo = ?, splice = ?, updated_at = ? WHERE id = ?",
     ).bind(
       project.activityType,
       project.client,
@@ -326,6 +347,7 @@ export async function updateProject(input: ProjectRecord) {
       project.technician,
       technician.username,
       project.cpe,
+      project.cpeRequiresGrounding ? 1 : 0,
       project.sfp ? 1 : 0,
       project.mc ? 1 : 0,
       project.terminalBox ? 1 : 0,
@@ -399,7 +421,7 @@ export async function saveFieldDocumentation(projectId: string, section: string,
   let finalizedProject: ProjectRecord | undefined;
 
   if (section !== "intervention") {
-    const fieldContent = content as { noIntervention?: unknown; noInterventionReason?: unknown; service?: unknown };
+    const fieldContent = content as { noIntervention?: unknown; noInterventionReason?: unknown; clientHasNoGroundingSystem?: unknown; service?: unknown };
     if (fieldContent.noIntervention === true) {
       const reason = typeof fieldContent.noInterventionReason === "string" ? fieldContent.noInterventionReason.trim() : "";
       if (!reason || reason.length > 2_000) {
@@ -412,11 +434,16 @@ export async function saveFieldDocumentation(projectId: string, section: string,
       if (!["Internet", "VPN", "Internet+OL", "OL"].includes(service)) {
         return { error: "Selectează serviciul documentat la client.", status: 400 as const };
       }
+      const noGroundingSystem = fieldContent.clientHasNoGroundingSystem === true;
+      if (noGroundingSystem && (!project.cpe_requires_grounding || fieldContent.noIntervention === true)) {
+        return { error: "Declarația privind lipsa împământării este disponibilă numai când echipamentul necesită împământare și a fost instalat.", status: 400 as const };
+      }
       const requiredCategories = [
         "report",
         ...(service === "Internet" || service === "Internet+OL" ? ["speed"] : []),
         ...(service === "OL" || service === "Internet+OL" ? ["olTest"] : []),
         ...(fieldContent.noIntervention === true ? [] : ["overview", "detail", "labels"]),
+        ...(project.cpe_requires_grounding && fieldContent.noIntervention !== true && !noGroundingSystem ? ["grounding"] : []),
       ];
       const photoRows = await getRawDb()
         .prepare("SELECT DISTINCT category FROM project_files WHERE project_id = ? AND section = 'client'")
@@ -425,7 +452,7 @@ export async function saveFieldDocumentation(projectId: string, section: string,
       const availableCategories = new Set((photoRows.results ?? []).map((photo) => photo.category));
       const missingCategories = requiredCategories.filter((category) => !availableCategories.has(category));
       if (missingCategories.length) {
-        return { error: `Lipsesc ${missingCategories.length} fotografii obligatorii: procesul-verbal, testele aplicabile sau documentarea execuției.`, status: 400 as const };
+        return { error: `Lipsesc ${missingCategories.length} fotografii obligatorii: procesul-verbal, testele aplicabile, împământarea sau documentarea execuției.`, status: 400 as const };
       }
     }
   }
@@ -574,32 +601,33 @@ export async function saveFieldDocumentation(projectId: string, section: string,
   return { documentation: next };
 }
 
-export async function addCpe(name: string) {
+export async function addCpe(name: string, requiresGrounding: boolean) {
   const normalized = name.trim();
   if (normalized.length < 2 || normalized.length > 120) return { error: "Denumirea echipamentului nu este validă.", status: 400 as const };
   const existing = await getRawDb().prepare("SELECT id FROM cpe_catalog WHERE name = ? LIMIT 1").bind(normalized).first();
   if (existing) return { error: "Echipamentul există deja în catalog.", status: 409 as const };
-  await getRawDb().prepare("INSERT INTO cpe_catalog (id, name, created_at) VALUES (?, ?, ?)").bind(crypto.randomUUID(), normalized, Date.now()).run();
-  return { name: normalized };
+  await getRawDb().prepare("INSERT INTO cpe_catalog (id, name, requires_grounding, created_at) VALUES (?, ?, ?, ?)").bind(crypto.randomUUID(), normalized, requiresGrounding ? 1 : 0, Date.now()).run();
+  return { name: normalized, requiresGrounding };
 }
 
-export async function renameCpe(previousName: string, name: string) {
+export async function updateCpe(previousName: string, name: string, requiresGrounding: boolean) {
   const originalName = previousName.trim();
   const normalized = name.trim();
   if (normalized.length < 2 || normalized.length > 120) return { error: "Denumirea echipamentului nu este validă.", status: 400 as const };
 
   const existing = await getRawDb().prepare("SELECT id, name FROM cpe_catalog WHERE name = ? LIMIT 1").bind(originalName).first<{ id: string; name: string }>();
   if (!existing) return { error: "Echipamentul selectat nu există în catalog.", status: 404 as const };
-  if (existing.name === normalized) return { previousName: existing.name, name: normalized };
 
-  const duplicate = await getRawDb().prepare("SELECT id FROM cpe_catalog WHERE name = ? AND id != ? LIMIT 1").bind(normalized, existing.id).first();
-  if (duplicate) return { error: "Echipamentul există deja în catalog.", status: 409 as const };
+  if (existing.name !== normalized) {
+    const duplicate = await getRawDb().prepare("SELECT id FROM cpe_catalog WHERE name = ? AND id != ? LIMIT 1").bind(normalized, existing.id).first();
+    if (duplicate) return { error: "Echipamentul există deja în catalog.", status: 409 as const };
+  }
 
   await getRawDb().batch([
-    getRawDb().prepare("UPDATE cpe_catalog SET name = ? WHERE id = ?").bind(normalized, existing.id),
-    getRawDb().prepare("UPDATE projects SET cpe = ?, updated_at = ? WHERE cpe = ?").bind(normalized, Date.now(), existing.name),
+    getRawDb().prepare("UPDATE cpe_catalog SET name = ?, requires_grounding = ? WHERE id = ?").bind(normalized, requiresGrounding ? 1 : 0, existing.id),
+    getRawDb().prepare("UPDATE projects SET cpe = ?, cpe_requires_grounding = ?, updated_at = ? WHERE cpe = ?").bind(normalized, requiresGrounding ? 1 : 0, Date.now(), existing.name),
   ]);
-  return { previousName: existing.name, name: normalized };
+  return { previousName: existing.name, name: normalized, requiresGrounding };
 }
 
 export function bucket() {
