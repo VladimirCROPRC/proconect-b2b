@@ -3762,7 +3762,10 @@ td > small {
   width: 100%;
 }
 
-.mobile-brand, .mobile-nav {
+.mobile-brand,
+.mobile-nav,
+.mobile-work-header,
+.mobile-section-tabs {
   display: none;
 }
 
@@ -6241,7 +6244,7 @@ td > small {
 
 @media (max-width: 820px) {
   body {
-    padding-bottom: 72px;
+    padding-bottom: 0;
   }
 
   .sidebar {
@@ -6304,6 +6307,181 @@ td > small {
   .mobile-proconect-logo {
     width: 128px;
     height: 34px;
+  }
+
+  .project-mobile-topbar {
+    height: 82px;
+    padding: 0 14px;
+    border-bottom: 0;
+    color: #fff;
+    background: linear-gradient(135deg, #073c51 0%, #006778 100%);
+    box-shadow: 0 6px 18px rgba(3, 53, 69, .18);
+    backdrop-filter: none;
+  }
+
+  .project-mobile-topbar .mobile-brand,
+  .project-mobile-topbar .top-actions {
+    display: none;
+  }
+
+  .mobile-work-header {
+    display: grid;
+    width: 100%;
+    grid-template-columns: 34px 56px minmax(0, 1fr) 38px;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .mobile-work-back,
+  .mobile-work-logout {
+    display: grid;
+    width: 34px;
+    height: 40px;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    color: rgba(255, 255, 255, .9);
+    background: transparent;
+    font-size: 34px;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .mobile-work-logout {
+    width: 38px;
+    font-size: 22px;
+  }
+
+  .mobile-work-logo {
+    display: flex;
+    width: 56px;
+    height: 40px;
+    align-items: center;
+    justify-content: center;
+    padding: 5px;
+    border-radius: 7px;
+    background: rgba(255, 255, 255, .96);
+    box-shadow: 0 2px 8px rgba(0, 31, 42, .2);
+  }
+
+  .mobile-work-copy {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+  }
+
+  .mobile-work-copy strong {
+    overflow: hidden;
+    color: #fff;
+    font-size: 20px;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-work-copy small {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 3px;
+    color: rgba(255, 255, 255, .76);
+    font-size: 13px !important;
+  }
+
+  .mobile-work-copy small i {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #83ddc8;
+    box-shadow: 0 0 0 3px rgba(131, 221, 200, .14);
+  }
+
+  .mobile-section-tabs {
+    display: grid;
+    width: calc(100% - 26px);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 3px;
+    margin: 12px auto 0;
+    padding: 6px;
+    border: 1px solid #dce7ea;
+    border-radius: 13px;
+    background: #eaf1f3;
+  }
+
+  .mobile-section-tabs.manager-tabs {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .mobile-section-tabs button {
+    min-width: 0;
+    min-height: 42px;
+    padding: 0 13px;
+    border: 0;
+    border-radius: 9px;
+    color: #53616b;
+    background: transparent;
+    font-size: 14px;
+    font-weight: 750;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .mobile-section-tabs button.active {
+    color: #102b39;
+    background: #fff;
+    box-shadow: 0 2px 8px rgba(20, 52, 65, .14);
+  }
+
+  .mobile-project-context {
+    width: calc(100% - 26px);
+    grid-template-columns: 1fr;
+    margin: 12px auto 0;
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .mobile-project-context .active-project-picker,
+  .mobile-project-context .active-project-summary {
+    display: none;
+  }
+
+  .mobile-project-context .project-operation-tabs {
+    display: flex;
+    grid-column: auto;
+    gap: 2px;
+    overflow-x: auto;
+    padding: 6px;
+    border: 1px solid #dce7ea;
+    border-radius: 13px;
+    background: #eaf1f3;
+    scrollbar-width: none;
+  }
+
+  .mobile-project-context .project-operation-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .mobile-project-context .project-operation-tabs button {
+    min-width: 62px;
+    min-height: 42px;
+    flex: 1 0 auto;
+    padding: 0 10px;
+    border-radius: 9px;
+    color: #53616b;
+    font-weight: 750;
+  }
+
+  .mobile-project-context .project-operation-tabs button span {
+    display: none;
+  }
+
+  .mobile-project-context .project-operation-tabs button.active {
+    color: #102b39;
+    background: #fff;
+    box-shadow: 0 2px 8px rgba(20, 52, 65, .14);
   }
 
   .page-wrap {
