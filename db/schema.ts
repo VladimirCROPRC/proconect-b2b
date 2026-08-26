@@ -45,6 +45,7 @@ export const projects = sqliteTable("projects", {
   technician: text("technician").notNull(),
   technicianUsername: text("technician_username").notNull(),
   cpe: text("cpe").notNull(),
+  cpeRequiresGrounding: integer("cpe_requires_grounding", { mode: "boolean" }).notNull().default(false),
   sfp: integer("sfp", { mode: "boolean" }).notNull().default(false),
   mc: integer("mc", { mode: "boolean" }).notNull().default(false),
   terminalBox: integer("terminal_box", { mode: "boolean" }).notNull().default(false),
@@ -92,6 +93,7 @@ export const projectReports = sqliteTable("project_reports", {
 export const cpeCatalog = sqliteTable("cpe_catalog", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
+  requiresGrounding: integer("requires_grounding", { mode: "boolean" }).notNull().default(false),
   createdAt: integer("created_at").notNull(),
 }, (table) => [uniqueIndex("cpe_catalog_name_idx").on(table.name)]);
 

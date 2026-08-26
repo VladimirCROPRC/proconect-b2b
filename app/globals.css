@@ -1406,6 +1406,33 @@ td > small {
   padding: 0 20px;
 }
 
+.cpe-empty-state {
+  display: flex;
+  grid-column: 1 / -1;
+  min-height: 190px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  padding: 28px;
+  border: 1px dashed #cfd5e2;
+  border-radius: 11px;
+  color: #596176;
+  background: #fafbfc;
+  text-align: center;
+}
+
+.cpe-empty-state strong {
+  font-size: 15px;
+}
+
+.cpe-empty-state p {
+  max-width: 380px;
+  margin: 7px 0 16px;
+  color: #8b93a4;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .cpe-card {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto auto;
@@ -1435,6 +1462,15 @@ td > small {
   margin-top: 5px;
   color: #98a19c;
   font-size: 11px;
+}
+
+.cpe-card .grounding-status {
+  color: #65736b;
+}
+
+.cpe-card .grounding-status.required {
+  color: #9a5a10;
+  font-weight: 750;
 }
 
 .cpe-card > span {
@@ -3462,6 +3498,83 @@ td > small {
   white-space: nowrap;
 }
 
+.grounding-requirement {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 11px;
+  padding: 13px;
+  border: 1px solid #efc779;
+  border-radius: 6px;
+  background: #fffaf0;
+}
+
+.grounding-requirement.exception {
+  border-color: #e6adad;
+  background: #fff6f6;
+}
+
+.grounding-requirement > div,
+.grounding-requirement > label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.grounding-icon {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 5px;
+  color: #805316;
+  background: #f7dfae;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.grounding-requirement p {
+  display: flex;
+  margin: 0;
+  flex-direction: column;
+}
+
+.grounding-requirement strong {
+  color: #60471f;
+  font-size: 12px;
+}
+
+.grounding-requirement small {
+  margin-top: 3px;
+  color: #8f7449;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.grounding-requirement > label {
+  width: fit-content;
+  color: #4c5261;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.grounding-requirement > label input {
+  width: 17px;
+  height: 17px;
+  accent-color: #9a5a10;
+}
+
+.grounding-requirement .grounding-warning {
+  padding: 9px 10px;
+  border-radius: 5px;
+  color: #983b3b;
+  background: #fbe4e4;
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
 .photo-upload-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -4021,6 +4134,74 @@ td > small {
 
 .switch-card input:checked + i::after {
   transform: translateX(12px);
+}
+
+.grounding-switch {
+  display: flex;
+  min-height: 66px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 13px;
+  border: 1px solid #e4c685;
+  border-radius: 9px;
+  background: #fffaf1;
+  cursor: pointer;
+}
+
+.grounding-switch > span {
+  display: flex;
+  flex-direction: column;
+}
+
+.grounding-switch b {
+  color: #5e4926;
+  font-size: 12px;
+}
+
+.grounding-switch small {
+  margin-top: 4px;
+  color: #8c7650;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.grounding-switch input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.grounding-switch i {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  flex: 0 0 auto;
+  border-radius: 20px;
+  background: #cfc8bb;
+  transition: .18s ease;
+}
+
+.grounding-switch i::after {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .18);
+  content: "";
+  transition: .18s ease;
+}
+
+.grounding-switch input:checked + i {
+  background: #9a6a22;
+}
+
+.grounding-switch input:checked + i::after {
+  transform: translateX(16px);
 }
 
 .upload-grid {

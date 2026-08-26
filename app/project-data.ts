@@ -2,6 +2,11 @@ import type { ProjectFieldDocumentation } from "./field-documentation";
 
 export type ProjectActivityType = "Instalare" | "Intervenție" | "Survey";
 
+export type CpeCatalogItem = {
+  name: string;
+  requiresGrounding: boolean;
+};
+
 export type ProjectRecord = {
   id: string;
   activityType: ProjectActivityType;
@@ -13,6 +18,7 @@ export type ProjectRecord = {
   requirements: string;
   technician: string;
   cpe: string;
+  cpeRequiresGrounding: boolean;
   sfp: boolean;
   mc: boolean;
   terminalBox: boolean;
@@ -34,6 +40,7 @@ export const initialProjects: ProjectRecord[] = [
     requirements: "Instalare serviciu business 1 Gbps, montare CPE în rack-ul existent și etichetarea completă a fibrei.",
     technician: "Vlad",
     cpe: "Cisco C1111-8P",
+    cpeRequiresGrounding: false,
     sfp: true,
     mc: false,
     terminalBox: true,
@@ -53,6 +60,7 @@ export const initialProjects: ProjectRecord[] = [
     requirements: "Conectare sediu nou, instalare media converter și predarea testelor de putere optică reprezentantului clientului.",
     technician: "Vlad",
     cpe: "Huawei AR651C",
+    cpeRequiresGrounding: false,
     sfp: true,
     mc: true,
     terminalBox: true,
@@ -72,6 +80,7 @@ export const initialProjects: ProjectRecord[] = [
     requirements: "Extindere traseu FO până în camera tehnică și documentarea tuturor punctelor de acces.",
     technician: "Vlad",
     cpe: "MikroTik CCR2004",
+    cpeRequiresGrounding: false,
     sfp: true,
     mc: false,
     terminalBox: false,
@@ -91,6 +100,7 @@ export const initialProjects: ProjectRecord[] = [
     requirements: "Migrare conexiune pe noul CPE fără întreruperea serviciului principal.",
     technician: "Vlad",
     cpe: "Cisco C1111-8P",
+    cpeRequiresGrounding: false,
     sfp: true,
     mc: false,
     terminalBox: true,
@@ -101,12 +111,7 @@ export const initialProjects: ProjectRecord[] = [
   },
 ];
 
-export const initialCpeCatalog = [
-  "Cisco C1111-8P",
-  "Huawei AR651C",
-  "MikroTik CCR2004",
-  "Nokia 7250 IXR-e",
-];
+export const initialCpeCatalog: CpeCatalogItem[] = [];
 
 export const initialFieldDocumentation: Record<string, ProjectFieldDocumentation> = {
   RID10482: {
