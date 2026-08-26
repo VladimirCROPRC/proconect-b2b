@@ -1120,7 +1120,18 @@ export default function Home() {
       </aside>
 
       <section className="content">
-        <header className="topbar">
+        <header className={`topbar${isProjectView ? " project-mobile-topbar" : ""}`}>
+          {isProjectView && (
+            <div className="mobile-work-header">
+              <button className="mobile-work-back" onClick={() => goTo(listViewForActivity(activeProject.activityType))} aria-label={`Înapoi la ${activitySections[listViewForActivity(activeProject.activityType)].title}`}>‹</button>
+              <span className="mobile-work-logo"><img className="proconect-logo" src={proconectLogoUrl} alt="PRO CONECT" /></span>
+              <div className="mobile-work-copy">
+                <strong>{activeProject.id}</strong>
+                <small><i />{activeProject.status}</small>
+              </div>
+              <button className="mobile-work-logout" onClick={handleSignOut} aria-label="Deconectare" title="Deconectare">⎋</button>
+            </div>
+          )}
           <button className="mobile-brand" onClick={() => goTo("projects")} aria-label="Pagina principală">
             <img className="proconect-logo mobile-proconect-logo" src={proconectLogoUrl} alt="PRO CONECT" />
             <strong>B2B</strong>
@@ -1134,8 +1145,19 @@ export default function Home() {
           </div>
         </header>
 
+        {!isProjectView && (
+          <nav className={`mobile-section-tabs${canManageDocuments ? " manager-tabs" : ""}`} aria-label="Secțiunile aplicației">
+            <button className={view === "projects" ? "active" : ""} onClick={() => goTo("projects")}>Instalări</button>
+            <button className={view === "interventions" ? "active" : ""} onClick={() => goTo("interventions")}>Intervenții</button>
+            <button className={view === "surveys" ? "active" : ""} onClick={() => goTo("surveys")}>Survey</button>
+            {canManageDocuments && <button className={view === "team" ? "active" : ""} onClick={() => goTo("team")}>Echipă</button>}
+            {canManageDocuments && <button className={view === "cpe" ? "active" : ""} onClick={() => goTo("cpe")}>CPE</button>}
+            {canManageDocuments && <button className={view === "drive" ? "active" : ""} onClick={() => goTo("drive")}>Drive</button>}
+          </nav>
+        )}
+
         {isProjectView && (
-          <section className="active-project-context" aria-label="Proiect activ și operațiuni">
+          <section className="active-project-context mobile-project-context" aria-label="Proiect activ și operațiuni">
             <label className="active-project-picker">
               <span>{activeProject.activityType === "Intervenție" ? "TICHET ACTIV" : "PROIECT ACTIV"}</span>
               <select value={activeProjectId} onChange={(event) => changeActiveProject(event.target.value)}>
@@ -1150,10 +1172,10 @@ export default function Home() {
             <nav className="project-operation-tabs" aria-label="Operațiunile proiectului activ">
               {activeProject.activityType === "Instalare" ? <>
                 <button className={view === "client" ? "active" : ""} onClick={() => goTo("client")}><span>1</span>Client</button>
-                <button className={view === "route" ? "active" : ""} onClick={() => goTo("route")}><span>2</span>Traseu FO</button>
-                <button className={view === "splices" ? "active" : ""} onClick={() => goTo("splices")}><span>3</span>Suduri FO</button>
+                <button className={view === "route" ? "active" : ""} onClick={() => goTo("route")} title="Traseu FO"><span>2</span>Traseu</button>
+                <button className={view === "splices" ? "active" : ""} onClick={() => goTo("splices")} title="Suduri FO"><span>3</span>Suduri</button>
                 <button className={view === "site" ? "active" : ""} onClick={() => goTo("site")}><span>4</span>Site</button>
-                {canManageDocuments && <button className={view === "documents" ? "active" : ""} onClick={() => goTo("documents")}><span>5</span>Documente</button>}
+                {canManageDocuments && <button className={view === "documents" ? "active" : ""} onClick={() => goTo("documents")} title="Documente"><span>5</span>Docs</button>}
               </> : activeProject.activityType === "Intervenție" ? <>
                 <button className={view === "intervention-workspace" ? "active" : ""} onClick={() => goTo("intervention-workspace")}><span>1</span>Constatare</button>
                 <button className={view === "intervention-execution" ? "active" : ""} onClick={() => goTo("intervention-execution")}><span>2</span>Execuție</button>
@@ -1436,22 +1458,6 @@ export default function Home() {
         {view === "site" && <SiteOperationsSection project={activeProject} initialSummary={activeFieldDocumentation.site} onNotify={showToast} onSaved={saveSiteSummary} />}
         {view === "documents" && canManageDocuments && <ProjectDocumentsSection project={activeProject} fieldData={activeFieldDocumentation} onNotify={showToast} />}
       </section>
-
-      <nav className={`${canManageDocuments ? "mobile-nav manager-nav" : "mobile-nav"}${showInstallationNavigation ? "" : " activity-nav"}`} aria-label="Navigare mobilă">
-        <button className={view === "projects" ? "active" : ""} onClick={() => goTo("projects")}><span>IN</span>Instalări</button>
-        <button className={view === "interventions" || isInterventionWorkspace ? "active" : ""} onClick={() => goTo("interventions")}><span>IT</span>Intervenții</button>
-        <button className={view === "surveys" || view === "survey-workspace" ? "active" : ""} onClick={() => goTo("surveys")}><span>SV</span>Survey</button>
-        {canManageDocuments && <button className={view === "team" ? "active" : ""} onClick={() => goTo("team")}><span>E</span>Echipă</button>}
-        {canManageDocuments && <button className={view === "cpe" ? "active" : ""} onClick={() => goTo("cpe")}><span>C</span>CPE</button>}
-        {canManageDocuments && <button className={view === "drive" ? "active" : ""} onClick={() => goTo("drive")}><span>GD</span>Drive</button>}
-        {showInstallationNavigation && <>
-          <button className={view === "client" ? "active" : ""} onClick={() => goTo("client")}><span>CL</span>Client</button>
-          <button className={view === "route" ? "active" : ""} onClick={() => goTo("route")}><span>TR</span>Traseu</button>
-          <button className={view === "splices" ? "active" : ""} onClick={() => goTo("splices")}><span>SU</span>Suduri</button>
-          <button className={view === "site" ? "active" : ""} onClick={() => goTo("site")}><span>ST</span>Site</button>
-          {canManageDocuments && <button className={view === "documents" ? "active" : ""} onClick={() => goTo("documents")}><span>DOC</span>Documente</button>}
-        </>}
-      </nav>
 
       {modal && <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && closeModal()}>
         {(modal === "project" || modal === "edit-project") && (
