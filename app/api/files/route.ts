@@ -1,4 +1,4 @@
-import { getAuthorizedProject, getFileRow, hasValidPhotoCoordinates, isManagementRole, listProjectFiles, removeFile, storeFile, validateUpload } from "../../project-server";
+import { getAuthorizedProject, getFileRow, hasCompletedProjectSafety, hasValidPhotoCoordinates, isManagementRole, listProjectFiles, removeFile, storeFile, validateUpload } from "../../project-server";
 import { syncFileIfConnected } from "../../google-drive-server";
 import { currentSession, sameOrigin } from "../../server-auth";
 
@@ -14,6 +14,9 @@ export async function GET(request: Request) {
     if (!projectId) return Response.json({ error: "Proiectul nu a fost selectat." }, { status: 400 });
     if (section === "documents" && !isManagementRole(session.account)) return Response.json({ error: "Acces rezervat administratorului." }, { status: 403 });
     if (!(await getAuthorizedProject(projectId, session.account))) return Response.json({ error: "Proiect indisponibil." }, { status: 404 });
+    if (section !== "safety" && !(await hasCompletedProjectSafety(projectId, session.account))) {
+      return Response.json({ error: "Încarcă fotografiile Pretask și EIP înainte de accesarea lucrării." }, { status: 403 });
+    }
     const files = await listProjectFiles(projectId, section);
     return Response.json({ files: isManagementRole(session.account) ? files : files.filter((file: { section: string }) => file.section !== "documents") }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
@@ -41,6 +44,19 @@ export async function POST(request: Request) {
     }
     const project = await getAuthorizedProject(projectId, session.account);
     if (!project) return Response.json({ error: "Proiect indisponibil." }, { status: 404 });
+    if (section === "safety") {
+      if (session.account.role !== "Tehnician") {
+        return Response.json({ error: "Verificarea Pretask se completează de tehnicianul alocat lucrării." }, { status: 403 });
+      }
+      if (category !== "pretask" && category !== "ppe") {
+        return Response.json({ error: "Categoria fotografiei de siguranță nu este validă." }, { status: 400 });
+      }
+      if (typeof geo !== "string" || !hasValidPhotoCoordinates(geo)) {
+        return Response.json({ error: "Fotografiile Pretask și EIP necesită coordonate GPS valide." }, { status: 400 });
+      }
+    } else if (!(await hasCompletedProjectSafety(projectId, session.account))) {
+      return Response.json({ error: "Încarcă fotografiile Pretask și EIP înainte de accesarea lucrării." }, { status: 403 });
+    }
     if (section === "intervention-assessment" || section === "intervention-execution") {
       if (project.activity_type !== "Intervenție") {
         return Response.json({ error: "Aceste fotografii sunt disponibile numai pentru intervenții." }, { status: 400 });
@@ -78,6 +94,12 @@ export async function DELETE(request: Request) {
     if (!file || !(await getAuthorizedProject(file.project_id, session.account))) return Response.json({ error: "Fișier indisponibil." }, { status: 404 });
     if ((file.section === "project" || file.section === "documents") && !isManagementRole(session.account)) {
       return Response.json({ error: "Ștergerea acestui document este rezervată administratorului." }, { status: 403 });
+    }
+    if (file.section === "safety" && !isManagementRole(session.account)) {
+      return Response.json({ error: "Fotografiile Pretask și EIP nu pot fi șterse de tehnician după încărcare." }, { status: 403 });
+    }
+    if (file.section !== "safety" && !(await hasCompletedProjectSafety(file.project_id, session.account))) {
+      return Response.json({ error: "Încarcă fotografiile Pretask și EIP înainte de accesarea lucrării." }, { status: 403 });
     }
     await removeFile(body.fileId);
     return Response.json({ removed: true });

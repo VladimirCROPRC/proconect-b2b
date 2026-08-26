@@ -49,7 +49,7 @@ type StorageEnvironment = {
 };
 
 const storageEnvironment = env as unknown as StorageEnvironment;
-const fileSections = new Set(["project", "client", "route", "splices", "site", "documents", "intervention-assessment", "intervention-execution"]);
+const fileSections = new Set(["project", "safety", "client", "route", "splices", "site", "documents", "intervention-assessment", "intervention-execution"]);
 const maximumUploadBytes = 20 * 1024 * 1024;
 
 function validWorkIdentifier(value: string, activityType: ProjectActivityType) {
@@ -157,6 +157,21 @@ export async function listProjectData(account: AuthenticatedAccount) {
   const result = await query.all<ProjectRow>();
   const projects = (result.results ?? []).map((row: ProjectRow) => projectRowToRecord(row));
 
+  const safetyQuery = isManagementRole(account)
+    ? getRawDb().prepare("SELECT project_id, category FROM project_files WHERE section = 'safety' AND category IN ('pretask', 'ppe')")
+    : getRawDb()
+        .prepare("SELECT project_files.project_id, project_files.category FROM project_files INNER JOIN projects ON projects.id = project_files.project_id WHERE project_files.section = 'safety' AND project_files.category IN ('pretask', 'ppe') AND project_files.uploaded_by = ? AND projects.technician_username = ?")
+        .bind(account.username, account.username);
+  const safetyRows = await safetyQuery.all<{ project_id: string; category: "pretask" | "ppe" }>();
+  const safetyChecks: Record<string, { pretask: boolean; ppe: boolean; completed: boolean }> = {};
+  for (const project of projects) safetyChecks[project.id] = { pretask: false, ppe: false, completed: false };
+  for (const row of safetyRows.results ?? []) {
+    const current = safetyChecks[row.project_id];
+    if (!current) continue;
+    current[row.category] = true;
+    current.completed = current.pretask && current.ppe;
+  }
+
   const documentationQuery = isManagementRole(account)
     ? getRawDb().prepare("SELECT project_field_documentation.project_id, project_field_documentation.content_json FROM project_field_documentation")
     : getRawDb()
@@ -165,6 +180,7 @@ export async function listProjectData(account: AuthenticatedAccount) {
   const documentationRows = await documentationQuery.all<{ project_id: string; content_json: string }>();
   const fieldDocumentation: Record<string, ProjectFieldDocumentation> = {};
   for (const row of documentationRows.results ?? []) {
+    if (!isManagementRole(account) && !safetyChecks[row.project_id]?.completed) continue;
     try {
       const documentation = JSON.parse(row.content_json) as ProjectFieldDocumentation;
       if (!isManagementRole(account) && documentation.intervention?.documentation) {
@@ -186,7 +202,7 @@ export async function listProjectData(account: AuthenticatedAccount) {
 
   const cpeRows = await getRawDb().prepare("SELECT name FROM cpe_catalog ORDER BY created_at ASC").all<{ name: string }>();
   const cpe = (cpeRows.results ?? []).map((row: { name: string }) => row.name);
-  return { projects, fieldDocumentation, cpe };
+  return { projects, fieldDocumentation, cpe, safetyChecks };
 }
 
 export async function getAuthorizedProject(projectId: string, account: AuthenticatedAccount) {
@@ -194,6 +210,16 @@ export async function getAuthorizedProject(projectId: string, account: Authentic
     ? getRawDb().prepare("SELECT * FROM projects WHERE id = ? LIMIT 1").bind(projectId)
     : getRawDb().prepare("SELECT * FROM projects WHERE id = ? AND technician_username = ? LIMIT 1").bind(projectId, account.username);
   return query.first<ProjectRow>();
+}
+
+export async function hasCompletedProjectSafety(projectId: string, account: AuthenticatedAccount) {
+  if (isManagementRole(account)) return true;
+  if (account.role !== "Tehnician") return false;
+  const row = await getRawDb()
+    .prepare("SELECT COUNT(DISTINCT project_files.category) AS count FROM project_files INNER JOIN projects ON projects.id = project_files.project_id WHERE project_files.project_id = ? AND projects.technician_username = ? AND project_files.uploaded_by = ? AND project_files.section = 'safety' AND project_files.category IN ('pretask', 'ppe')")
+    .bind(projectId, account.username, account.username)
+    .first<{ count: number }>();
+  return (row?.count ?? 0) >= 2;
 }
 
 export async function createProject(input: ProjectRecord, createdBy: AuthenticatedAccount) {
@@ -367,6 +393,9 @@ export async function saveFieldDocumentation(projectId: string, section: string,
   }
   const project = await getAuthorizedProject(projectId, account);
   if (!project) return { error: "Proiectul nu este disponibil pentru acest utilizator.", status: 404 as const };
+  if (!(await hasCompletedProjectSafety(projectId, account))) {
+    return { error: "Încarcă fotografiile Pretask și EIP înainte de accesarea lucrării.", status: 403 as const };
+  }
   let finalizedProject: ProjectRecord | undefined;
 
   if (section === "intervention") {

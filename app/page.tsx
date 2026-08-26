@@ -10,6 +10,7 @@ import { GoogleDriveSettings, type GoogleDriveStatus } from "./google-drive-sett
 import { fetchProjectFiles, formatCapturedAt, uploadProjectFile } from "./client-storage";
 import { initialCpeCatalog, type ProjectActivityType, type ProjectRecord } from "./project-data";
 import type { ClientFieldSummary, InterventionFieldSummary, ProjectFieldDocumentation, RouteFieldSummary, SiteFieldSummary, SpliceFieldSummary } from "./field-documentation";
+import { TechnicianProjectSafety, type ProjectSafetyStatus } from "./technician-project-safety";
 
 type View = "projects" | "interventions" | "surveys" | "intervention-workspace" | "intervention-execution" | "intervention-documentation" | "survey-workspace" | "team" | "cpe" | "drive" | "documents" | "client" | "route" | "splices" | "site";
 type ActivityListView = "projects" | "interventions" | "surveys";
@@ -173,6 +174,10 @@ export default function Home() {
   const [clientPhotos, setClientPhotos] = useState<Partial<Record<ClientPhotoKey, ClientPhoto[]>>>({});
   const [fieldDocumentation, setFieldDocumentation] = useState<Record<string, ProjectFieldDocumentation>>({});
   const [driveStatus, setDriveStatus] = useState<GoogleDriveStatus | null>(null);
+  const [safetyChecks, setSafetyChecks] = useState<Record<string, ProjectSafetyStatus>>({});
+  const [safetyProject, setSafetyProject] = useState<Project | null>(null);
+  const [safetyDestination, setSafetyDestination] = useState<View | null>(null);
+  const [projectReloadKey, setProjectReloadKey] = useState(0);
 
   useEffect(() => {
     let mounted = true;
@@ -257,6 +262,7 @@ export default function Home() {
           projects?: Project[];
           fieldDocumentation?: Record<string, ProjectFieldDocumentation>;
           cpe?: string[];
+          safetyChecks?: Record<string, ProjectSafetyStatus>;
           error?: string;
         };
         if (!response.ok || !payload.projects) throw new Error(payload.error || "Proiectele nu sunt disponibile momentan.");
@@ -264,6 +270,7 @@ export default function Home() {
         setProjects(payload.projects);
         setFieldDocumentation(payload.fieldDocumentation ?? {});
         setCpeList(payload.cpe ?? []);
+        setSafetyChecks(payload.safetyChecks ?? {});
         setClientService(payload.fieldDocumentation?.[payload.projects[0]?.id ?? ""]?.client?.service ?? "Internet");
         setActiveProjectId((current) => payload.projects!.some((project) => project.id === current) ? current : payload.projects![0]?.id ?? "");
         setProjectDataReady(true);
@@ -276,7 +283,7 @@ export default function Home() {
     return () => {
       mounted = false;
     };
-  }, [authenticatedAccount]);
+  }, [authenticatedAccount, projectReloadKey]);
 
   useEffect(() => {
     if (!authenticatedAccount || authenticatedAccount.passwordResetRequired || !activeProjectId || !projectDataReady) return;
@@ -325,6 +332,7 @@ export default function Home() {
   const displayedAccountName = currentAccount.name;
   const displayedAccountRole = currentAccount.role;
   const activeFieldDocumentation = fieldDocumentation[activeProject.id] ?? {};
+  const selectedSafetyComplete = canManageDocuments || Boolean(selected && safetyChecks[selected.id]?.completed);
   const requiredClientPhotoKeys: ClientPhotoKey[] = [
     "report",
     ...(clientService === "Internet" || clientService === "Internet+OL" ? (["speed"] as ClientPhotoKey[]) : []),
@@ -456,6 +464,11 @@ export default function Home() {
       setView("projects");
       setSelected(null);
       setModal(null);
+      setProjects([]);
+      setFieldDocumentation({});
+      setSafetyChecks({});
+      setSafetyProject(null);
+      setSafetyDestination(null);
     }
   }
 
@@ -538,6 +551,7 @@ export default function Home() {
         ...(spliceFile ? [uploadProjectFile({ projectId: id, section: "project", category: "splice-diagram", file: spliceFile })] : []),
       ]);
       setProjects((current) => [payload.project!, ...current]);
+      setSafetyChecks((current) => ({ ...current, [payload.project!.id]: { pretask: false, ppe: false, completed: false } }));
       setActiveProjectId((current) => current || payload.project!.id);
       setAccounts((current) => current.map((account) => account.name === payload.project!.technician ? { ...account, jobs: account.jobs + 1 } : account));
       closeModal();
@@ -626,6 +640,11 @@ export default function Home() {
       const remainingProjects = projects.filter((project) => project.id !== deletedId);
       setProjects(remainingProjects);
       setFieldDocumentation((current) => {
+        const next = { ...current };
+        delete next[deletedId];
+        return next;
+      });
+      setSafetyChecks((current) => {
         const next = { ...current };
         delete next[deletedId];
         return next;
@@ -881,20 +900,45 @@ export default function Home() {
 
   function changeActiveProject(nextProjectId: string) {
     if (nextProjectId === activeProjectId) return;
-    setActiveProjectId(nextProjectId);
-    setClientService(fieldDocumentation[nextProjectId]?.client?.service ?? "Internet");
-    setClientPhotos({});
     const nextProject = projects.find((project) => project.id === nextProjectId);
-    if (nextProject) showToast(`${nextProject.id} este acum proiectul activ.`);
+    if (!nextProject) return;
+    if (currentAccount.role === "Tehnician" && !safetyChecks[nextProject.id]?.completed) {
+      setSafetyProject(nextProject);
+      setSafetyDestination(view);
+      return;
+    }
+    activateProject(nextProject, view);
+    showToast(`${nextProject.id} este acum proiectul activ.`);
   }
 
-  function openProject(project: Project) {
+  function activateProject(project: Project, destination: View) {
     setActiveProjectId(project.id);
     setClientService(fieldDocumentation[project.id]?.client?.service ?? "Internet");
     setClientPhotos({});
     setSelected(null);
-    setView(project.activityType === "Intervenție" ? "intervention-workspace" : project.activityType === "Survey" ? "survey-workspace" : "client");
+    setView(destination);
+  }
+
+  function openProject(project: Project) {
+    const destination: View = project.activityType === "Intervenție" ? "intervention-workspace" : project.activityType === "Survey" ? "survey-workspace" : "client";
+    if (currentAccount.role === "Tehnician" && !safetyChecks[project.id]?.completed) {
+      setSelected(null);
+      setSafetyProject(project);
+      setSafetyDestination(destination);
+      return;
+    }
+    activateProject(project, destination);
     showToast(`${project.id} a fost deschis în secțiunea ${activitySections[listViewForActivity(project.activityType)].title}.`);
+  }
+
+  function completeProjectSafety(project: Project, status: ProjectSafetyStatus) {
+    setSafetyChecks((current) => ({ ...current, [project.id]: status }));
+    setProjectReloadKey((current) => current + 1);
+    const destination = safetyDestination ?? (project.activityType === "Intervenție" ? "intervention-workspace" : project.activityType === "Survey" ? "survey-workspace" : "client");
+    setSafetyProject(null);
+    setSafetyDestination(null);
+    activateProject(project, destination);
+    showToast(`Verificarea Pretask și EIP pentru ${project.id} este completă. Lucrarea a fost deblocată.`);
   }
 
   function openProjectDocuments(project: Project) {
@@ -916,6 +960,7 @@ export default function Home() {
       showToast("Nu ai permisiunea de a accesa această secțiune administrativă.");
       return;
     }
+    let destinationProject = activeProject;
     if (next === "client" || next === "route" || next === "splices" || next === "site" || next === "documents") {
       const installation = activeProject.activityType === "Instalare"
         ? activeProject
@@ -925,7 +970,7 @@ export default function Home() {
         setView("projects");
         return;
       }
-      if (installation.id !== activeProjectId) setActiveProjectId(installation.id);
+      destinationProject = installation;
     }
     if (next === "projects" || next === "interventions" || next === "surveys") {
       setSearch("");
@@ -935,6 +980,17 @@ export default function Home() {
       showToast("Creează mai întâi o lucrare în secțiunea dedicată.");
       setView("projects");
       return;
+    }
+    const projectWorkspace = next === "client" || next === "route" || next === "splices" || next === "site" || next === "intervention-workspace" || next === "intervention-execution" || next === "survey-workspace";
+    if (projectWorkspace && currentAccount.role === "Tehnician" && destinationProject.id && !safetyChecks[destinationProject.id]?.completed) {
+      setSafetyProject(destinationProject);
+      setSafetyDestination(next);
+      return;
+    }
+    if (destinationProject.id && destinationProject.id !== activeProjectId) {
+      setActiveProjectId(destinationProject.id);
+      setClientService(fieldDocumentation[destinationProject.id]?.client?.service ?? "Internet");
+      setClientPhotos({});
     }
     setView(next);
     setSelected(null);
@@ -1130,7 +1186,7 @@ export default function Home() {
                   <tbody>
                     {filteredProjects.map((project) => (
                       <tr className={project.id === activeProject.id ? "active-project-row" : ""} key={project.id} onClick={() => setSelected(project)} tabIndex={0} onKeyDown={(event) => event.key === "Enter" && setSelected(project)}>
-                        <td><strong className="rid">{project.id}</strong><small>{project.id === activeProject.id ? project.activityType === "Intervenție" ? "Tichet activ" : "Proiect activ" : "Salvat permanent"}</small></td>
+                        <td><strong className="rid">{project.id}</strong><small>{currentAccount.role === "Tehnician" ? safetyChecks[project.id]?.completed ? "Pretask și EIP completate" : "🔒 Pretask și EIP necesare" : project.id === activeProject.id ? project.activityType === "Intervenție" ? "Tichet activ" : "Proiect activ" : "Salvat permanent"}</small></td>
                         <td><strong>{project.client}</strong><small>{project.address}</small></td>
                         <td><div className="technician"><span className="avatar">{initials(project.technician)}</span><strong>{project.technician}</strong></div></td>
                         <td><span className={statusClass[project.status]}><i />{project.status}</span></td>
@@ -1446,19 +1502,28 @@ export default function Home() {
       {selected && <div className="drawer-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setSelected(null)}><aside className="detail-drawer">
         <div className="drawer-head"><div><span className={statusClass[selected.status]}><i />{selected.status}</span><h2>{selected.id}</h2><p>{selected.activityType} · {selected.client}</p></div><button onClick={() => setSelected(null)} aria-label="Închide">×</button></div>
         <div className="drawer-section"><small>LOCAȚIE ȘI CONTACT</small><strong>{selected.address}</strong><p>{selected.contact} · {selected.phone}</p><p>{selected.email}</p></div>
-        <div className="drawer-section"><small>CERINȚELE LUCRĂRII</small><p className="requirements-text">{selected.requirements}</p></div>
+        {!selectedSafetyComplete && <div className="drawer-safety-lock"><span>🔒</span><div><strong>Lucrare blocată</strong><p>Încarcă fotografia Pretask și fotografia cu echipamentul individual de protecție pentru a vedea cerințele și operațiunile.</p></div></div>}
+        {selectedSafetyComplete && <><div className="drawer-section"><small>CERINȚELE LUCRĂRII</small><p className="requirements-text">{selected.requirements}</p></div>
         <div className="drawer-section"><small>TEHNICIAN ALOCAT</small><div className="technician large"><span className="avatar">{initials(selected.technician)}</span><div><strong>{selected.technician}</strong><p>Programare: {selected.date}</p></div></div></div>
         {selected.activityType === "Instalare" && <div className="drawer-section"><small>ECHIPAMENTE</small><strong>{selected.cpe}</strong><div className="tag-row">{selected.sfp && <span>SFP</span>}{selected.mc && <span>MC</span>}{selected.terminalBox && <span>Terminal Box</span>}</div></div>}
         {selected.activityType === "Instalare" && <div className="drawer-section"><small>DOCUMENTE</small><button className="file-row" onClick={() => void openProjectFile(selected.id, "ipwo")}><span>PDF</span><div><strong>{selected.ipwo}</strong><small>IPWO</small></div><b>↗</b></button><button className="file-row" onClick={() => void openProjectFile(selected.id, "splice-diagram")}><span>FO</span><div><strong>{selected.splice}</strong><small>Diagramă suduri</small></div><b>↗</b></button></div>}
-        <div className="drive-folder"><span className="folder-icon">▰</span><div><small>{driveStatus?.folders[selected.id] ? "GOOGLE DRIVE" : "STOCARE SECURIZATĂ"}</small><strong>Dosar {selected.id}</strong></div>{driveStatus?.folders[selected.id] ? <a className="drive-folder-open" href={driveStatus.folders[selected.id]} target="_blank" rel="noreferrer" aria-label={`Deschide dosarul Google Drive ${selected.id}`}>↗</a> : <span>✓</span>}</div>
+        <div className="drive-folder"><span className="folder-icon">▰</span><div><small>{driveStatus?.folders[selected.id] ? "GOOGLE DRIVE" : "STOCARE SECURIZATĂ"}</small><strong>Dosar {selected.id}</strong></div>{driveStatus?.folders[selected.id] ? <a className="drive-folder-open" href={driveStatus.folders[selected.id]} target="_blank" rel="noreferrer" aria-label={`Deschide dosarul Google Drive ${selected.id}`}>↗</a> : <span>✓</span>}</div></>}
         <div className="drawer-project-actions">
-          <button className="primary-button" onClick={() => openProject(selected)}>{selected.activityType === "Intervenție" ? "Deschide intervenția" : "Deschide proiectul"} <span>→</span></button>
+          <button className="primary-button" onClick={() => openProject(selected)}>{selectedSafetyComplete ? selected.activityType === "Intervenție" ? "Deschide intervenția" : "Deschide proiectul" : "Completează Pretask și EIP"} <span>→</span></button>
           {canManageDocuments && <button className="secondary-button" onClick={() => openProjectEditor(selected)}>{selected.activityType === "Intervenție" ? "Editează intervenția" : "Editează proiectul"}</button>}
           {canManageDocuments && selected.activityType === "Instalare" && <button className="secondary-button" onClick={() => openProjectDocuments(selected)}>Documente administrative</button>}
           {canManageDocuments && <button className="secondary-button" style={{ color: "#b42336", borderColor: "#ecc8cc" }} onClick={() => openProjectDeletion(selected)}>{selected.activityType === "Intervenție" ? "Șterge intervenția" : "Șterge proiectul"}</button>}
           <small>{selected.activityType === "Instalare" ? "Client, traseu, suduri, operațiuni site și închiderea proiectului" : selected.activityType === "Intervenție" ? "Constatare, execuție și documentarea intervenției" : "Fișă și obiective dedicate survey-ului"}</small>
         </div>
       </aside></div>}
+
+      {safetyProject && <TechnicianProjectSafety
+        project={safetyProject}
+        initialStatus={safetyChecks[safetyProject.id] ?? { pretask: false, ppe: false, completed: false }}
+        onCancel={() => { setSafetyProject(null); setSafetyDestination(null); setView(listViewForActivity(safetyProject.activityType)); }}
+        onStatusChange={(status) => setSafetyChecks((current) => ({ ...current, [safetyProject.id]: status }))}
+        onComplete={(status) => completeProjectSafety(safetyProject, status)}
+      />}
 
       {toast && <div className="toast"><span>✓</span>{toast}<button onClick={() => setToast("")}>×</button></div>}
     </main>

@@ -1,4 +1,4 @@
-import { bucket, getAuthorizedProject, getFileRow, isManagementRole } from "../../../project-server";
+import { bucket, getAuthorizedProject, getFileRow, hasCompletedProjectSafety, isManagementRole } from "../../../project-server";
 import { currentSession } from "../../../server-auth";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +11,9 @@ export async function GET(request: Request, context: { params: Promise<{ fileId:
     const file = await getFileRow(fileId);
     if (!file || !(await getAuthorizedProject(file.project_id, session.account))) return Response.json({ error: "Fișier indisponibil." }, { status: 404 });
     if (file.section === "documents" && !isManagementRole(session.account)) return Response.json({ error: "Acces rezervat administratorului." }, { status: 403 });
+    if (file.section !== "safety" && !(await hasCompletedProjectSafety(file.project_id, session.account))) {
+      return Response.json({ error: "Încarcă fotografiile Pretask și EIP înainte de accesarea lucrării." }, { status: 403 });
+    }
     const object = await bucket().get(file.storage_key);
     if (!object) return Response.json({ error: "Fișierul nu mai este disponibil." }, { status: 404 });
     const safeName = file.original_name.replace(/[\r\n"]/g, "_");

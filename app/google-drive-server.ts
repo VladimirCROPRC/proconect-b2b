@@ -40,25 +40,28 @@ export const driveActivityFolders: Record<ProjectActivityType, string> = {
 
 export const driveSectionFolders: Record<string, string> = {
   project: "01_Documente proiect",
-  client: "02_Client",
-  route: "03_Traseu FO",
-  splices: "04_Suduri FO",
-  site: "05_Operatiuni site",
-  documents: "06_Documente administrative",
+  safety: "02_Pretask_si_EIP",
+  client: "03_Client",
+  route: "04_Traseu FO",
+  splices: "05_Suduri FO",
+  site: "06_Operatiuni site",
+  documents: "07_Documente administrative",
 };
 
 const activitySectionFolders: Record<ProjectActivityType, Record<string, string>> = {
   Instalare: driveSectionFolders,
   "Intervenție": {
-    "intervention-assessment": "01_Constatare",
-    "intervention-execution": "02_Executie",
-    "intervention-documentation": "03_Documentare",
-    project: "04_Documente interventie",
-    documents: "05_Documente administrative",
+    safety: "01_Pretask_si_EIP",
+    "intervention-assessment": "02_Constatare",
+    "intervention-execution": "03_Executie",
+    "intervention-documentation": "04_Documentare",
+    project: "05_Documente interventie",
+    documents: "06_Documente administrative",
   },
   Survey: {
-    project: "01_Documente survey",
-    documents: "02_Documente administrative",
+    safety: "01_Pretask_si_EIP",
+    project: "02_Documente survey",
+    documents: "03_Documente administrative",
   },
 };
 
