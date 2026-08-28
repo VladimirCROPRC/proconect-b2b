@@ -25,7 +25,9 @@ jobs:
       - name: Validate all SQLite migrations
         run: python3 scripts/test-migrations.py
       - name: TypeScript
-        run: npx tsc --noEmit
+        run: |
+          npx wrangler types
+          npx tsc --noEmit
       - name: Lint
         run: npm run lint
       - name: Production build (no deployment)

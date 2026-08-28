@@ -10,6 +10,42 @@ const moduleUrl = text => `data:text/javascript;base64,${Buffer.from(stripTypeSc
 const coreUrl = moduleUrl(await source('app/onedrive-core.ts'));
 const core = await import(coreUrl);
 
+test('OneDrive API restricts actions to an authenticated Admin and matching origin', async () => {
+  let session = null, operations = 0;
+  globalThis.__odApi = {
+    currentSession: async () => session,
+    oneDriveSameOrigin: request => request.headers.get('Origin') === 'https://example.test',
+    oneDriveStatus: async () => ({ connected: false }),
+    beginOneDrive: async () => { operations++; return 'https://login.microsoftonline.com/test'; },
+    disconnectOneDrive: async () => { operations++; },
+    drainOneDrive: async () => { operations++; },
+    retryOneDrive: async () => { operations++; },
+    setBackupMode: async () => { operations++; },
+  };
+  const code = (await source('app/api/onedrive/route.ts'))
+    .replace(/^import .*onedrive-server";$/m, 'const { beginOneDrive, disconnectOneDrive, drainOneDrive, oneDriveSameOrigin, oneDriveStatus, retryOneDrive, setBackupMode } = globalThis.__odApi;')
+    .replace(/^import .*server-auth";$/m, 'const { currentSession } = globalThis.__odApi;');
+  const api = await import(moduleUrl(code));
+  const request = (origin = 'https://example.test') => new Request('https://example.test/api/onedrive', { method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'authorize' }) });
+  try {
+    assert.equal((await api.POST(request())).status, 401);
+    for (const role of ['Tehnician', 'Manager', 'Coordonator']) {
+      session = { sessionId: 'session', account: { role, passwordResetRequired: false } };
+      assert.equal((await api.POST(request())).status, 403);
+      assert.equal((await api.GET(new Request('https://example.test/api/onedrive'))).status, 403);
+    }
+    session.account = { role: 'Admin', passwordResetRequired: true };
+    assert.equal((await api.POST(request())).status, 401);
+    session.account.passwordResetRequired = false;
+    assert.equal((await api.POST(request('https://evil.test'))).status, 403);
+    assert.equal(operations, 0);
+    const allowed = await api.POST(request());
+    assert.equal(allowed.status, 200);
+    assert.equal(allowed.headers.get('Cache-Control'), 'no-store');
+    assert.equal(operations, 1);
+  } finally { delete globalThis.__odApi; }
+});
+
 test('provider selection, fixed origin, unique safe names, and retry delays', async () => {
   assert.equal(core.validMode('both'), true);
   assert.equal(core.validMode('arbitrary'), false);
