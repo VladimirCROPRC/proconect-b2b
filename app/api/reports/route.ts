@@ -1,5 +1,5 @@
 import { getAuthorizedProject, isManagementRole, readReport, writeReport } from "../../project-server";
-import { syncReportIfConnected } from "../../google-drive-server";
+import { syncReportIfConnected } from "../../backup-server";
 import { currentSession, sameOrigin } from "../../server-auth";
 
 export const dynamic = "force-dynamic";

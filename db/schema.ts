@@ -137,3 +137,37 @@ export const googleDriveFileSync = sqliteTable("google_drive_file_sync", {
   lastError: text("last_error").notNull().default(""),
   updatedAt: integer("updated_at").notNull(),
 }, (table) => [index("google_drive_file_sync_project_idx").on(table.projectId)]);
+
+export const onedriveConnection = sqliteTable("onedrive_connection", {
+  id: text("id").primaryKey(),
+  mode: text("mode").notNull().default("google"),
+  generation: text("generation").notNull().default(""),
+  access_token: text("access_token").notNull().default(""),
+  refresh_token: text("refresh_token").notNull().default(""),
+  expires_at: integer("expires_at").notNull().default(0),
+  drive_id: text("drive_id").notNull().default(""),
+  root_id: text("root_id").notNull().default(""),
+  root_url: text("root_url").notNull().default(""),
+  account: text("account").notNull().default(""),
+  owner_id: text("owner_id").notNull().default(""),
+  lease: text("lease").notNull().default(""),
+  lease_until: integer("lease_until").notNull().default(0),
+});
+
+export const onedriveOauthStates = sqliteTable("onedrive_oauth_states", {
+  id: text("id").primaryKey(),
+  session_id: text("session_id").notNull(),
+  verifier: text("verifier").notNull(),
+  expires_at: integer("expires_at").notNull(),
+});
+
+export const onedriveJobs = sqliteTable("onedrive_jobs", {
+  id: text("id").primaryKey(),
+  kind: text("kind").notNull(),
+  item_id: text("item_id").notNull(),
+  revision: integer("revision").notNull().default(1),
+  done_revision: integer("done_revision").notNull().default(0),
+  attempts: integer("attempts").notNull().default(0),
+  next_at: integer("next_at").notNull().default(0),
+  last_error: text("last_error").notNull().default(""),
+}, (table) => [index("onedrive_jobs_pending_idx").on(table.next_at)]);

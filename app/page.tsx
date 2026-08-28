@@ -7,6 +7,7 @@ import { SiteOperationsSection } from "./site-operations";
 import { InterventionOperationsSection } from "./intervention-operations";
 import { ProjectDocumentsSection } from "./project-documents";
 import { GoogleDriveSettings, type GoogleDriveStatus } from "./google-drive-settings";
+import { OneDriveSettings } from "./onedrive-settings";
 import { fetchProjectFiles, formatCapturedAt, uploadProjectFile } from "./client-storage";
 import { initialCpeCatalog, type CpeCatalogItem, type ProjectActivityType, type ProjectRecord } from "./project-data";
 import type { ClientFieldSummary, InterventionFieldSummary, ProjectFieldDocumentation, RouteFieldSummary, SiteFieldSummary, SpliceFieldSummary } from "./field-documentation";
@@ -235,6 +236,13 @@ export default function Home() {
 
   useEffect(() => {
     if (!authenticatedAccount || authenticatedAccount.passwordResetRequired || authenticatedAccount.role === "Tehnician") return;
+    const oneDriveResult = new URLSearchParams(window.location.search).get("onedrive");
+    if (oneDriveResult && authenticatedAccount.role === "Admin") {
+      setView("drive");
+      showToast(oneDriveResult === "connected" ? "OneDrive conectat. Alege destinația pentru copiile automate." : "Conectarea Microsoft nu a reușit. Reîncearcă; dacă este cerută aprobarea IT, așteaptă aprobarea.");
+      const clean = new URL(window.location.href); clean.searchParams.delete("onedrive");
+      window.history.replaceState({}, "", clean.pathname + clean.search + clean.hash);
+    }
     let mounted = true;
     fetch("/api/google-drive", { cache: "no-store", credentials: "same-origin" })
       .then(async (response) => {
@@ -1115,7 +1123,7 @@ export default function Home() {
             <span className="nav-symbol">C</span> Echipamente CPE
           </button>}
           {canManageDocuments && <button className={view === "drive" ? "active" : ""} onClick={() => goTo("drive")}>
-            <span className="nav-symbol">GD</span> Google Drive
+            <span className="nav-symbol">GD</span> Drive și OneDrive
           </button>}
           {showInstallationNavigation && <>
             <p>DOCUMENTAȚIE INSTALĂRI</p>
@@ -1477,6 +1485,7 @@ export default function Home() {
           onNotify={showToast}
           onSaved={saveInterventionSummary}
         />}
+        {view === "drive" && authenticatedAccount?.role === "Admin" && <OneDriveSettings />}
         {view === "drive" && canManageDocuments && <GoogleDriveSettings initialStatus={driveStatus} onStatusChange={setDriveStatus} onNotify={showToast} />}
         {view === "route" && <FoRouteSection project={activeProject} initialSummary={activeFieldDocumentation.route} onNotify={showToast} onSaved={saveRouteSummary} />}
         {view === "splices" && <FoSplicesSection project={activeProject} initialSummary={activeFieldDocumentation.splices} onNotify={showToast} onSaved={saveSpliceSummary} />}

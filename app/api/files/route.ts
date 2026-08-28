@@ -1,5 +1,5 @@
 import { getAuthorizedProject, getFileRow, hasCompletedProjectSafety, hasValidPhotoCoordinates, isManagementRole, listProjectFiles, removeFile, storeFile, validateUpload } from "../../project-server";
-import { syncFileIfConnected } from "../../google-drive-server";
+import { syncFileIfConnected } from "../../backup-server";
 import { currentSession, sameOrigin } from "../../server-auth";
 
 export const dynamic = "force-dynamic";
