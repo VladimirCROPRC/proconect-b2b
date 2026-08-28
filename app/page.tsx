@@ -236,14 +236,18 @@ export default function Home() {
 
   useEffect(() => {
     if (!authenticatedAccount || authenticatedAccount.passwordResetRequired || authenticatedAccount.role === "Tehnician") return;
+    let mounted = true;
     const oneDriveResult = new URLSearchParams(window.location.search).get("onedrive");
     if (oneDriveResult && authenticatedAccount.role === "Admin") {
-      setView("drive");
-      showToast(oneDriveResult === "connected" ? "OneDrive conectat. Alege destinația pentru copiile automate." : "Conectarea Microsoft nu a reușit. Reîncearcă; dacă este cerută aprobarea IT, așteaptă aprobarea.");
-      const clean = new URL(window.location.href); clean.searchParams.delete("onedrive");
-      window.history.replaceState({}, "", clean.pathname + clean.search + clean.hash);
+      fetch("/api/onedrive", { cache: "no-store" }).then(async response => {
+        const result = await response.json() as { connected?: boolean };
+        if (!mounted) return;
+        setView("drive");
+        showToast(response.ok && result.connected && oneDriveResult === "connected" ? "OneDrive conectat. Alege destinația pentru copiile automate." : "Conectarea Microsoft nu a reușit. Reîncearcă; dacă este cerută aprobarea IT, așteaptă aprobarea.");
+        const clean = new URL(window.location.href); clean.searchParams.delete("onedrive");
+        window.history.replaceState({}, "", clean.pathname + clean.search + clean.hash);
+      }).catch(() => { if (mounted) showToast("Starea OneDrive nu poate fi verificată momentan."); });
     }
-    let mounted = true;
     fetch("/api/google-drive", { cache: "no-store", credentials: "same-origin" })
       .then(async (response) => {
         if (!response.ok) return;

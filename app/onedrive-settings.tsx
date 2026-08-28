@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 type Status = { configured: boolean; connected: boolean; mode: string; account: string; rootUrl: string; synced: number; pending: number; errors: { kind: string; item_id: string; last_error: string }[] };
 type Payload = Status & { error?: string; authorizationUrl?: string };
 export function OneDriveSettings() {
@@ -7,13 +7,15 @@ export function OneDriveSettings() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [processing, setProcessing] = useState(false);
-  const refresh = useCallback(async () => {
-    const response = await fetch("/api/onedrive", { cache: "no-store" });
-    const data = await response.json() as Payload;
-    if (!response.ok) throw new Error(data.error);
-    setStatus(data as Status);
+  useEffect(() => {
+    let mounted = true;
+    fetch("/api/onedrive", { cache: "no-store" }).then(async response => {
+      const data = await response.json() as Payload;
+      if (!response.ok) throw new Error(data.error);
+      if (mounted) setStatus(data);
+    }).catch(e => { if (mounted) setError(e.message); });
+    return () => { mounted = false; };
   }, []);
-  useEffect(() => { void refresh().catch(e => setError(e.message)); }, [refresh]);
   async function action(actionName: string, mode?: string) {
     setBusy(true); setError("");
     try {
