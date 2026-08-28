@@ -209,7 +209,7 @@ export function GoogleDriveSettings({ initialStatus, onStatusChange, onNotify }:
         <div className="drive-connection-details">
           {status?.connected ? (
             <>
-              <p>Documentele și fotografiile noi sunt copiate automat în dosarul companiei imediat după salvare.</p>
+              <p>Documentele și fotografiile noi sunt copiate automat dacă Google Drive este selectat ca destinație. Conexiunea poate rămâne activă și când copiile automate sunt oprite.</p>
               <div className="drive-connected-actions">
                 <a className="secondary-button drive-root-link" href={status.rootFolderUrl} target="_blank" rel="noreferrer">Deschide dosarul {status.rootFolderName} ↗</a>
                 <button className="drive-text-button" onClick={() => void authorizeGoogle()} disabled={authorizing}>{authorizing ? "Se redirecționează..." : "Reconectează contul Google"}</button>
@@ -269,3 +269,4 @@ export function GoogleDriveSettings({ initialStatus, onStatusChange, onNotify }:
     </div>
   );
 }
+

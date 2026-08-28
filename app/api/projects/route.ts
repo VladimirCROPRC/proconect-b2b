@@ -1,5 +1,5 @@
 import { createProject, deleteProject, ensureProjectData, isManagementRole, listProjectData, updateProject } from "../../project-server";
-import { syncProjectIfConnected } from "../../google-drive-server";
+import { syncProjectIfConnected } from "../../backup-server";
 import type { ProjectRecord } from "../../project-data";
 import { currentSession, sameOrigin } from "../../server-auth";
 

@@ -1,4 +1,6 @@
 import { env } from "cloudflare:workers";
+import { backupMode } from "./onedrive-server";
+import { usesGoogle } from "./onedrive-core";
 import { getRawDb } from "../db";
 import type { ProjectActivityType } from "./project-data";
 import { bucket, getFileRow, readReport } from "./project-server";
@@ -365,12 +367,14 @@ async function uploadDriveFile(name: string, contentType: string, content: Array
 }
 
 export async function syncProjectIfConnected(projectId: string) {
+  if (!usesGoogle(await backupMode())) return false;
   if (!isConnected(await settings())) return false;
   await ensureProjectFolder(projectId);
   return true;
 }
 
 export async function syncFileIfConnected(fileId: string) {
+  if (!usesGoogle(await backupMode())) return false;
   if (!isConnected(await settings())) return false;
   const file = await getFileRow(fileId);
   if (!file) return false;
@@ -396,6 +400,7 @@ export async function syncFileIfConnected(fileId: string) {
 }
 
 export async function syncReportIfConnected(projectId: string) {
+  if (!usesGoogle(await backupMode())) return false;
   if (!isConnected(await settings())) return false;
   const saved = await readReport(projectId);
   if (!saved) return false;
@@ -408,6 +413,7 @@ export async function syncReportIfConnected(projectId: string) {
 }
 
 export async function syncAllDriveData() {
+  if (!usesGoogle(await backupMode())) return { error: "Google Drive este dezactivat ca destinație. Selectează Google Drive sau ambele destinații.", status: 409 as const };
   const configuration = await settings();
   if (!isConnected(configuration) || !configuration) return { error: "Conectează mai întâi contul Google Drive.", status: 409 as const };
   const categoryFolders = await ensureActivityFolders(configuration.root_folder_id);

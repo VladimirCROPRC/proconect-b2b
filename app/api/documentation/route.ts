@@ -1,4 +1,5 @@
 import { saveFieldDocumentation } from "../../project-server";
+import { queueOneDrive } from "../../onedrive-server";
 import { currentSession, sameOrigin } from "../../server-auth";
 
 export const dynamic = "force-dynamic";
@@ -14,6 +15,7 @@ export async function PATCH(request: Request) {
     }
     const result = await saveFieldDocumentation(body.projectId, body.section, body.content, session.account);
     if ("error" in result) return Response.json({ error: result.error }, { status: result.status });
+    try { await queueOneDrive("project", body.projectId); } catch { console.error("OneDrive documentation backup requires retry"); }
     return Response.json({ documentation: result.documentation, ...(result.project ? { project: result.project } : {}) });
   } catch (error) {
     console.error("Proconect field documentation error:", error instanceof Error ? error.message : "Unknown documentation failure");

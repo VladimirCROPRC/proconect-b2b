@@ -1,5 +1,6 @@
 import { getAuthorizedProject, getFileRow, hasCompletedProjectSafety, hasValidPhotoCoordinates, isManagementRole, listProjectFiles, removeFile, storeFile, validateUpload } from "../../project-server";
-import { syncFileIfConnected } from "../../google-drive-server";
+import { syncFileIfConnected } from "../../backup-server";
+import { queueOneDrive } from "../../onedrive-server";
 import { currentSession, sameOrigin } from "../../server-auth";
 
 export const dynamic = "force-dynamic";
@@ -102,6 +103,7 @@ export async function DELETE(request: Request) {
       return Response.json({ error: "Încarcă fotografiile Pretask și EIP înainte de accesarea lucrării." }, { status: 403 });
     }
     await removeFile(body.fileId);
+    try { await queueOneDrive("project", file.project_id); } catch { console.error("OneDrive project export requires retry"); }
     return Response.json({ removed: true });
   } catch {
     return Response.json({ error: "Fișierul nu a putut fi șters." }, { status: 503 });
