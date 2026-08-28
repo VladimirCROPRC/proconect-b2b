@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 type Status = { configured: boolean; connected: boolean; mode: string; account: string; rootUrl: string; synced: number; pending: number; errors: { kind: string; item_id: string; last_error: string }[] };
+type Payload = Status & { error?: string; authorizationUrl?: string };
 export function OneDriveSettings() {
   const [status, setStatus] = useState<Status | null>(null);
   const [error, setError] = useState("");
@@ -8,7 +9,7 @@ export function OneDriveSettings() {
   const [processing, setProcessing] = useState(false);
   const refresh = useCallback(async () => {
     const response = await fetch("/api/onedrive", { cache: "no-store" });
-    const data = await response.json();
+    const data = await response.json() as Payload;
     if (!response.ok) throw new Error(data.error);
     setStatus(data as Status);
   }, []);
@@ -17,7 +18,7 @@ export function OneDriveSettings() {
     setBusy(true); setError("");
     try {
       const response = await fetch("/api/onedrive", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: actionName, mode }) });
-      const data = await response.json();
+      const data = await response.json() as Payload;
       if (!response.ok) throw new Error(data.error);
       if (data.authorizationUrl) { window.location.assign(data.authorizationUrl); return; }
       setStatus(data as Status);
@@ -32,7 +33,7 @@ export function OneDriveSettings() {
     async function next() {
       try {
         const response = await fetch("/api/onedrive", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "process" }) });
-        const data = await response.json();
+        const data = await response.json() as Payload;
         if (!response.ok) throw new Error(data.error);
         if (cancelled) return;
         setStatus(data);

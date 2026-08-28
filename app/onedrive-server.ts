@@ -132,7 +132,7 @@ export async function seedOneDrive() {
   if (!usesOneDrive(await backupMode())) return;
   await getRawDb().batch([
     getRawDb().prepare("INSERT OR IGNORE INTO onedrive_jobs (id, kind, item_id) SELECT 'file:' || id, 'file', id FROM project_files"),
-    getRawDb().prepare("INSERT OR IGNORE INTO onedrive_jobs (id, kind, item_id) SELECT 'project:' || id, 'project', id FROM projects"),
+    getRawDb().prepare("INSERT INTO onedrive_jobs (id, kind, item_id) SELECT 'project:' || id, 'project', id FROM projects WHERE true ON CONFLICT(id) DO UPDATE SET revision = revision + 1, next_at = 0, last_error = ''"),
   ]);
 }
 export async function retryOneDrive() {

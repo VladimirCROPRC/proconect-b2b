@@ -174,6 +174,7 @@ test('OneDrive server with isolated SQLite, fake Microsoft responses and fake R2
       assert.ok(job.next_at > Date.now() + 110000);
       const before = uploads; await server.drainOneDrive(); assert.equal(uploads, before);
       failUpload = false; await server.retryOneDrive(); await server.drainOneDrive();
+      await server.drainOneDrive();
       assert.equal((await server.oneDriveStatus()).errors.length, 0);
     });
     await t.test('expired tokens rotate refresh token securely', async () => {
@@ -194,6 +195,8 @@ test('OneDrive server with isolated SQLite, fake Microsoft responses and fake R2
       const before = uploads;
       await server.queueOneDrive('file', 'f-1'); await server.drainOneDrive();
       assert.equal(uploads, before);
+      await server.setBackupMode('both');
+      assert.equal((await server.oneDriveStatus()).pending, 1, 'reenabling refreshes project exports changed while paused');
       const callsBefore = calls.length;
       await server.disconnectOneDrive();
       assert.equal(calls.length, callsBefore);

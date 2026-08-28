@@ -13,7 +13,8 @@ export function decode64(value: string) {
 export async function safeName(label: string, id: string) {
   const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(id)));
   const suffix = Array.from(digest.slice(0, 16), n => n.toString(16).padStart(2, "0")).join("");
-  const clean = label.normalize("NFC").replace(/[\x00-\x1f"*:<>?\/\\|#%]/g, "_").replace(/^[. ]+|[. ]+$/g, "").slice(0, 110) || "document";
+  const printable = Array.from(label.normalize("NFC"), c => c.charCodeAt(0) < 32 ? "_" : c).join("");
+  const clean = printable.replace(/["*:<>?\/\\|#%]/g, "_").replace(/^[. ]+|[. ]+$/g, "").slice(0, 110) || "document";
   const dot = clean.lastIndexOf(".");
   return dot > 0 ? `${clean.slice(0, dot)}--${suffix}${clean.slice(dot)}` : `${clean}--${suffix}`;
 }
