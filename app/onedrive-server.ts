@@ -53,7 +53,7 @@ async function exchange(parameters: URLSearchParams) {
   parameters.set("client_id", c.client); parameters.set("client_secret", c.secret);
   let response: Response;
   try {
-    response = await fetch(`https://login.microsoftonline.com/${c.tenant}/oauth2/v2.0/token`, { method: "POST", body: parameters, signal: AbortSignal.timeout(20_000), redirect: "error" });
+    response = await fetch(`https://login.microsoftonline.com/${c.tenant}/oauth2/v2.0/token`, { method: "POST", body: parameters, signal: AbortSignal.timeout(20_000) });
   } catch {
     throw new RemoteFailure("MICROSOFT_TOKEN:network");
   }
