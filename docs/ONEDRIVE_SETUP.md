@@ -42,7 +42,7 @@ Generate the encryption key on a trusted machine using `openssl rand -hex 32`, t
 
 ## What is copied
 
-- One folder per project inside `Proconect B2B`. Stable hashed identifiers prevent sanitized names from colliding.
+- User-uploaded files are organized as `Proconect B2B / activity / project ID / section`. Project folder names stay readable; stable identifiers remain only in filenames to prevent collisions.
 - Uploaded photos and documents retain their extension and include their section and stable file identifier in the name. Reprocessing overwrites the same application-owned item, not another upload with the same original name.
 - `Date_lucrare.json` contains the project, field documentation (including grounding declarations), administrative report, and file metadata/GPS. This is a structured export, not a newly rendered/signed PDF.
 - Existing uploaded signed documents are copied as files. The integration does not inspect/OCR or alter their signed contents.
@@ -56,7 +56,7 @@ The queue is durable in D1. Each worker invocation processes at most one item, w
 
 New successful POST/PATCH/DELETE operations can trigger one background job. The administrator's sync screen processes continuously, one request at a time, while open. **No periodic Cloudflare trigger is enabled by this patch.** If the application is idle and the screen is closed, pending retries wait for the next activity or manual sync. A worker shutdown leaves jobs pending; the lease expires so they can be retried. No paid queue service is introduced.
 
-Existing Google retry behavior is unchanged. OneDrive statistics count both uploaded files and project JSON exports. "Synced" is the last confirmed copy, not a continuous check that nobody later deleted it in OneDrive. Remote deletion of an archive requires re-enqueuing/reconnecting for full resync; do not treat the destination as immutable storage.
+Existing Google retry behavior is unchanged. OneDrive statistics count only user-uploaded photographs and documents. "Synced" is the last confirmed copy, not a continuous check that nobody later deleted it in OneDrive. Remote deletion of an archive requires re-enqueuing/reconnecting for full resync; do not treat the destination as immutable storage.
 
 Disconnect deletes only local OneDrive credentials, OAuth states and queue tracking, restores the default Google destination, and retains remote archives. An already in-flight upload may finish. Revoke application consent in Microsoft separately when required. Changing the connected Microsoft drive is rejected until explicit disconnect.
 
