@@ -262,6 +262,7 @@ export default function Home() {
           "token-unauthorized_client": "Microsoft raportează unauthorized_client: aplicația nu este autorizată pentru acest flux sau tenant.",
           "token-interaction_required": "Microsoft cere interacțiune sau aprobare suplimentară. Verifică Admin consent în Entra.",
           "token-temporarily_unavailable": "Serviciul Microsoft pentru tokenuri este temporar indisponibil. Reîncearcă.",
+          "token-network": "Workerul nu a putut contacta endpointul Microsoft pentru tokenuri în 20 de secunde. Reîncearcă și verifică disponibilitatea Microsoft.",
           "token-other": "Microsoft a refuzat tokenul cu un cod neclasificat. Verifică Sign-in logs în Entra.",
           "stage-token": "Microsoft a refuzat schimbul codului cu tokenuri. Verifică Client Secret Value, tenantul și aprobarea.",
           "stage-drive": "Microsoft Graph nu poate citi OneDrive-ul contului selectat. Verifică licența și Files.ReadWrite.",
