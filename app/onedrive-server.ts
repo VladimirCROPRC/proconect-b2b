@@ -90,22 +90,31 @@ export async function beginOneDrive(sessionId: string) {
   const parameters = new URLSearchParams({ client_id: c.client, redirect_uri: `${c.origin}/api/onedrive/callback`, response_type: "code", response_mode: "query", scope, state, code_challenge: challenge, code_challenge_method: "S256", prompt: "select_account" });
   return `https://login.microsoftonline.com/${c.tenant}/oauth2/v2.0/authorize?${parameters}`;
 }
+async function oneDriveStage<T>(name: string, action: () => Promise<T>) {
+  try { return await action(); }
+  catch { throw new Error(`ONEDRIVE_STAGE:${name}`); }
+}
 export async function finishOneDrive(sessionId: string, state: string, code: string) {
   const c = config();
   // DELETE RETURNING atomically consumes state, bound to the current app session.
-  const authorization = await getRawDb().prepare("DELETE FROM onedrive_oauth_states WHERE id = ? AND session_id = ? AND expires_at > ? RETURNING verifier").bind(state, sessionId, Date.now()).first<{ verifier: string }>();
+  const authorization = await oneDriveStage("state-db", () => getRawDb().prepare("DELETE FROM onedrive_oauth_states WHERE id = ? AND session_id = ? AND expires_at > ? RETURNING verifier").bind(state, sessionId, Date.now()).first<{ verifier: string }>());
   if (!authorization) throw new Error("Autorizarea a expirat sau a fost deja folosită. Reîncearcă din aplicație.");
-  const tokens = await exchange(new URLSearchParams({ grant_type: "authorization_code", code, code_verifier: await unseal(authorization.verifier), redirect_uri: `${c.origin}/api/onedrive/callback`, scope }));
+  const verifier = await oneDriveStage("state-decrypt", () => unseal(authorization.verifier));
+  const tokens = await oneDriveStage("token", () => exchange(new URLSearchParams({ grant_type: "authorization_code", code, code_verifier: verifier, redirect_uri: `${c.origin}/api/onedrive/callback`, scope })));
   if (!tokens.refresh_token) throw new Error("Microsoft nu a acordat acces pentru sincronizarea în fundal.");
-  const drive = await checked(await graph(tokens.access_token!, "/me/drive"));
+  const drive = await oneDriveStage("drive", async () => checked(await graph(tokens.access_token!, "/me/drive")));
   if (drive.driveType !== "business" || !drive.id) throw new Error("Conectează contul OneDrive de serviciu Microsoft 365.");
-  const existing = await connection();
+  const existing = await oneDriveStage("connection-db", () => connection());
   if (existing?.drive_id && existing.drive_id !== drive.id) throw new Error("Este conectat alt OneDrive. Deconectează-l explicit înainte de schimbarea contului.");
-  const root = await checked(await graph(tokens.access_token!, "/me/drive/root"));
-  const destination = await folder(tokens.access_token!, root.id, "Proconect B2B");
+  const root = await oneDriveStage("root", async () => checked(await graph(tokens.access_token!, "/me/drive/root")));
+  const destination = await oneDriveStage("folder", () => folder(tokens.access_token!, root.id, "Proconect B2B"));
   const generation = crypto.randomUUID();
-  await getRawDb().prepare("INSERT INTO onedrive_connection (id, mode, generation, access_token, refresh_token, expires_at, drive_id, root_id, root_url, account, owner_id, lease, lease_until) VALUES (?, 'google', ?, ?, ?, ?, ?, ?, ?, ?, ?, '', 0) ON CONFLICT(id) DO UPDATE SET generation = excluded.generation, access_token = excluded.access_token, refresh_token = excluded.refresh_token, expires_at = excluded.expires_at, drive_id = excluded.drive_id, root_id = excluded.root_id, root_url = excluded.root_url, account = excluded.account, owner_id = excluded.owner_id, lease = '', lease_until = 0")
-    .bind(settingsId, generation, await seal(tokens.access_token!), await seal(tokens.refresh_token), Date.now() + (tokens.expires_in ?? 3600) * 1000, drive.id, destination.id, destination.webUrl ?? "", drive.owner?.user?.email ?? drive.owner?.user?.displayName ?? "OneDrive Microsoft 365", drive.owner?.user?.id ?? "").run();
+  await oneDriveStage("save-db", async () => {
+    const accessToken = await seal(tokens.access_token!);
+    const refreshToken = await seal(tokens.refresh_token!);
+    return getRawDb().prepare("INSERT INTO onedrive_connection (id, mode, generation, access_token, refresh_token, expires_at, drive_id, root_id, root_url, account, owner_id, lease, lease_until) VALUES (?, 'google', ?, ?, ?, ?, ?, ?, ?, ?, ?, '', 0) ON CONFLICT(id) DO UPDATE SET generation = excluded.generation, access_token = excluded.access_token, refresh_token = excluded.refresh_token, expires_at = excluded.expires_at, drive_id = excluded.drive_id, root_id = excluded.root_id, root_url = excluded.root_url, account = excluded.account, owner_id = excluded.owner_id, lease = '', lease_until = 0")
+      .bind(settingsId, generation, accessToken, refreshToken, Date.now() + (tokens.expires_in ?? 3600) * 1000, drive.id, destination.id, destination.webUrl ?? "", drive.owner?.user?.email ?? drive.owner?.user?.displayName ?? "OneDrive Microsoft 365", drive.owner?.user?.id ?? "").run();
+  });
 }
 export async function setBackupMode(value: unknown) {
   if (!validMode(value)) throw new Error("Destinație de salvare invalidă.");
