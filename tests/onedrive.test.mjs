@@ -66,11 +66,11 @@ test('provider selection, fixed origin, unique safe names, and retry delays', as
 test('OneDrive server with isolated SQLite, fake Microsoft responses and fake R2', async t => {
   const db = new DatabaseSync(':memory:');
   db.exec(await source('drizzle/0005_onedrive_backup.sql'));
-  db.exec(`CREATE TABLE projects(id TEXT PRIMARY KEY, client TEXT);
+  db.exec(`CREATE TABLE projects(id TEXT PRIMARY KEY, client TEXT, activity_type TEXT);
     CREATE TABLE project_files(id TEXT PRIMARY KEY, project_id TEXT, section TEXT, category TEXT, original_name TEXT, content_type TEXT, storage_key TEXT, geolocation TEXT, captured_at INTEGER, uploaded_by TEXT);
     CREATE TABLE project_reports(project_id TEXT, content_json TEXT);
     CREATE TABLE project_field_documentation(project_id TEXT, content_json TEXT);
-    INSERT INTO projects VALUES ('RID-1', 'Test client');
+    INSERT INTO projects VALUES ('RID-1', 'Test client', 'Instalare');
     INSERT INTO project_files VALUES ('f-1','RID-1','client','grounding','photo.jpg','image/jpeg','object-1','44,26',1,'tech');`);
   const env = {};
   const raw = { prepare(sql) { let values = []; return {
@@ -151,6 +151,12 @@ test('OneDrive server with isolated SQLite, fake Microsoft responses and fake R2
       assert.equal(uploads, 1);
       await server.drainOneDrive();
       assert.equal((await server.oneDriveStatus()).pending, 0);
+      const decodedCalls = calls.map(value => decodeURIComponent(value));
+      assert.ok(decodedCalls.some(value => value.includes(":/Instalări")));
+      assert.ok(decodedCalls.some(value => value.includes(":/RID-1")));
+      assert.ok(decodedCalls.some(value => value.includes(":/03_Client")));
+      assert.ok(decodedCalls.some(value => value.includes(":/07_Documente administrative")));
+      assert.ok(decodedCalls.every(value => !value.includes("RID-1--")));
     });
     await t.test('report changes enqueue a new revision', async () => {
       await server.queueOneDrive('project', 'RID-1');
