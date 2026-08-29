@@ -52,7 +52,12 @@ async function exchange(parameters: URLSearchParams) {
   const c = config();
   parameters.set("client_id", c.client); parameters.set("client_secret", c.secret);
   const response = await fetch(`https://login.microsoftonline.com/${c.tenant}/oauth2/v2.0/token`, { method: "POST", body: parameters, signal: AbortSignal.timeout(8000), redirect: "error" });
-  if (!response.ok) throw new RemoteFailure("Microsoft a refuzat autorizarea. Reconectează contul; dacă se solicită aprobarea administratorului, contactează IT.");
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({})) as { error?: unknown };
+    const allowed = new Set(["invalid_client", "invalid_grant", "invalid_scope", "unauthorized_client", "interaction_required", "temporarily_unavailable"]);
+    const code = typeof payload.error === "string" && allowed.has(payload.error) ? payload.error : "other";
+    throw new RemoteFailure(`MICROSOFT_TOKEN:${code}`);
+  }
   const tokens = await response.json() as { access_token?: string; refresh_token?: string; expires_in?: number };
   if (!tokens.access_token) throw new RemoteFailure("Microsoft nu a returnat un token valid.");
   return tokens;
@@ -92,7 +97,10 @@ export async function beginOneDrive(sessionId: string) {
 }
 async function oneDriveStage<T>(name: string, action: () => Promise<T>) {
   try { return await action(); }
-  catch { throw new Error(`ONEDRIVE_STAGE:${name}`); }
+  catch (error) {
+    if (error instanceof Error && error.message.startsWith("MICROSOFT_TOKEN:")) throw error;
+    throw new Error(`ONEDRIVE_STAGE:${name}`);
+  }
 }
 export async function finishOneDrive(sessionId: string, state: string, code: string) {
   const c = config();
