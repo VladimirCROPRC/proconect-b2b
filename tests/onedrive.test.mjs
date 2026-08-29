@@ -146,7 +146,7 @@ test('OneDrive server with isolated SQLite, fake Microsoft responses and fake R2
       await assert.rejects(server.setBackupMode('invalid'));
       await server.setBackupMode('both');
       assert.equal(await server.backupMode(), 'both');
-      assert.equal((await server.oneDriveStatus()).pending, 2);
+      assert.equal((await server.oneDriveStatus()).pending, 1);
       await Promise.all([server.drainOneDrive(), server.drainOneDrive()]);
       assert.equal(uploads, 1);
       await server.drainOneDrive();
@@ -155,18 +155,17 @@ test('OneDrive server with isolated SQLite, fake Microsoft responses and fake R2
       assert.ok(decodedCalls.some(value => value.includes(":/Instalări")));
       assert.ok(decodedCalls.some(value => value.includes(":/RID-1")));
       assert.ok(decodedCalls.some(value => value.includes(":/03_Client")));
-      assert.ok(decodedCalls.some(value => value.includes(":/07_Documente administrative")));
+      assert.ok(decodedCalls.every(value => !value.includes("Date_lucrare.json")));
       assert.ok(decodedCalls.every(value => !value.includes("RID-1--")));
     });
-    await t.test('report changes enqueue a new revision', async () => {
+    await t.test('project metadata is not exported to OneDrive', async () => {
       await server.queueOneDrive('project', 'RID-1');
-      assert.equal((await server.oneDriveStatus()).pending, 1);
-      await server.drainOneDrive();
       assert.equal((await server.oneDriveStatus()).pending, 0);
+      assert.ok(calls.every(value => !value.includes('Date_lucrare.json')));
     });
     await t.test('an edit during upload remains pending after the old revision finishes', async () => {
-      await server.queueOneDrive('project', 'RID-1');
-      onUpload = () => server.queueOneDrive('project', 'RID-1');
+      await server.queueOneDrive('file', 'f-1');
+      onUpload = () => server.queueOneDrive('file', 'f-1');
       await server.drainOneDrive();
       assert.equal((await server.oneDriveStatus()).pending, 1);
       await server.drainOneDrive();
