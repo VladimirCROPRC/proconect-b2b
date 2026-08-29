@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 
 function safeFailure(error: unknown) {
   const message = error instanceof Error ? error.message : "";
-  const tokenCode = message.match(/^MICROSOFT_TOKEN:(invalid_client|invalid_grant|invalid_scope|unauthorized_client|interaction_required|temporarily_unavailable|other)$/)?.[1];
+  const tokenCode = message.match(/^MICROSOFT_TOKEN:(invalid_client|invalid_grant|invalid_scope|unauthorized_client|interaction_required|temporarily_unavailable|network|other)$/)?.[1];
   if (tokenCode) return `token-${tokenCode}`;
   const stage = message.match(/^ONEDRIVE_STAGE:(state-db|state-decrypt|token|drive|connection-db|root|folder|save-db)$/)?.[1];
   if (stage) return `stage-${stage}`;
