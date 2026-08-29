@@ -51,7 +51,12 @@ class RemoteFailure extends Error {
 async function exchange(parameters: URLSearchParams) {
   const c = config();
   parameters.set("client_id", c.client); parameters.set("client_secret", c.secret);
-  const response = await fetch(`https://login.microsoftonline.com/${c.tenant}/oauth2/v2.0/token`, { method: "POST", body: parameters, signal: AbortSignal.timeout(8000), redirect: "error" });
+  let response: Response;
+  try {
+    response = await fetch(`https://login.microsoftonline.com/${c.tenant}/oauth2/v2.0/token`, { method: "POST", body: parameters, signal: AbortSignal.timeout(20_000), redirect: "error" });
+  } catch {
+    throw new RemoteFailure("MICROSOFT_TOKEN:network");
+  }
   if (!response.ok) {
     const payload = await response.json().catch(() => ({})) as { error?: unknown };
     const allowed = new Set(["invalid_client", "invalid_grant", "invalid_scope", "unauthorized_client", "interaction_required", "temporarily_unavailable"]);
