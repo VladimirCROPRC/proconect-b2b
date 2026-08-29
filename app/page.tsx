@@ -254,6 +254,14 @@ export default function Home() {
           "different-drive": "Aplicația are deja asociat un alt OneDrive. Deconectează-l înainte de schimbarea contului.",
           graph: "Microsoft Graph a refuzat accesul la OneDrive. Verifică Files.ReadWrite și aprobarea administratorului.",
           config: "Configurarea OneDrive din Cloudflare nu este validă.",
+          "stage-state-db": "Eroare la verificarea cererii OAuth în baza D1.",
+          "stage-state-decrypt": "Cererea OAuth salvată nu poate fi decriptată. Verifică ONEDRIVE_ENCRYPTION_KEY.",
+          "stage-token": "Microsoft a refuzat schimbul codului cu tokenuri. Verifică Client Secret Value, tenantul și aprobarea.",
+          "stage-drive": "Microsoft Graph nu poate citi OneDrive-ul contului selectat. Verifică licența și Files.ReadWrite.",
+          "stage-connection-db": "Conexiunea OneDrive existentă nu poate fi citită din baza D1.",
+          "stage-root": "Microsoft Graph nu poate deschide rădăcina OneDrive.",
+          "stage-folder": "Dosarul Proconect B2B nu poate fi găsit sau creat în OneDrive.",
+          "stage-save-db": "Tokenurile OneDrive nu pot fi criptate sau salvate în baza D1.",
           callback: "Conectarea a ajuns înapoi în aplicație, dar finalizarea a eșuat. Verifică baza de date și contul OneDrive.",
         };
         showToast(response.ok && result.connected && oneDriveResult === "connected"
