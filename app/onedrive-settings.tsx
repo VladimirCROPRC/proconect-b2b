@@ -68,7 +68,7 @@ export function OneDriveSettings() {
           <p>{processing ? "Se procesează pe rând. Păstrează acest ecran deschis pentru copierea întregii arhive." : "Fișierele noi intră automat în coadă. Reîncercările se fac la activitate în aplicație sau când pornești sincronizarea aici."}</p>
           {status.errors.map(item => <p role="status" key={`${item.kind}:${item.item_id}`}>{item.item_id}: {item.last_error}</p>)}
         </>}
-        <small>Copiile includ fișierele și un export JSON al fiecărei lucrări, nu un backup complet restaurabil al conturilor și întregii baze de date. Ștergerile din aplicație nu șterg copiile OneDrive.</small>
+        <small>OneDrive primește exclusiv fotografiile și documentele încărcate de utilizatori, organizate pe activitate, lucrare și secțiune. Datele interne ale aplicației nu sunt exportate. Ștergerile din aplicație nu șterg copiile OneDrive.</small>
       </div>}
     </section>
   </div>;
