@@ -243,7 +243,22 @@ export default function Home() {
         const result = await response.json() as { connected?: boolean };
         if (!mounted) return;
         setView("drive");
-        showToast(response.ok && result.connected && oneDriveResult === "connected" ? "OneDrive conectat. Alege destinația pentru copiile automate." : "Conectarea Microsoft nu a reușit. Reîncearcă; dacă este cerută aprobarea IT, așteaptă aprobarea.");
+        const oneDriveMessages: Record<string, string> = {
+          session: "Sesiunea Admin nu a fost recunoscută după revenirea de la Microsoft. Autentifică-te din nou și reîncearcă.",
+          "microsoft-denied": "Microsoft nu a acordat autorizarea. Verifică aprobarea și permisiunea delegată Files.ReadWrite.",
+          response: "Răspunsul Microsoft nu conține datele necesare autorizării. Reîncearcă.",
+          state: "Cererea de autorizare a expirat sau a fost deja folosită. Reîncearcă din aplicație.",
+          token: "Microsoft a refuzat schimbul de token. Verifică tenantul, client secret Value și aprobarea permisiunilor.",
+          offline: "Microsoft nu a acordat acces offline. Verifică aprobarea pentru offline_access și reîncearcă.",
+          business: "Contul selectat nu are OneDrive de serviciu Microsoft 365 activ.",
+          "different-drive": "Aplicația are deja asociat un alt OneDrive. Deconectează-l înainte de schimbarea contului.",
+          graph: "Microsoft Graph a refuzat accesul la OneDrive. Verifică Files.ReadWrite și aprobarea administratorului.",
+          config: "Configurarea OneDrive din Cloudflare nu este validă.",
+          callback: "Conectarea a ajuns înapoi în aplicație, dar finalizarea a eșuat. Verifică baza de date și contul OneDrive.",
+        };
+        showToast(response.ok && result.connected && oneDriveResult === "connected"
+          ? "OneDrive conectat. Alege destinația pentru copiile automate."
+          : oneDriveMessages[oneDriveResult] ?? "Conectarea Microsoft nu a reușit.");
         const clean = new URL(window.location.href); clean.searchParams.delete("onedrive");
         window.history.replaceState({}, "", clean.pathname + clean.search + clean.hash);
       }).catch(() => { if (mounted) showToast("Starea OneDrive nu poate fi verificată momentan."); });
