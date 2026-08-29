@@ -4,6 +4,8 @@ export const dynamic = "force-dynamic";
 
 function safeFailure(error: unknown) {
   const message = error instanceof Error ? error.message : "";
+  const stage = message.match(/^ONEDRIVE_STAGE:(state-db|state-decrypt|token|drive|connection-db|root|folder|save-db)$/)?.[1];
+  if (stage) return `stage-${stage}`;
   if (message.includes("Microsoft a refuzat autorizarea")) return "token";
   if (message.includes("sincronizarea în fundal")) return "offline";
   if (message.includes("OneDrive de serviciu")) return "business";
