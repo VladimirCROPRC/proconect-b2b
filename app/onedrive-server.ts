@@ -70,7 +70,7 @@ async function exchange(parameters: URLSearchParams) {
 async function graph(token: string, path: string, options: RequestInit = {}) {
   if (!path.startsWith("/me/drive")) throw new Error("Adresă Graph nepermisă.");
   const headers = new Headers(options.headers); headers.set("Authorization", `Bearer ${token}`);
-  return fetch(`https://graph.microsoft.com/v1.0${path}`, { ...options, headers, redirect: "error", signal: AbortSignal.timeout(8000) });
+  return fetch(`https://graph.microsoft.com/v1.0${path}`, { ...options, headers, signal: AbortSignal.timeout(20_000) });
 }
 async function checked(response: Response): Promise<Item> {
   if (!response.ok) throw new RemoteFailure(`OneDrive: operațiunea a eșuat (HTTP ${response.status}).${response.status === 401 || response.status === 403 ? " Reconectează contul sau solicită aprobarea IT." : ""}`, retryDelay(0, response.headers.get("Retry-After")));
