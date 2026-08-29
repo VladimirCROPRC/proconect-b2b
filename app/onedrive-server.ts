@@ -146,7 +146,7 @@ export async function disconnectOneDrive() {
   // Remote archives are deliberately retained. Revoke consent separately in Microsoft.
 }
 export async function queueOneDrive(kind: "file" | "project", id: string) {
-  if (!usesOneDrive(await backupMode())) return;
+  if (kind !== "file" || !usesOneDrive(await backupMode())) return;
   await getRawDb().prepare("INSERT INTO onedrive_jobs (id, kind, item_id, revision, done_revision, attempts, next_at, last_error) VALUES (?, ?, ?, 1, 0, 0, 0, '') ON CONFLICT(id) DO UPDATE SET revision = revision + 1, attempts = 0, next_at = 0, last_error = ''")
     .bind(`${kind}:${id}`, kind, id).run();
 }
@@ -154,7 +154,7 @@ export async function seedOneDrive() {
   if (!usesOneDrive(await backupMode())) return;
   await getRawDb().batch([
     getRawDb().prepare("INSERT OR IGNORE INTO onedrive_jobs (id, kind, item_id) SELECT 'file:' || id, 'file', id FROM project_files"),
-    getRawDb().prepare("INSERT INTO onedrive_jobs (id, kind, item_id) SELECT 'project:' || id, 'project', id FROM projects WHERE true ON CONFLICT(id) DO UPDATE SET revision = revision + 1, next_at = 0, last_error = ''"),
+    getRawDb().prepare("DELETE FROM onedrive_jobs WHERE kind = 'project'"),
   ]);
 }
 export async function retryOneDrive() {
@@ -218,36 +218,26 @@ async function oneDriveDestination(token: string, rootId: string, projectId: str
   return folder(token, projectFolder.id, sectionName);
 }
 async function uploadJob(c: Connection, job: Job) {
+  // OneDrive contains only files explicitly uploaded by users. Project records,
+  // reports and metadata stay in Cloudflare and are not exported as JSON.
+  if (job.kind !== "file") return;
   const token = await tokenFor(c);
-  let projectId = job.item_id, filename: string, body: BodyInit, contentType = "application/json", section = "documents";
+  const file = await getFileRow(job.item_id);
+  if (!file) return;
+  const projectId = file.project_id;
   let activity: OneDriveActivity = "Instalare";
-  if (job.kind === "file") {
-    const file = await getFileRow(job.item_id);
-    if (!file) return;
-    projectId = file.project_id;
-    section = file.section;
-    const project = await getRawDb().prepare("SELECT activity_type FROM projects WHERE id = ?").bind(projectId).first<{ activity_type?: OneDriveActivity }>();
-    if (!project) return;
-    if (project.activity_type && project.activity_type in oneDriveActivityFolders) activity = project.activity_type;
-    const stored = await bucket().get(file.storage_key);
-    if (!stored) throw new Error("Fișierul sursă nu mai este disponibil în Cloudflare.");
-    filename = await safeName(file.original_name, file.id);
-    body = await new Response(stored.body).arrayBuffer(); contentType = file.content_type;
-  } else {
-    const project = await getRawDb().prepare("SELECT * FROM projects WHERE id = ?").bind(projectId).first<{ activity_type?: OneDriveActivity } & Record<string, unknown>>();
-    if (!project) return;
-    if (project.activity_type && project.activity_type in oneDriveActivityFolders) activity = project.activity_type;
-    const documentation = await getRawDb().prepare("SELECT * FROM project_field_documentation WHERE project_id = ?").bind(projectId).first();
-    const report = await getRawDb().prepare("SELECT * FROM project_reports WHERE project_id = ?").bind(projectId).first();
-    const files = await getRawDb().prepare("SELECT id, section, category, original_name, geolocation, captured_at, uploaded_by FROM project_files WHERE project_id = ?").bind(projectId).all();
-    filename = "Date_lucrare.json";
-    body = JSON.stringify({ format: "proconect-project-v1", exportedAt: new Date().toISOString(), project, documentation, report, files: files.results }, null, 2);
-  }
-  const destination = await oneDriveDestination(token, c.root_id, projectId, activity, section);
+  const project = await getRawDb().prepare("SELECT activity_type FROM projects WHERE id = ?").bind(projectId).first<{ activity_type?: OneDriveActivity }>();
+  if (!project) return;
+  if (project.activity_type && project.activity_type in oneDriveActivityFolders) activity = project.activity_type;
+  const stored = await bucket().get(file.storage_key);
+  if (!stored) throw new Error("Fișierul sursă nu mai este disponibil în Cloudflare.");
+  const filename = await safeName(file.original_name, file.id);
+  const body = await new Response(stored.body).arrayBuffer();
+  const destination = await oneDriveDestination(token, c.root_id, projectId, activity, file.section);
   // Recheck before external write; switching/disconnecting does not resurrect old credentials.
   const current = await connection();
   if (!current || current.generation !== c.generation || current.lease !== c.lease || !usesOneDrive(current.mode)) throw new Error("Sincronizarea OneDrive a fost oprită.");
-  await checked(await graph(token, `/me/drive/items/${encodeURIComponent(destination.id)}:/${encodeURIComponent(filename)}:/content`, { method: "PUT", headers: { "Content-Type": contentType }, body }));
+  await checked(await graph(token, `/me/drive/items/${encodeURIComponent(destination.id)}:/${encodeURIComponent(filename)}:/content`, { method: "PUT", headers: { "Content-Type": file.content_type }, body }));
 }
 export async function drainOneDrive() {
   if (!oneDriveConfigured()) return;
