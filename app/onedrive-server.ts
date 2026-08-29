@@ -178,27 +178,72 @@ async function tokenFor(c: Connection) {
   if (!result.meta.changes) throw new Error("Conexiunea OneDrive s-a schimbat. Reîncearcă.");
   return tokens.access_token!;
 }
+type OneDriveActivity = "Instalare" | "Intervenție" | "Survey";
+const oneDriveActivityFolders: Record<OneDriveActivity, string> = {
+  Instalare: "Instalări",
+  "Intervenție": "Intervenții",
+  Survey: "Survey",
+};
+const oneDriveSectionFolders: Record<OneDriveActivity, Record<string, string>> = {
+  Instalare: {
+    project: "01_Documente proiect",
+    safety: "02_Pretask și EIP",
+    client: "03_Client",
+    route: "04_Traseu FO",
+    splices: "05_Suduri FO",
+    site: "06_Operațiuni site",
+    documents: "07_Documente administrative",
+  },
+  "Intervenție": {
+    safety: "01_Pretask și EIP",
+    "intervention-assessment": "02_Constatare",
+    "intervention-execution": "03_Execuție",
+    "intervention-documentation": "04_Documentare",
+    project: "05_Documente intervenție",
+    documents: "06_Documente administrative",
+  },
+  Survey: {
+    safety: "01_Pretask și EIP",
+    project: "02_Documente survey",
+    documents: "03_Documente administrative",
+  },
+};
+function readableFolderName(value: string) {
+  return value.normalize("NFC").replace(/[\u0000-\u001f"*:<>?\/\\|#%]/g, "_").replace(/^[. ]+|[. ]+$/g, "").slice(0, 140) || "Lucrare";
+}
+async function oneDriveDestination(token: string, rootId: string, projectId: string, activity: OneDriveActivity, section: string) {
+  const activityFolder = await folder(token, rootId, oneDriveActivityFolders[activity]);
+  const projectFolder = await folder(token, activityFolder.id, readableFolderName(projectId));
+  const sectionName = oneDriveSectionFolders[activity][section] ?? "99_Alte documente";
+  return folder(token, projectFolder.id, sectionName);
+}
 async function uploadJob(c: Connection, job: Job) {
   const token = await tokenFor(c);
-  let projectId = job.item_id, filename: string, body: BodyInit, contentType = "application/json";
+  let projectId = job.item_id, filename: string, body: BodyInit, contentType = "application/json", section = "documents";
+  let activity: OneDriveActivity = "Instalare";
   if (job.kind === "file") {
     const file = await getFileRow(job.item_id);
     if (!file) return;
     projectId = file.project_id;
+    section = file.section;
+    const project = await getRawDb().prepare("SELECT activity_type FROM projects WHERE id = ?").bind(projectId).first<{ activity_type?: OneDriveActivity }>();
+    if (!project) return;
+    if (project.activity_type && project.activity_type in oneDriveActivityFolders) activity = project.activity_type;
     const stored = await bucket().get(file.storage_key);
     if (!stored) throw new Error("Fișierul sursă nu mai este disponibil în Cloudflare.");
-    filename = await safeName(`${file.section}--${file.original_name}`, file.id);
+    filename = await safeName(file.original_name, file.id);
     body = await new Response(stored.body).arrayBuffer(); contentType = file.content_type;
   } else {
-    const project = await getRawDb().prepare("SELECT * FROM projects WHERE id = ?").bind(projectId).first();
+    const project = await getRawDb().prepare("SELECT * FROM projects WHERE id = ?").bind(projectId).first<{ activity_type?: OneDriveActivity } & Record<string, unknown>>();
     if (!project) return;
+    if (project.activity_type && project.activity_type in oneDriveActivityFolders) activity = project.activity_type;
     const documentation = await getRawDb().prepare("SELECT * FROM project_field_documentation WHERE project_id = ?").bind(projectId).first();
     const report = await getRawDb().prepare("SELECT * FROM project_reports WHERE project_id = ?").bind(projectId).first();
     const files = await getRawDb().prepare("SELECT id, section, category, original_name, geolocation, captured_at, uploaded_by FROM project_files WHERE project_id = ?").bind(projectId).all();
     filename = "Date_lucrare.json";
     body = JSON.stringify({ format: "proconect-project-v1", exportedAt: new Date().toISOString(), project, documentation, report, files: files.results }, null, 2);
   }
-  const destination = await folder(token, c.root_id, await safeName(projectId, projectId));
+  const destination = await oneDriveDestination(token, c.root_id, projectId, activity, section);
   // Recheck before external write; switching/disconnecting does not resurrect old credentials.
   const current = await connection();
   if (!current || current.generation !== c.generation || current.lease !== c.lease || !usesOneDrive(current.mode)) throw new Error("Sincronizarea OneDrive a fost oprită.");
