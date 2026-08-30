@@ -625,7 +625,7 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
                     );
                   })}
                 </div>
-                <div className="splice-readiness"><span className={junctionReady && cableTypesReady && colorsReady && photosReady ? "ready" : ""}>{junctionReady && colorsReady && photosReady ? "✓" : "i"}</span><p><strong>{junctionReady && colorsReady && photosReady ? "Sudură pregătită pentru salvare" : !junction ? "Selectează joncțiunea" : !junctionReady ? "Completează clasificarea joncțiunii" : !cableTypesReady ? "Completează tipurile de cablu" : !colorsReady ? "Completează toate culorile" : "Încarcă cele 3 fotografii obligatorii"}</strong><small>Datele obligatorii sunt marcate cu *.</small></p></div>
+                <div className="splice-readiness"><span className={junctionReady && cableTypesReady && colorsReady && photosReady ? "ready" : ""}>{junctionReady && cableTypesReady && colorsReady && photosReady ? "✓" : "i"}</span><p><strong>{junctionReady && cableTypesReady && colorsReady && photosReady ? "Sudură pregătită pentru salvare" : !junction ? "Selectează joncțiunea" : !junctionReady ? "Completează clasificarea joncțiunii" : !cableTypesReady ? "Completează tipurile de cablu" : !colorsReady ? "Completează toate culorile" : "Încarcă cele 3 fotografii obligatorii"}</strong><small>Datele obligatorii sunt marcate cu *.</small></p></div>
                 <div className="splice-form-actions"><button onClick={() => { resetDraft(); setCreating(false); }}>Renunță</button><button className="primary-button" onClick={saveSplice}>Salvează sudura <span>→</span></button></div>
               </section>
             </>
