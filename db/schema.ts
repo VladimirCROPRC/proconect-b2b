@@ -48,6 +48,7 @@ export const projects = sqliteTable("projects", {
   cpeRequiresGrounding: integer("cpe_requires_grounding", { mode: "boolean" }).notNull().default(false),
   sfp: integer("sfp", { mode: "boolean" }).notNull().default(false),
   mc: integer("mc", { mode: "boolean" }).notNull().default(false),
+  mcType: text("mc_type").notNull().default(""),
   terminalBox: integer("terminal_box", { mode: "boolean" }).notNull().default(false),
   status: text("status").notNull(),
   scheduledLabel: text("scheduled_label").notNull(),
