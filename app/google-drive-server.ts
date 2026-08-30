@@ -386,6 +386,13 @@ export async function deleteDriveFileCopy(fileId: string) {
   await getRawDb().prepare("DELETE FROM google_drive_file_sync WHERE file_id = ?").bind(fileId).run();
 }
 
+function splicePhotoFolder(category: string) {
+  const token = category.split(":")[1] ?? "";
+  if (!token) return "";
+  const undocumented = /^J_nedocumentata_(\d+)$/i.exec(token);
+  return undocumented ? `J nedocumentată ${undocumented[1]}` : token;
+}
+
 export async function syncFileIfConnected(fileId: string) {
   if (!usesGoogle(await backupMode())) return false;
   if (!isConnected(await settings())) return false;
@@ -400,7 +407,10 @@ export async function syncFileIfConnected(fileId: string) {
     const stored = await bucket().get(file.storage_key);
     if (!stored) throw new Error("Fișierul nu mai este disponibil în stocarea proiectului.");
     const description = [file.category, file.geolocation ? `GPS: ${file.geolocation}` : "", `Încărcat de: ${file.uploaded_by}`].filter(Boolean).join(" · ");
-    const driveFileId = await uploadDriveFile(file.original_name, file.content_type, await new Response(stored.body).arrayBuffer(), sectionFolders[file.section] ?? folders.folder_id, description, synced?.drive_file_id || undefined);
+    let destinationFolderId = sectionFolders[file.section] ?? folders.folder_id;
+    const spliceFolder = file.section === "splices" ? splicePhotoFolder(file.category) : "";
+    if (spliceFolder) destinationFolderId = (await findOrCreateFolder(spliceFolder, destinationFolderId)).id;
+    const driveFileId = await uploadDriveFile(file.original_name, file.content_type, await new Response(stored.body).arrayBuffer(), destinationFolderId, description, synced?.drive_file_id || undefined);
     await getRawDb().prepare("INSERT INTO google_drive_file_sync (file_id, project_id, drive_file_id, status, last_error, updated_at) VALUES (?, ?, ?, 'synced', '', ?) ON CONFLICT(file_id) DO UPDATE SET drive_file_id = excluded.drive_file_id, status = 'synced', last_error = '', updated_at = excluded.updated_at")
       .bind(file.id, file.project_id, driveFileId, Date.now()).run();
     return true;
