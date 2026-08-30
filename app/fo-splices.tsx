@@ -578,7 +578,7 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
           <div className="splice-map-search">
             <label><span>⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Caută joncțiunea înainte sau după „Sudură nouă”…" /></label>
             <div className={`splice-data-state ${sitesStatus}`}><i>{sitesStatus === "ready" ? "✓" : sitesStatus === "error" ? "!" : "↻"}</i>{sitesStatus === "ready" ? `${sites.length.toLocaleString("ro-RO")} site-uri` : sitesStatus === "error" ? "Date indisponibile" : "Se încarcă"}</div>
-            {search.trim().length >= 2 && <div className="splice-search-results">{searchResults.map((site) => <article className={junction?.id === site.id ? "selected" : ""} key={site.id}><button className="splice-exact-junction-name" onClick={() => chooseDocumented(site)}><strong>{site.name}</strong><b>Arată pe hartă</b></button><a href={googleMapsUrl(site)} target="_blank" rel="noreferrer" aria-label={`Deschide joncțiunea ${site.code} în Google Maps`}>Google Maps ↗</a></article>)}{!searchResults.length && <p>Nicio joncțiune găsită.</p>}</div>}
+            {search.trim().length >= 2 && <div className="splice-search-results">{searchResults.map((site) => <article className={junction?.id === site.id ? "selected" : ""} key={site.id}><button className="splice-exact-junction-name" onClick={() => chooseDocumented(site)}><strong>{site.code}</strong><b>Arată pe hartă</b></button><a href={googleMapsUrl(site)} target="_blank" rel="noreferrer" aria-label={`Deschide joncțiunea ${site.code} în Google Maps`}>Google Maps ↗</a></article>)}{!searchResults.length && <p>Nicio joncțiune găsită.</p>}</div>}
           </div>
         </section>
 
