@@ -555,14 +555,14 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
 
   return <div className="intervention-execution-shell">
     <section className="project-card intervention-activities-heading">
-      <div><h2>Activități de execuție</h2><p>Documentează individual operațiunile de remediere pentru acest tichet.</p></div>
+      <div><h2>Execuție intervenție</h2><p>1. Caută joncțiunea · 2. Alege activitatea · 3. Operează pe hartă · 4. Documentează și salvează.</p></div>
       <button type="button" className="primary-button" onClick={beginActivity} disabled={Boolean(draft)}><span>＋</span> Activitate nouă</button>
     </section>
 
     {!initialSummary?.assessment && <div className="intervention-execution-notice">Salvează mai întâi secțiunea „Constatare” pentru a începe execuția.</div>}
 
     {draft && <section className="project-card intervention-activity-types">
-      <div className="card-heading"><div><h2>Tip activitate</h2><p>Alege operațiunea efectuată în cadrul intervenției.</p></div></div>
+      <div className="card-heading"><div><h2>1. Alege activitatea</h2><p>Selectează operațiunea, apoi folosește aceleași controale ale hărții ca în Instalări.</p></div></div>
       <div className="intervention-type-grid">{(Object.keys(activityCatalog) as InterventionActivityType[]).map((type) => <button
         type="button"
         key={type}
@@ -574,9 +574,9 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
 
     <div className="intervention-map-layout">
       <section className={`splice-map-card intervention-map-card ${mapFullscreen.fullscreen ? "map-fullscreen" : ""}`}>
-        <div className="splice-map-head intervention-map-head"><div><small>HARTĂ OPTIX ȘI OPENSTREETMAP</small><strong>{draft?.type ? activityCatalog[draft.type].title : "Puncte și activități ale intervenției"}</strong></div>
+        <div className="splice-map-head intervention-map-head"><div><small>MOD ACTIV</small><strong>{draft?.type ? activityCatalog[draft.type].title : "Puncte și activități ale intervenției"}</strong></div>
           <div className="intervention-map-actions">
-            {draft?.type !== "junction-installation" && <button type="button" className={mode === "documented" ? "active" : ""} onClick={() => setMode("documented")} disabled={!draft?.type}>Optix</button>}
+            {draft?.type !== "junction-installation" && <button type="button" className={mode === "documented" ? "active" : ""} onClick={() => setMode("documented")} disabled={!draft?.type}>J documentată</button>}
             <button type="button" className={mode === "undocumented" ? "active" : ""} onClick={() => setMode("undocumented")} disabled={!draft?.type}>J fără cod</button>
             {draft?.type === "fo-installation" && <button type="button" className={mode === "draw" ? "active" : ""} onClick={() => setMode("draw")}>Trasează</button>}
             <button type="button" className="fo-fullscreen-toggle" onClick={mapFullscreen.toggleFullscreen} aria-pressed={mapFullscreen.fullscreen}>{mapFullscreen.fullscreen ? "× Închide" : "⛶ Ecran complet"}</button>
@@ -612,6 +612,13 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
           <a className="fo-attribution" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>© OpenStreetMap contributors</a>
         </div>
 
+        <div className="fo-map-footer intervention-map-footer">
+          <button type="button" onClick={locate} disabled={gpsLoading}><span>⌖</span>{gpsLoading ? "Se caută GPS…" : "Identifică locația curentă"}</button>
+          <button type="button" onClick={() => setDraft((current) => current ? { ...current, routePoints: current.routePoints.slice(0, -1) } : current)} disabled={!draft?.routePoints.length}><span>↶</span>Anulează ultimul punct</button>
+          <button type="button" onClick={() => setDraft((current) => current ? { ...current, routePoints: [] } : current)} disabled={!draft?.routePoints.length}><span>⌫</span>Șterge traseul</button>
+          <button type="button" onClick={() => void cancelActivity()} disabled={!draft || saving}><span>↻</span>Reset activitate</button>
+        </div>
+
         <div className="splice-map-search"><label><span>⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Introdu codul exact, ex. J2…" disabled={draft?.type === "junction-installation"} /></label><div className={`splice-data-state ${sitesStatus}`}><i>{sitesStatus === "ready" ? "✓" : sitesStatus === "error" ? "!" : "↻"}</i>{sitesStatus === "ready" ? `${sites.length.toLocaleString("ro-RO")} puncte` : sitesStatus === "error" ? "Date indisponibile" : "Se încarcă"}</div>
           {search.trim().length >= 2 && <div className="splice-search-results">{searchResults.filter((site) => site.code.trim().toLocaleLowerCase("ro") === search.trim().toLocaleLowerCase("ro")).map((site) => <article className={previewJunction?.id === site.id ? "selected" : ""} key={site.id}><button type="button" className="splice-exact-junction-name" onClick={() => pickDocumented(site)}><strong>{site.code}</strong><b>Arată pe hartă</b></button><a href={googleMapsUrl(site)} target="_blank" rel="noreferrer">Google Maps ↗</a></article>)}{!searchResults.some((site) => site.code.trim().toLocaleLowerCase("ro") === search.trim().toLocaleLowerCase("ro")) && <p>Nicio joncțiune cu acest cod.</p>}</div>}
         </div>
@@ -620,7 +627,7 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
       <aside className="intervention-activity-panel">
         {!draft ? <section className="splice-empty-card intervention-empty-card"><span>{previewJunction ? "✓" : "＋"}</span><h2>{previewJunction ? previewJunction.code : "Nicio activitate în editare"}</h2><p>{previewJunction ? `Joncțiune găsită la ${formatCoordinate(previewJunction)}. Va fi preselectată pentru activitatea compatibilă.` : "Caută mai întâi joncțiunea sau adaugă direct o activitate de execuție."}</p>{previewJunction && <a className="splice-preselected-maps" href={googleMapsUrl(previewJunction)} target="_blank" rel="noreferrer">Google Maps ↗</a>}<button type="button" onClick={beginActivity}>＋ Activitate nouă</button></section>
           : !draft.type ? <section className="splice-empty-card intervention-empty-card"><span>4</span><h2>Alege tipul activității</h2><p>Selectează una dintre cele patru operațiuni pentru a activa harta și formularul dedicat.</p><button type="button" onClick={() => void cancelActivity()}>Anulează activitatea</button></section>
-            : <><section className="project-card intervention-activity-form"><div className="card-heading"><div><h2>{activityCatalog[draft.type].title}</h2><p>{activityCatalog[draft.type].description}</p></div></div>
+            : <><section className="project-card intervention-activity-form"><div className="card-heading"><div><h2>2. {activityCatalog[draft.type].title}</h2><p>{activityCatalog[draft.type].description}</p></div></div>
               <div className="intervention-activity-form-body">
                 {draft.type === "fo-installation" ? <>
                   {junctionPanel("a", "JONCȚIUNEA A", draft.endpointA)}
@@ -632,12 +639,12 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
                   <div className="fo-photo-rules intervention-photo-thresholds"><span className={cableLengthValid && cableLength <= 100 ? "active" : ""}><b>≤100 m</b><small>3 poze</small></span><span className={cableLength > 100 && cableLength <= 200 ? "active" : ""}><b>101–200 m</b><small>5 poze</small></span><span className={cableLength > 200 && cableLength <= 300 ? "active" : ""}><b>201–300 m</b><small>10 poze</small></span><span className={cableLength > 300 ? "active" : ""}><b>&gt;300 m</b><small>15 poze</small></span></div>
                 </> : junctionPanel("junction", draft.type === "diagnostics" ? "JONCȚIUNEA MĂSURĂRII OTDR" : draft.type === "splice-repair" ? "JONCȚIUNEA REFACERII SUDURII" : "JONCȚIUNEA NOU INSTALATĂ", draft.junction)}
 
-                <div className="intervention-activity-photo-title"><strong>{draft.type === "diagnostics" ? "Fotografii diagnostic OTDR" : draft.type === "fo-installation" ? "Fotografii instalare FO" : "Fotografii remediere"}</strong><span>{activityPhotos.length}/{requiredPhotos || "—"}</span></div>
+                <div className="intervention-activity-photo-title"><strong>3. {draft.type === "diagnostics" ? "Fotografii diagnostic OTDR" : draft.type === "fo-installation" ? "Fotografii instalare FO" : "Fotografii remediere"}</strong><span>{activityPhotos.length}/{requiredPhotos || "—"}</span></div>
                 <label className={`intervention-photo-upload intervention-activity-upload${uploading ? " is-uploading" : ""}${!requiredPhotos ? " is-disabled" : ""}`}><input type="file" accept="image/*" capture="environment" multiple disabled={uploading || !requiredPhotos} onChange={(event) => { const selected = Array.from(event.target.files ?? []); event.currentTarget.value = ""; void addActivityPhotos(selected); }} /><span className="intervention-upload-icon">⌖</span><strong>{uploading ? "Se încarcă fotografiile..." : "Adaugă fotografii GPS"}</strong><small>Data, ora și poziția sunt marcate pe imagine.</small></label>
 
                 {activityPhotos.length > 0 && <div className="intervention-activity-photo-list">{activityPhotos.map((photo) => <article key={photo.id}><span>✓</span><div><strong>{photo.name}</strong><small>⌖ {photo.geo} · {formatCapturedAt(photo.capturedAt)}</small></div><button type="button" onClick={() => void removeActivityPhoto(photo)} disabled={removingPhoto === photo.id}>{removingPhoto === photo.id ? "..." : "×"}</button></article>)}</div>}
                 {error && <p className="intervention-error" role="alert">{error}</p>}
-                <div className="intervention-activity-actions"><button type="button" className="secondary-button" onClick={() => void cancelActivity()} disabled={saving}>Anulează</button><button type="button" className="primary-button" onClick={() => void saveActivity()} disabled={!activityReady || saving || uploading}>{saving ? "Se salvează..." : "Salvează activitatea"} <span>→</span></button></div>
+                <div className="intervention-activity-actions"><button type="button" className="secondary-button" onClick={() => void cancelActivity()} disabled={saving}>Anulează</button><button type="button" className="primary-button" onClick={() => void saveActivity()} disabled={!activityReady || saving || uploading}>{saving ? "Se salvează..." : "Salvează execuția"} <span>→</span></button></div>
               </div></section></>}
       </aside>
     </div>
