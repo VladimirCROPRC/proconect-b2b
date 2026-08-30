@@ -7643,6 +7643,35 @@ td > small {
   font-weight: 500;
 }
 
+.report-code-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 22px;
+}
+
+.report-code-grid label {
+  display: grid;
+  gap: 6px;
+  color: #56627a;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.report-code-grid input {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid #dce2eb;
+  border-radius: 6px;
+  color: #1d2b4f;
+  background: #fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: none;
+}
+
 .editable-report-section {
   margin-top: 38px;
 }
@@ -10430,7 +10459,7 @@ td > small {
 
 .splice-sheet-project {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   margin: 20px 0;
   border: 1px solid #dce2eb;
   border-radius: 7px;
@@ -10444,8 +10473,12 @@ td > small {
   border-right: 1px solid #e2e6ed;
 }
 
-.splice-sheet-project > div:last-child {
+.splice-sheet-project > div:nth-child(3n) {
   border-right: 0;
+}
+
+.splice-sheet-project > div:nth-child(-n+3) {
+  border-bottom: 1px solid #e2e6ed;
 }
 
 .splice-sheet-project small {
@@ -10543,11 +10576,15 @@ td > small {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .splice-sheet-project > div:nth-child(2) {
+  .splice-sheet-project > div:nth-child(3n) {
+    border-right: 1px solid #e2e6ed;
+  }
+
+  .splice-sheet-project > div:nth-child(2n) {
     border-right: 0;
   }
 
-  .splice-sheet-project > div:nth-child(-n+2) {
+  .splice-sheet-project > div:nth-child(-n+4) {
     border-bottom: 1px solid #e2e6ed;
   }
 }
