@@ -536,7 +536,7 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
         <div><small>{title}</small><strong>{junction ? junction.documented ? `${junction.code} · ${junction.name}` : junction.kind === "new" ? "Joncțiune nouă" : "Joncțiune nedocumentată" : "Alege punctul pe hartă"}</strong></div>
         <b>{readyJunction(junction) ? "✓" : "○"}</b>
       </button>
-      {junction && <p className="intervention-junction-coordinates">⌖ {junction.lat.toFixed(6)}, {junction.lon.toFixed(6)}</p>}
+      {junction && <><p className="intervention-junction-coordinates">⌖ {junction.lat.toFixed(6)}, {junction.lon.toFixed(6)}</p><div className="splice-junction-links"><button type="button" onClick={() => { setCenter({ lat: junction.lat, lon: junction.lon }); setZoom((current) => Math.max(current, 18)); }}>Arată punctul pe hartă</button>{junction.documented && <a href={googleMapsUrl(junction)} target="_blank" rel="noreferrer">Google Maps ↗</a>}</div></>}
       {junction && !junction.documented && <div className="intervention-junction-options">
         {draft?.type === "fo-installation" && <fieldset><legend>TIP JONCȚIUNE *</legend><div>{(["existing", "new"] as const).map((kind) =>
           <button type="button" key={kind} className={junction.kind === kind ? "active" : ""} onClick={() => updateJunction(slot, { ...junction, kind })}>{kind === "existing" ? "Existentă" : "Nouă"}</button>
