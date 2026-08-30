@@ -46,6 +46,8 @@ export type SpliceFieldSummary = {
     junction: { id: string; code: string; name: string; region: string; documented: boolean; lat: number; lon: number };
     junctionKind: "" | "existing" | "new";
     network: "" | "mobile" | "fixed";
+    siteCableType?: string;
+    clientCableType?: string;
     siteBuffer: string;
     siteFiber: string;
     clientBuffer: string;
