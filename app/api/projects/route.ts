@@ -1,4 +1,4 @@
-import { createProject, deleteProject, ensureProjectData, isManagementRole, listProjectData, updateProject } from "../../project-server";
+import { createProject, deleteProject, ensureProjectData, isManagementRole, listProjectData, updateProject, writeReport } from "../../project-server";
 import { syncProjectIfConnected } from "../../backup-server";
 import type { ProjectRecord } from "../../project-data";
 import { currentSession, sameOrigin } from "../../server-auth";
@@ -24,10 +24,13 @@ export async function POST(request: Request) {
     if (!session || session.account.passwordResetRequired) return Response.json({ error: "Autentificare necesară." }, { status: 401 });
     if (!isManagementRole(session.account)) return Response.json({ error: "Numai administratorul poate crea proiecte." }, { status: 403 });
     await ensureProjectData();
-    const body = (await request.json()) as { project?: ProjectRecord };
+    const body = (await request.json()) as { project?: ProjectRecord; reportMetadata?: { siteCode?: unknown; lec?: unknown } };
     if (!body.project || typeof body.project !== "object") return Response.json({ error: "Datele proiectului lipsesc." }, { status: 400 });
     const result = await createProject(body.project, session.account);
     if ("error" in result) return Response.json({ error: result.error }, { status: result.status });
+    const siteCode = typeof body.reportMetadata?.siteCode === "string" ? body.reportMetadata.siteCode.trim().slice(0, 100) : "";
+    const lec = typeof body.reportMetadata?.lec === "string" ? body.reportMetadata.lec.trim().slice(0, 100) : "";
+    if (siteCode || lec) await writeReport(result.project.id, { siteCode, lec }, session.account);
     try {
       await syncProjectIfConnected(result.project.id);
     } catch (error) {
