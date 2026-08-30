@@ -480,10 +480,10 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
         })),
         records: nextProjectRecords,
       };
-      await onSaved?.(summary);
-      setRecords(nextProjectRecords);
       const storedFiles = await fetchProjectFiles(projectItem.id, "splices");
       const attached = storedFiles.filter((file) => file.category.startsWith(`${record.id}:`));
+      await onSaved?.(summary);
+      setRecords(nextProjectRecords);
       const removals = await Promise.allSettled(attached.map((file) => deleteProjectFile(file.id)));
       const failed = removals.filter((result) => result.status === "rejected").length;
       onNotify(failed ? `Sudura a fost ștearsă, dar ${failed} fotografii necesită reîncercare.` : "Sudura FO și fotografiile aferente au fost șterse.");
