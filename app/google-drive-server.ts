@@ -4,6 +4,7 @@ import { usesGoogle } from "./onedrive-core";
 import { getRawDb } from "../db";
 import type { ProjectActivityType } from "./project-data";
 import { bucket, getFileRow, readReport } from "./project-server";
+import { buildAcceptanceReportDocx } from "./report-docx";
 
 type DriveEnvironment = { PROCONECT_DRIVE_ENCRYPTION_KEY?: string };
 type DriveSettingsRow = {
@@ -406,8 +407,15 @@ export async function syncReportIfConnected(projectId: string) {
   if (!saved) return false;
   const folders = await ensureProjectFolder(projectId);
   const sectionFolders = JSON.parse(folders.section_folders_json) as Record<string, string>;
-  const lines = ["RAPORT DE ACCEPTANȚĂ", `Proiect: ${projectId}`, "", ...Object.entries(saved.report).map(([key, value]) => `${key.replace(/([A-Z])/g, " $1")}: ${value}`)];
-  const driveFileId = await uploadDriveFile(`Raport_acceptanta_${projectId}.txt`, "text/plain; charset=UTF-8", lines.join("\n"), sectionFolders.documents, "Raport administrativ generat din Proconect B2B", folders.report_file_id || undefined);
+  const document = buildAcceptanceReportDocx(projectId, saved.report);
+  const driveFileId = await uploadDriveFile(
+    `Raport_acceptanta_${projectId}.docx`,
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    document.buffer,
+    sectionFolders.documents,
+    "Raport administrativ Word generat din Proconect B2B",
+    folders.report_file_id || undefined
+  );
   await getRawDb().prepare("UPDATE google_drive_project_folders SET report_file_id = ?, updated_at = ? WHERE project_id = ?").bind(driveFileId, Date.now(), projectId).run();
   return true;
 }
