@@ -177,6 +177,7 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
   const [splicePhotos, setSplicePhotos] = useState<Partial<Record<SplicePhotoKey, string>>>({});
   const [draftId, setDraftId] = useState(() => crypto.randomUUID());
   const [search, setSearch] = useState("");
+  const [deletingRecord, setDeletingRecord] = useState("");
   const [records, setRecords] = useState<SpliceRecord[]>([]);
   const [noIntervention, setNoIntervention] = useState(false);
   const [noInterventionReason, setNoInterventionReason] = useState("");
@@ -463,6 +464,36 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
     }
   }
 
+  async function deleteSpliceRecord(record: SpliceRecord) {
+    if (!window.confirm("Ștergi această sudură FO și cele 3 fotografii aferente?")) return;
+    setDeletingRecord(record.id);
+    try {
+      const nextProjectRecords = projectRecords.filter((item) => item.id !== record.id);
+      const summary: SpliceFieldSummary = {
+        noIntervention: false,
+        noInterventionReason: "",
+        count: nextProjectRecords.length,
+        junctions: nextProjectRecords.map((item) => ({
+          label: item.junction.documented ? `${item.junction.code} · ${item.junction.name}` : "Joncțiune nedocumentată",
+          documented: item.junction.documented,
+          kind: item.junction.documented ? "documented" : item.junctionKind as "existing" | "new",
+        })),
+        records: nextProjectRecords,
+      };
+      await onSaved?.(summary);
+      setRecords(nextProjectRecords);
+      const storedFiles = await fetchProjectFiles(projectItem.id, "splices");
+      const attached = storedFiles.filter((file) => file.category.startsWith(`${record.id}:`));
+      const removals = await Promise.allSettled(attached.map((file) => deleteProjectFile(file.id)));
+      const failed = removals.filter((result) => result.status === "rejected").length;
+      onNotify(failed ? `Sudura a fost ștearsă, dar ${failed} fotografii necesită reîncercare.` : "Sudura FO și fotografiile aferente au fost șterse.");
+    } catch (error) {
+      onNotify(error instanceof Error ? error.message : "Sudura FO nu a putut fi ștearsă.");
+    } finally {
+      setDeletingRecord("");
+    }
+  }
+
   async function saveNoIntervention() {
     const reason = noInterventionReason.trim();
     if (!reason) {
@@ -634,7 +665,7 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
 
           <section className="splice-records-card">
             <div className="splice-card-title"><span>✓</span><div><h2>Suduri documentate</h2><p>{projectItem.id} · {projectRecords.length} înregistrări</p></div></div>
-            {projectRecords.length ? <div className="splice-record-list">{projectRecords.map((record, index) => <article key={record.id}><span>{index + 1}</span><div><strong>{record.junction.documented ? `${record.junction.code} · ${record.junction.name}` : `Fără cod · ${record.junctionKind === "existing" ? "existentă" : "nou instalată"}`}</strong><small>{record.junction.documented ? "Joncțiune documentată" : record.network === "mobile" ? "Vodafone Mobil" : "Vodafone Fixed"} · 3 fotografii</small><p><b style={{ background: colorHex[record.siteBuffer] }} />{record.siteCableType || "Cablu nespecificat"} · {record.siteBuffer}/{record.siteFiber} <i>→</i> <b style={{ background: colorHex[record.clientBuffer] }} />{record.clientCableType || "Cablu nespecificat"} · {record.clientBuffer}/{record.clientFiber}</p></div><em>Salvată</em></article>)}</div> : <div className="splice-no-records"><span>○</span><p>Nicio sudură salvată pentru această lucrare.</p></div>}
+            {projectRecords.length ? <div className="splice-record-list">{projectRecords.map((record, index) => <article key={record.id}><span>{index + 1}</span><div><strong>{record.junction.documented ? `${record.junction.code} · ${record.junction.name}` : `Fără cod · ${record.junctionKind === "existing" ? "existentă" : "nou instalată"}`}</strong><small>{record.junction.documented ? "Joncțiune documentată" : record.network === "mobile" ? "Vodafone Mobil" : "Vodafone Fixed"} · 3 fotografii</small><p><b style={{ background: colorHex[record.siteBuffer] }} />{record.siteCableType || "Cablu nespecificat"} · {record.siteBuffer}/{record.siteFiber} <i>→</i> <b style={{ background: colorHex[record.clientBuffer] }} />{record.clientCableType || "Cablu nespecificat"} · {record.clientBuffer}/{record.clientFiber}</p></div><em>Salvată</em><button type="button" className="record-delete-button" onClick={() => void deleteSpliceRecord(record)} disabled={Boolean(deletingRecord)}>{deletingRecord === record.id ? "Se șterge…" : "Șterge"}</button></article>)}</div> : <div className="splice-no-records"><span>○</span><p>Nicio sudură salvată pentru această lucrare.</p></div>}
           </section>
         </aside>
       </div>}
