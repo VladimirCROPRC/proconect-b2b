@@ -305,22 +305,27 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
   }
 
   function startNewSplice() {
+    const preselectedJunction = junction?.documented ? junction : null;
     resetDraft();
+    if (preselectedJunction) {
+      setJunction(preselectedJunction);
+      setCenter({ lat: preselectedJunction.lat, lon: preselectedJunction.lon });
+      setZoom((current) => Math.max(current, 18));
+    }
     setCreating(true);
-    onNotify("Sudură nouă inițiată. Selectează joncțiunea pe hartă.");
+    onNotify(preselectedJunction
+      ? `Sudură nouă inițiată în joncțiunea ${preselectedJunction.code}.`
+      : "Sudură nouă inițiată. Selectează joncțiunea pe hartă.");
   }
 
   function chooseDocumented(site: Junction) {
-    if (!creating) {
-      onNotify("Apasă „Sudură nouă” înainte de a selecta joncțiunea.");
-      return;
-    }
     setJunction(site);
     setJunctionKind("");
     setNetwork("");
     setCenter({ lat: site.lat, lon: site.lon });
-    setZoom((current) => Math.max(current, 15));
-    setSearch("");
+    setZoom((current) => Math.max(current, creating ? 15 : 18));
+    if (creating) setSearch("");
+    if (!creating) onNotify(`${site.code} a fost găsită. Poți verifica punctul pe hartă sau porni „Sudură nouă”.`);
   }
 
   function handleMapClick(event: MouseEvent<HTMLDivElement>) {
@@ -571,7 +576,7 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
             <a className="fo-attribution" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>© OpenStreetMap contributors</a>
           </div>
           <div className="splice-map-search">
-            <label><span>⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Caută după cod, nume sau localitate…" disabled={!creating} /></label>
+            <label><span>⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Caută joncțiunea înainte sau după „Sudură nouă”…" /></label>
             <div className={`splice-data-state ${sitesStatus}`}><i>{sitesStatus === "ready" ? "✓" : sitesStatus === "error" ? "!" : "↻"}</i>{sitesStatus === "ready" ? `${sites.length.toLocaleString("ro-RO")} site-uri` : sitesStatus === "error" ? "Date indisponibile" : "Se încarcă"}</div>
             {search.trim().length >= 2 && <div className="splice-search-results">{searchResults.map((site) => <article className={junction?.id === site.id ? "selected" : ""} key={site.id}><button onClick={() => chooseDocumented(site)}><span>{site.code}</span><div><strong>{site.name}</strong><small>{site.region}</small></div><b>Arată pe hartă</b></button><a href={googleMapsUrl(site)} target="_blank" rel="noreferrer" aria-label={`Deschide joncțiunea ${site.code} în Google Maps`}>Google Maps ↗</a></article>)}{!searchResults.length && <p>Nicio joncțiune găsită.</p>}</div>}
           </div>
@@ -579,7 +584,7 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
 
         <aside className="splice-side">
           {!creating ? (
-            <section className="splice-empty-card"><span>SU</span><h2>Nicio sudură în editare</h2><p>Pornește o înregistrare nouă, apoi selectează joncțiunea și fibrele sudate.</p><button onClick={startNewSplice}>＋ Sudură nouă</button></section>
+            <section className="splice-empty-card"><span>{junction?.documented ? "✓" : "SU"}</span><h2>{junction?.documented ? `${junction.code} · ${junction.name}` : "Nicio sudură în editare"}</h2><p>{junction?.documented ? `Joncțiune găsită la ${formatCoordinate(junction)}. Pornește sudura nouă pentru a continua cu fibrele.` : "Poți căuta mai întâi joncțiunea pe hartă sau poți porni direct o înregistrare nouă."}</p>{junction?.documented && <a className="splice-preselected-maps" href={googleMapsUrl(junction)} target="_blank" rel="noreferrer">Google Maps ↗</a>}<button onClick={startNewSplice}>＋ Sudură nouă</button></section>
           ) : (
             <>
               <section className="splice-form-card">
