@@ -76,18 +76,14 @@ export function zipPackage(files: Array<{ name: string; content: string }>) {
 }
 
 export function buildAcceptanceReportDocx(projectId: string, report: AcceptanceReport) {
-  const siteTitle = `Site ${report.siteCode || projectId}`;
-  const clientTitle = `Client ${report.lec || ""}`.trim();
   const body = [
-    paragraph(report.title || "Raport de acceptanță", { style: "Title", centered: true }),
+    paragraph(report.title || "Raport acceptanță", { style: "Title", centered: true }),
     paragraph(`Proiect: ${projectId}`, { centered: true }),
-    paragraph(siteTitle, { style: "Heading1" }),
-    ...(report.siteCode ? [paragraph(`Cod site: ${report.siteCode}`, { bold: true })] : []),
+    paragraph(`Cod site: ${report.siteCode || "Nespecificat"}`, { style: "Heading1" }),
     reportLines(report.site),
     paragraph("Traseu", { style: "Heading1" }),
     reportLines(report.route),
-    paragraph(clientTitle, { style: "Heading1" }),
-    ...(report.lec ? [paragraph(`Client LEC: ${report.lec}`, { bold: true })] : []),
+    paragraph(`Client LEC: ${report.lec || "Nespecificat"}`, { style: "Heading1" }),
     reportLines(report.client),
   ].join("");
 
