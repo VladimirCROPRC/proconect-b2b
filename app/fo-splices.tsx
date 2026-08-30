@@ -5,6 +5,7 @@ import { fetchProjectFiles, uploadProjectFile } from "./client-storage";
 import type { SpliceFieldSummary } from "./field-documentation";
 import { NoInterventionControl } from "./no-intervention-control";
 import { useMapGestures } from "./use-map-gestures";
+import { useMapFullscreen } from "./use-map-fullscreen";
 
 type Coordinate = { lat: number; lon: number };
 type OptixSiteRow = [code: string, description: string, region: string, lat: number, lon: number];
@@ -501,12 +502,18 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
           <button className="primary-button" onClick={saveNoIntervention}>Salvează secțiunea <span>→</span></button>
         </section>
       ) : <div className="splice-layout">
-        <section className="splice-map-card">
+        <section className={`splice-map-card ${mapFullscreen.fullscreen ? "map-fullscreen" : ""}`}>
           <div className="splice-map-head">
             <div><small>SELECTARE JONCȚIUNE</small><strong>{mode === "documented" ? "Punct documentat din registru" : "Punct nedocumentat pe hartă"}</strong></div>
             <div className="splice-mode-switch">
               <button className={mode === "documented" ? "active" : ""} onClick={() => setMode("documented")}>Documentată</button>
               <button className={mode === "undocumented" ? "active" : ""} onClick={() => setMode("undocumented")}>Nedocumentată</button>
+              <button
+                className="fo-fullscreen-toggle"
+                onClick={mapFullscreen.toggleFullscreen}
+                aria-pressed={mapFullscreen.fullscreen}
+                aria-label={mapFullscreen.fullscreen ? "Închide harta pe tot ecranul" : "Deschide harta pe tot ecranul"}
+              ><span>{mapFullscreen.fullscreen ? "×" : "⛶"}</span> {mapFullscreen.fullscreen ? "Închide" : "Ecran complet"}</button>
             </div>
           </div>
           <div
