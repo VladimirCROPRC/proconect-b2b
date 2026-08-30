@@ -943,7 +943,7 @@ export function FoRouteSection({ project: projectItem, variant = "installation",
                 {searchResults.map((site) => (
                   <article className={endB?.id === site.id ? "selected" : ""} key={site.id}>
                     <button className="fo-exact-junction-name" onClick={() => setDocumentedEnd(site)}>
-                      <strong>{site.name}</strong>
+                      <strong>{site.code}</strong>
                       <b>Arată pe hartă</b>
                     </button>
                     <a href={googleMapsUrl(site)} target="_blank" rel="noreferrer" aria-label={`Deschide joncțiunea ${site.code} în Google Maps`}>Google Maps ↗</a>
