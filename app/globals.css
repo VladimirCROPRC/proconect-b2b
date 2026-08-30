@@ -2544,6 +2544,17 @@ td > small {
   flex-direction: column;
 }
 
+.fo-search-results > article > button.fo-exact-junction-name {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.fo-search-results > article > button.fo-exact-junction-name > strong {
+  overflow: visible;
+  line-height: 1.3;
+  text-overflow: clip;
+  white-space: normal;
+}
+
 .fo-search-results > article > button > b {
   color: #3d4d91;
   font-size: 10px;
@@ -5154,9 +5165,10 @@ td > small {
 }
 
 .splice-search-results > article > button.splice-exact-junction-name > strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow: visible;
+  line-height: 1.3;
+  text-overflow: clip;
+  white-space: normal;
 }
 
 .splice-search-results > article > button > b {
