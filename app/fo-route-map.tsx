@@ -886,7 +886,7 @@ export function FoRouteSection({ project: projectItem, initialSummary, onNotify,
                 return <span className={`fo-end-marker end-b ${endB.documented ? "" : "undocumented"}`} style={{ left: `${(point.x / MAP_WIDTH) * 100}%`, top: `${(point.y / MAP_HEIGHT) * 100}%` }}><b>B</b><small>{markerLabel}</small></span>;
               })()}
 
-              <div className="fo-map-instruction"><span>{mode === "pan" ? "✥" : mode === "client" ? "A" : mode === "route" ? "⌁" : "B?"}</span>{mode === "pan" ? "Trage harta pentru deplasare" : mode === "client" ? "Atinge harta la locația clientului" : mode === "route" ? "Atinge succesiv traseul cablului" : "Atinge locul joncțiunii nedocumentate"}</div>
+              <div className="fo-map-instruction"><span>{mode === "pan" ? "✥" : mode === "client" ? "A" : mode === "route" ? "⌁" : "B?"}</span>{mode === "pan" ? "Glisează harta · apropie două degete pentru zoom" : mode === "client" ? "Atinge pentru Client A · glisează sau folosește pinch zoom" : mode === "route" ? "Atinge pentru punct · glisează sau folosește pinch zoom" : "Atinge pentru joncțiune · glisează sau folosește pinch zoom"}</div>
 
               <button
                 className={`fo-locate-button ${currentLocation ? "located" : ""}`}
