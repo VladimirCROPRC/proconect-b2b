@@ -1554,7 +1554,7 @@ export default function Home() {
                 <label><span>Nume client *</span><input name="client" required defaultValue={editingProject?.client} placeholder="Denumirea companiei" /></label>
                 {!editingProject && <>
                   <label><span>Cod site (opțional)</span><input name="siteCode" maxLength={100} placeholder="Codul site-ului clientului" /></label>
-                  <label><span>LEC (opțional)</span><input name="lec" maxLength={100} placeholder="Location Engineering Code" /></label>
+                  <label><span>Client LEC (opțional)</span><input name="lec" maxLength={100} placeholder="Location Engineering Code client" /></label>
                 </>}
                 <label className="wide"><span>{isInstallationForm ? "Adresă instalare" : "Adresă lucrare"} *</span><input name="address" required defaultValue={editingProject?.address} placeholder="Stradă, număr, localitate" /></label>
                 <label><span>Persoană de contact *</span><input name="contact" required defaultValue={editingProject?.contact} placeholder="Nume și prenume" /></label>
