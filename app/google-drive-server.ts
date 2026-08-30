@@ -374,6 +374,18 @@ export async function syncProjectIfConnected(projectId: string) {
   return true;
 }
 
+export async function deleteDriveFileCopy(fileId: string) {
+  const configuration = await settings();
+  if (!isConnected(configuration)) return;
+  const synced = await getRawDb().prepare("SELECT drive_file_id FROM google_drive_file_sync WHERE file_id = ? LIMIT 1")
+    .bind(fileId).first<{ drive_file_id: string }>();
+  if (!synced?.drive_file_id) return;
+  const headers = new Headers({ Authorization: `Bearer ${await accessToken()}` });
+  const response = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(synced.drive_file_id)}`, { method: "DELETE", headers });
+  if (!response.ok && response.status !== 404) throw new Error(`Google Drive nu a putut șterge copia fișierului (${response.status}).`);
+  await getRawDb().prepare("DELETE FROM google_drive_file_sync WHERE file_id = ?").bind(fileId).run();
+}
+
 export async function syncFileIfConnected(fileId: string) {
   if (!usesGoogle(await backupMode())) return false;
   if (!isConnected(await settings())) return false;
