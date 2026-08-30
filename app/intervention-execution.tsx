@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent } from "react";
+import { useDeferredValue, useEffect, useMemo, useState, type MouseEvent } from "react";
 import { deleteProjectFile, fetchProjectFiles, formatCapturedAt, uploadProjectFile, type StoredProjectFile } from "./client-storage";
 import {
   requiredInterventionCablePhotos,
@@ -10,6 +10,8 @@ import {
   type InterventionJunction,
 } from "./field-documentation";
 import type { ProjectRecord } from "./project-data";
+import { useMapGestures } from "./use-map-gestures";
+import { useMapFullscreen } from "./use-map-fullscreen";
 
 type Coordinate = { lat: number; lon: number };
 type OptixSiteRow = [code: string, description: string, region: string, lat: number, lon: number];
@@ -30,7 +32,6 @@ type ActivityDraft = {
   cableType: string;
   cableLength: string;
 };
-type DragState = { pointerId: number; startX: number; startY: number; centerX: number; centerY: number };
 type Props = {
   project: ProjectRecord;
   initialSummary?: InterventionFieldSummary;
@@ -177,8 +178,20 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
   const [saving, setSaving] = useState(false);
   const [removingPhoto, setRemovingPhoto] = useState("");
   const [error, setError] = useState("");
-  const dragRef = useRef<DragState | null>(null);
   const deferredSearch = useDeferredValue(search);
+  const mapGestures = useMapGestures({
+    center,
+    zoom,
+    setCenter,
+    setZoom,
+    project: projectCoordinate,
+    unproject: unprojectCoordinate,
+    mapWidth: MAP_WIDTH,
+    mapHeight: MAP_HEIGHT,
+    maximumZoom: 25,
+    mousePan: true,
+  });
+  const mapFullscreen = useMapFullscreen();
 
   useEffect(() => {
     let mounted = true;
@@ -216,20 +229,25 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
   }, [project.id, initialSummary?.execution?.documentedAt]);
 
   const tiles = useMemo(() => {
+    const sourceZoom = Math.min(zoom, 19);
+    const overzoomScale = 2 ** (zoom - sourceZoom);
+    const renderedTileSize = TILE_SIZE * overzoomScale;
     const projectedCenter = projectCoordinate(center, zoom);
-    const tilesAcross = 2 ** zoom;
-    const firstX = Math.floor((projectedCenter.x - MAP_WIDTH / 2) / TILE_SIZE);
-    const lastX = Math.floor((projectedCenter.x + MAP_WIDTH / 2) / TILE_SIZE);
-    const firstY = Math.floor((projectedCenter.y - MAP_HEIGHT / 2) / TILE_SIZE);
-    const lastY = Math.floor((projectedCenter.y + MAP_HEIGHT / 2) / TILE_SIZE);
-    const result: Array<{ key: string; x: number; y: number; urlX: number; urlY: number }> = [];
+    const tilesAcross = 2 ** sourceZoom;
+    const firstX = Math.floor((projectedCenter.x - MAP_WIDTH / 2) / renderedTileSize);
+    const lastX = Math.floor((projectedCenter.x + MAP_WIDTH / 2) / renderedTileSize);
+    const firstY = Math.floor((projectedCenter.y - MAP_HEIGHT / 2) / renderedTileSize);
+    const lastY = Math.floor((projectedCenter.y + MAP_HEIGHT / 2) / renderedTileSize);
+    const result: Array<{ key: string; x: number; y: number; size: number; sourceZoom: number; urlX: number; urlY: number }> = [];
     for (let tileX = firstX; tileX <= lastX; tileX += 1) {
       for (let tileY = firstY; tileY <= lastY; tileY += 1) {
         if (tileY < 0 || tileY >= tilesAcross) continue;
         result.push({
           key: `${zoom}-${tileX}-${tileY}`,
-          x: tileX * TILE_SIZE - (projectedCenter.x - MAP_WIDTH / 2),
-          y: tileY * TILE_SIZE - (projectedCenter.y - MAP_HEIGHT / 2),
+          x: tileX * renderedTileSize - (projectedCenter.x - MAP_WIDTH / 2),
+          y: tileY * renderedTileSize - (projectedCenter.y - MAP_HEIGHT / 2),
+          size: renderedTileSize,
+          sourceZoom,
           urlX: ((tileX % tilesAcross) + tilesAcross) % tilesAcross,
           urlY: tileY,
         });
@@ -350,6 +368,7 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
   }
 
   function onMapClick(event: MouseEvent<HTMLDivElement>) {
+    if (mapGestures.consumeSuppressedClick()) return;
     if (!draft?.type || mode === "pan" || mode === "documented") return;
     const coordinate = mapPoint(event);
     if (mode === "draw") {
@@ -395,28 +414,6 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
       },
       { enableHighAccuracy: true, timeout: 15_000, maximumAge: 15_000 },
     );
-  }
-
-  function onPointerDown(event: PointerEvent<HTMLDivElement>) {
-    if (mode !== "pan") return;
-    const projectedCenter = projectCoordinate(center, zoom);
-    dragRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, centerX: projectedCenter.x, centerY: projectedCenter.y };
-    event.currentTarget.setPointerCapture(event.pointerId);
-  }
-
-  function onPointerMove(event: PointerEvent<HTMLDivElement>) {
-    const drag = dragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    const bounds = event.currentTarget.getBoundingClientRect();
-    const deltaX = ((event.clientX - drag.startX) / bounds.width) * MAP_WIDTH;
-    const deltaY = ((event.clientY - drag.startY) / bounds.height) * MAP_HEIGHT;
-    setCenter(unprojectCoordinate({ x: drag.centerX - deltaX, y: drag.centerY - deltaY }, zoom));
-  }
-
-  function onPointerUp(event: PointerEvent<HTMLDivElement>) {
-    if (dragRef.current?.pointerId !== event.pointerId) return;
-    dragRef.current = null;
-    event.currentTarget.releasePointerCapture(event.pointerId);
   }
 
   async function addActivityPhotos(files: File[]) {
@@ -559,20 +556,20 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
     </section>}
 
     <div className="intervention-map-layout">
-      <section className="splice-map-card intervention-map-card">
+      <section className={`splice-map-card intervention-map-card ${mapFullscreen.fullscreen ? "map-fullscreen" : ""}`}>
         <div className="splice-map-head intervention-map-head"><div><small>HARTĂ OPTIX ȘI OPENSTREETMAP</small><strong>{draft?.type ? activityCatalog[draft.type].title : "Puncte și activități ale intervenției"}</strong></div>
           <div className="intervention-map-actions">
-            <button type="button" className={mode === "pan" ? "active" : ""} onClick={() => setMode("pan")}>Mută</button>
             {draft?.type !== "junction-installation" && <button type="button" className={mode === "documented" ? "active" : ""} onClick={() => setMode("documented")} disabled={!draft?.type}>Optix</button>}
             <button type="button" className={mode === "undocumented" ? "active" : ""} onClick={() => setMode("undocumented")} disabled={!draft?.type}>Pe hartă</button>
             {draft?.type === "fo-installation" && <button type="button" className={mode === "draw" ? "active" : ""} onClick={() => setMode("draw")}>Trasează</button>}
+            <button type="button" className="fo-fullscreen-toggle" onClick={mapFullscreen.toggleFullscreen} aria-pressed={mapFullscreen.fullscreen}>{mapFullscreen.fullscreen ? "× Închide" : "⛶ Ecran complet"}</button>
           </div>
         </div>
 
         <div className={`fo-map splice-map intervention-execution-map${mode === "pan" ? " mode-pan" : mode === "undocumented" || mode === "draw" ? " placing" : ""}`}
           role="application" aria-label="Hartă Optix și OpenStreetMap pentru activitățile intervenției"
-          onClick={onMapClick} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
-          <div className="fo-map-tiles" aria-hidden="true">{tiles.map((tile) => <img key={tile.key} src={`https://tile.openstreetmap.org/${zoom}/${tile.urlX}/${tile.urlY}.png`} alt="" draggable={false} style={{ left: `${tile.x / MAP_WIDTH * 100}%`, top: `${tile.y / MAP_HEIGHT * 100}%`, width: `${TILE_SIZE / MAP_WIDTH * 100}%`, height: `${TILE_SIZE / MAP_HEIGHT * 100}%` }} />)}</div>
+          onClick={onMapClick} onPointerDown={mapGestures.onPointerDown} onPointerMove={mapGestures.onPointerMove} onPointerUp={mapGestures.onPointerUp} onPointerCancel={mapGestures.onPointerCancel} onWheel={mapGestures.onWheel}>
+          <div className="fo-map-tiles" aria-hidden="true">{tiles.map((tile) => <img key={tile.key} src={`https://tile.openstreetmap.org/${tile.sourceZoom}/${tile.urlX}/${tile.urlY}.png`} alt="" draggable={false} style={{ left: `${tile.x / MAP_WIDTH * 100}%`, top: `${tile.y / MAP_HEIGHT * 100}%`, width: `${tile.size / MAP_WIDTH * 100}%`, height: `${tile.size / MAP_HEIGHT * 100}%` }} />)}</div>
 
           <svg className="fo-route-line intervention-routes" viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`} preserveAspectRatio="none" aria-hidden="true">
             {activities.filter((activity) => activity.type === "fo-installation").map((activity) => <polyline key={activity.id} className="intervention-saved-route" points={(activity.routePoints ?? []).map((point) => { const position = screenPoint(point, center, zoom); return `${position.x},${position.y}`; }).join(" ")} />)}
@@ -584,12 +581,15 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
           {savedJunctions.map((junction) => { const point = screenPoint(junction, center, zoom); return <button type="button" key={junction.id} className="fo-site-marker intervention-field-marker" title={`${junction.kind === "new" ? "Joncțiune nouă" : "Joncțiune existentă"} · ${junction.network === "mobile" ? "Vodafone Mobil" : "Vodafone Fixed"}`} style={{ left: `${point.x / MAP_WIDTH * 100}%`, top: `${point.y / MAP_HEIGHT * 100}%` }} onClick={(event) => { event.stopPropagation(); if (draft?.type === "junction-installation") return; updateJunction(draft?.type === "fo-installation" ? activeSlot : "junction", { ...junction, network: junction.network ?? "" }); }}><i /></button>; })}
 
           {draft?.routePoints.map((point, index) => { const position = screenPoint(point, center, zoom); return <span className="fo-route-point" key={`${point.lat}-${point.lon}-${index}`} style={{ left: `${position.x / MAP_WIDTH * 100}%`, top: `${position.y / MAP_HEIGHT * 100}%` }}>{index + 1}</span>; })}
-          {([draft?.endpointA ? ["A", draft.endpointA] : null, draft?.endpointB ? ["B", draft.endpointB] : null, draft?.junction ? ["J", draft.junction] : null] as Array<[string, DraftJunction] | null>).filter((item): item is [string, DraftJunction] => Boolean(item)).map(([label, junction]) => { const point = screenPoint(junction, center, zoom); return <span className={`fo-end-marker ${label === "A" ? "end-a" : "end-b"}${junction.documented ? "" : " undocumented"}`} key={label} style={{ left: `${point.x / MAP_WIDTH * 100}%`, top: `${point.y / MAP_HEIGHT * 100}%` }}><b>{label}</b><small>{junction.documented ? junction.code : junction.kind === "new" ? "NOUĂ" : "FĂRĂ COD"}</small></span>; })}
+          {([draft?.endpointA ? ["A", draft.endpointA] : null, draft?.endpointB ? ["B", draft.endpointB] : null, draft?.junction ? ["J", draft.junction] : null] as Array<[string, DraftJunction] | null>).filter((item): item is [string, DraftJunction] => Boolean(item)).map(([label, junction]) => {
+            const point = screenPoint(junction, center, zoom);
+            return <span className={`fo-placed-dot ${label === "A" ? "client-dot" : "junction-dot"}${junction.documented ? "" : " undocumented"}`} aria-label={label === "A" ? "Punct A" : "Punct joncțiune"} key={label} style={{ left: `${point.x / MAP_WIDTH * 100}%`, top: `${point.y / MAP_HEIGHT * 100}%` }} />;
+          })}
           {currentLocation && (() => { const point = screenPoint(currentLocation, center, zoom); return <span className="splice-current-location" style={{ left: `${point.x / MAP_WIDTH * 100}%`, top: `${point.y / MAP_HEIGHT * 100}%` }}><i /><small>LOCAȚIA MEA</small></span>; })()}
 
           <div className="fo-map-instruction"><span>{mode === "draw" ? "⌁" : mode === "pan" ? "✥" : activeSlot.toUpperCase().slice(0, 1)}</span>{mapInstruction}</div>
           <button type="button" className={`fo-locate-button splice-locate-button ${currentLocation ? "located" : ""}`} onClick={(event) => { event.stopPropagation(); locate(); }} disabled={gpsLoading}><span className={gpsLoading ? "loading" : ""}>{gpsLoading ? "↻" : currentLocation ? "✓" : "⌖"}</span><div><strong>{gpsLoading ? "Se caută poziția…" : currentLocation ? "Locație identificată" : "Locația mea"}</strong><small>{currentLocation ? `Precizie ±${Math.round(currentLocation.accuracy)} m` : "Centrează harta intervenției"}</small></div></button>
-          <div className="fo-zoom" onClick={(event) => event.stopPropagation()}><button type="button" onClick={() => setZoom((value) => clamp(value + 1, 7, 18))}>＋</button><button type="button" onClick={() => setZoom((value) => clamp(value - 1, 7, 18))}>−</button></div>
+          <div className="fo-zoom" onClick={(event) => event.stopPropagation()}><button type="button" onClick={() => setZoom((value) => clamp(value + 1, 7, 25))}>＋</button><button type="button" onClick={() => setZoom((value) => clamp(value - 1, 7, 25))}>−</button></div>
           <a className="fo-attribution" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>© OpenStreetMap contributors</a>
         </div>
 
