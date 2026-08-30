@@ -1015,12 +1015,10 @@ export function FoRouteSection({ project: projectItem, variant = "installation",
                       <div className="fo-installation-fields">
                         <label className="fo-cable-input">
                           <span>TIP CABLU INSTALAT *</span>
-                          <input
-                            list="fo-cable-suggestions"
-                            value={cableTypes[method]}
-                            onChange={(event) => setCableTypes((current) => ({ ...current, [method]: event.target.value }))}
-                            placeholder="ex. Cablu FO 12F G.652D"
-                          />
+                          <select value={cableTypes[method]} onChange={(event) => setCableTypes((current) => ({ ...current, [method]: event.target.value }))}>
+                            <option value="">Selectează tipul cablului</option>
+                            {[4, 12, 24, 48, 96].map((fibers) => <option key={fibers} value={`Cablu FO ${fibers}F`}>{fibers} fibre</option>)}
+                          </select>
                         </label>
                         <label className="fo-length-input">
                           <span>LUNGIME *</span>
@@ -1069,14 +1067,6 @@ export function FoRouteSection({ project: projectItem, variant = "installation",
                 );
               })}
             </div>
-            <datalist id="fo-cable-suggestions">
-              <option value="Cablu FO 2F G.657A2" />
-              <option value="Cablu FO 4F G.657A2" />
-              <option value="Cablu FO 12F G.652D" />
-              <option value="Microcablu FO 12F G.657A1" />
-              <option value="Cablu FO 24F G.652D" />
-              <option value="Cablu FO 48F G.652D" />
-            </datalist>
           </section>
 
           <section className="fo-route-photo-card">
