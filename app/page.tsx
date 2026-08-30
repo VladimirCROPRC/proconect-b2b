@@ -1552,7 +1552,7 @@ export default function Home() {
                   <label><span>Request ID *</span><div className="prefix-input"><b>RID</b><input name="requestId" required readOnly={Boolean(editingProject)} defaultValue={editingProject?.id.replace(/^RID/i, "")} inputMode="numeric" placeholder="ex. 10483" /></div></label>
                 )}
                 <label><span>Nume client *</span><input name="client" required defaultValue={editingProject?.client} placeholder="Denumirea companiei" /></label>
-                {isInstallationForm && !editingProject && <>
+                {!editingProject && <>
                   <label><span>Cod site (opțional)</span><input name="siteCode" maxLength={100} placeholder="Codul site-ului clientului" /></label>
                   <label><span>LEC (opțional)</span><input name="lec" maxLength={100} placeholder="Location Engineering Code" /></label>
                 </>}
