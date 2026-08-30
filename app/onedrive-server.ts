@@ -265,7 +265,10 @@ async function uploadSpliceSheet(token: string, projectId: string, destinationId
     noInterventionReason: splices.noInterventionReason,
     records: splices.records ?? [],
   });
-  const filename = `Fișa de suduri - ${readableFolderName(projectId)}.xlsx`;
+  const baseName = `Fișa de suduri - ${readableFolderName(projectId)}`;
+  const legacy = await graph(token, `/me/drive/items/${encodeURIComponent(destinationId)}:/${encodeURIComponent(`${baseName}.csv`)}`, { method: "DELETE" });
+  if (!legacy.ok && legacy.status !== 404) throw new RemoteFailure(`OneDrive: fișierul CSV anterior nu a putut fi înlocuit (HTTP ${legacy.status}).`);
+  const filename = `${baseName}.xlsx`;
   await checked(await graph(token, `/me/drive/items/${encodeURIComponent(destinationId)}:/${encodeURIComponent(filename)}:/content`, {
     method: "PUT",
     headers: { "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
