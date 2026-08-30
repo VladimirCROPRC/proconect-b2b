@@ -1,6 +1,7 @@
 import type { ProjectFieldDocumentation } from "./field-documentation";
 
 export type ProjectActivityType = "Instalare" | "Intervenție" | "Survey";
+export type MediaConverterType = "" | "100 Mbps" | "1 Gbps" | "JumboFrame";
 
 export type CpeCatalogItem = {
   name: string;
@@ -21,6 +22,7 @@ export type ProjectRecord = {
   cpeRequiresGrounding: boolean;
   sfp: boolean;
   mc: boolean;
+  mcType: MediaConverterType;
   terminalBox: boolean;
   status: "Planificat" | "În desfășurare" | "De verificat" | "Finalizat";
   date: string;
@@ -43,6 +45,7 @@ export const initialProjects: ProjectRecord[] = [
     cpeRequiresGrounding: false,
     sfp: true,
     mc: false,
+    mcType: "",
     terminalBox: true,
     status: "În desfășurare",
     date: "21 aug, 09:30",
@@ -63,6 +66,7 @@ export const initialProjects: ProjectRecord[] = [
     cpeRequiresGrounding: false,
     sfp: true,
     mc: true,
+    mcType: "1 Gbps",
     terminalBox: true,
     status: "Planificat",
     date: "22 aug, 11:00",
@@ -83,6 +87,7 @@ export const initialProjects: ProjectRecord[] = [
     cpeRequiresGrounding: false,
     sfp: true,
     mc: false,
+    mcType: "",
     terminalBox: false,
     status: "De verificat",
     date: "20 aug, 14:15",
@@ -103,6 +108,7 @@ export const initialProjects: ProjectRecord[] = [
     cpeRequiresGrounding: false,
     sfp: true,
     mc: false,
+    mcType: "",
     terminalBox: true,
     status: "Finalizat",
     date: "19 aug, 10:00",
