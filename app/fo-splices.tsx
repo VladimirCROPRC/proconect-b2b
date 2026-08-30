@@ -482,11 +482,12 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
       };
       const storedFiles = await fetchProjectFiles(projectItem.id, "splices");
       const attached = storedFiles.filter((file) => file.category.startsWith(`${record.id}:`));
-      await onSaved?.(summary);
-      setRecords(nextProjectRecords);
       const removals = await Promise.allSettled(attached.map((file) => deleteProjectFile(file.id)));
       const failed = removals.filter((result) => result.status === "rejected").length;
-      onNotify(failed ? `Sudura a fost ștearsă, dar ${failed} fotografii necesită reîncercare.` : "Sudura FO și fotografiile aferente au fost șterse.");
+      if (failed) throw new Error(`${failed} fotografii nu au putut fi șterse din toate destinațiile. Reîncearcă ștergerea sudurii.`);
+      await onSaved?.(summary);
+      setRecords(nextProjectRecords);
+      onNotify("Sudura FO și fotografiile aferente au fost șterse din aplicație, Google Drive și OneDrive.");
     } catch (error) {
       onNotify(error instanceof Error ? error.message : "Sudura FO nu a putut fi ștearsă.");
     } finally {
