@@ -5149,6 +5149,16 @@ td > small {
   min-width: 0;
 }
 
+.splice-search-results > article > button.splice-exact-junction-name {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.splice-search-results > article > button.splice-exact-junction-name > strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .splice-search-results > article > button > b {
   color: #3d4d91;
   font-size: 10px;
