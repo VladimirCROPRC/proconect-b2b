@@ -4,14 +4,13 @@ import {
   useEffect,
   useDeferredValue,
   useMemo,
-  useRef,
   useState,
   type MouseEvent,
-  type PointerEvent,
 } from "react";
 import { deleteProjectFile, fetchProjectFiles, formatCapturedAt, uploadProjectFile } from "./client-storage";
 import type { RouteFieldSummary } from "./field-documentation";
 import { NoInterventionControl } from "./no-intervention-control";
+import { useMapGestures } from "./use-map-gestures";
 
 type Coordinate = { lat: number; lon: number };
 type MapMode = "pan" | "client" | "route" | "undocumented";
@@ -221,7 +220,7 @@ export function FoRouteSection({ project: projectItem, initialSummary, onNotify,
   const [sourceName, setSourceName] = useState("Optix Sites.xlsx");
   const [rejectedSites, setRejectedSites] = useState(0);
   const [center, setCenter] = useState(DEFAULT_CENTER);
-  const [zoom, setZoom] = useState(13);
+  const [zoom, setZoom] = useState(15);
   const [mode, setMode] = useState<MapMode>("client");
   const [endA, setEndA] = useState<RouteEnd | null>(null);
   const [endB, setEndB] = useState<RouteEnd | null>(null);
@@ -254,13 +253,18 @@ export function FoRouteSection({ project: projectItem, initialSummary, onNotify,
   const [routePhotos, setRoutePhotos] = useState<RoutePhoto[]>([]);
   const [noIntervention, setNoIntervention] = useState(false);
   const [noInterventionReason, setNoInterventionReason] = useState("");
-  const dragRef = useRef<{
-    pointerId: number;
-    startX: number;
-    startY: number;
-    centerX: number;
-    centerY: number;
-  } | null>(null);
+  const mapGestures = useMapGestures({
+    center,
+    zoom,
+    setCenter,
+    setZoom,
+    project,
+    unproject,
+    mapWidth: MAP_WIDTH,
+    mapHeight: MAP_HEIGHT,
+    maximumZoom: 19,
+    mousePan: mode === "pan",
+  });
 
   useEffect(() => {
     let active = true;
@@ -507,7 +511,7 @@ export function FoRouteSection({ project: projectItem, initialSummary, onNotify,
   }
 
   function handleMapClick(event: MouseEvent<HTMLDivElement>) {
-    if (mode === "pan") return;
+    if (mapGestures.consumeSuppressedClick() || mode === "pan") return;
     const coordinate = mapCoordinate(event);
     if (mode === "client") {
       setEndA({
@@ -638,34 +642,6 @@ export function FoRouteSection({ project: projectItem, initialSummary, onNotify,
   function panMap(deltaX: number, deltaY: number) {
     const projectedCenter = project(center, zoom);
     setCenter(unproject({ x: projectedCenter.x + deltaX, y: projectedCenter.y + deltaY }, zoom));
-  }
-
-  function handlePointerDown(event: PointerEvent<HTMLDivElement>) {
-    if (mode !== "pan") return;
-    const projectedCenter = project(center, zoom);
-    dragRef.current = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      centerX: projectedCenter.x,
-      centerY: projectedCenter.y,
-    };
-    event.currentTarget.setPointerCapture(event.pointerId);
-  }
-
-  function handlePointerMove(event: PointerEvent<HTMLDivElement>) {
-    const drag = dragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    const rect = event.currentTarget.getBoundingClientRect();
-    const deltaX = ((event.clientX - drag.startX) / rect.width) * MAP_WIDTH;
-    const deltaY = ((event.clientY - drag.startY) / rect.height) * MAP_HEIGHT;
-    setCenter(unproject({ x: drag.centerX - deltaX, y: drag.centerY - deltaY }, zoom));
-  }
-
-  function handlePointerUp(event: PointerEvent<HTMLDivElement>) {
-    if (dragRef.current?.pointerId !== event.pointerId) return;
-    dragRef.current = null;
-    event.currentTarget.releasePointerCapture(event.pointerId);
   }
 
   function fitRoute() {
@@ -847,10 +823,11 @@ export function FoRouteSection({ project: projectItem, initialSummary, onNotify,
               role="application"
               aria-label="Hartă OpenStreetMap pentru trasarea cablului de fibră optică"
               onClick={handleMapClick}
-              onPointerDown={handlePointerDown}
-              onPointerMove={handlePointerMove}
-              onPointerUp={handlePointerUp}
-              onPointerCancel={handlePointerUp}
+              onPointerDown={mapGestures.onPointerDown}
+              onPointerMove={mapGestures.onPointerMove}
+              onPointerUp={mapGestures.onPointerUp}
+              onPointerCancel={mapGestures.onPointerCancel}
+              onWheel={mapGestures.onWheel}
             >
               <div className="fo-map-tiles" aria-hidden="true">
                 {tiles.map((tile) => (
@@ -922,8 +899,8 @@ export function FoRouteSection({ project: projectItem, initialSummary, onNotify,
               </button>
 
               <div className="fo-zoom" onClick={(event) => event.stopPropagation()}>
-                <button onClick={() => setZoom((current) => clamp(current + 1, 7, 18))} aria-label="Mărește harta">＋</button>
-                <button onClick={() => setZoom((current) => clamp(current - 1, 7, 18))} aria-label="Micșorează harta">−</button>
+                <button onClick={() => setZoom((current) => clamp(current + 1, 7, 19))} aria-label="Mărește harta">＋</button>
+                <button onClick={() => setZoom((current) => clamp(current - 1, 7, 19))} aria-label="Micșorează harta">−</button>
               </div>
               <div className="fo-pan-pad" onClick={(event) => event.stopPropagation()}>
                 <button onClick={() => panMap(0, -160)} aria-label="Mută harta spre nord">↑</button>
