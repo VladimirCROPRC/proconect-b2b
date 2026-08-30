@@ -1502,10 +1502,13 @@ export default function Home() {
               </aside>
             </div>
 
-            <section className="project-card activity-workflow-card">
-              <div className="card-heading"><div><h2>{activeProject.activityType === "Intervenție" ? "Flux dedicat intervențiilor" : "Flux dedicat survey"}</h2><p>Secțiune separată de documentația pentru instalări.</p></div></div>
-              <p>Etapele, fotografiile și informațiile specifice vor fi definite separat pentru această categorie.</p>
-            </section>
+            <FoRouteSection
+              project={activeProject}
+              variant="survey"
+              initialSummary={activeFieldDocumentation.route}
+              onNotify={showToast}
+              onSaved={saveRouteSummary}
+            />
           </div>
         )}
 
