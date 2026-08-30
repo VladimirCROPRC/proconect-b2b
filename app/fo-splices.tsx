@@ -183,6 +183,8 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
     mapHeight: MAP_HEIGHT,
     maximumZoom: 25,
   });
+  const mapFullscreen = useMapFullscreen();
+
   useEffect(() => {
     let active = true;
     fetch("/data/optix-sites.json")
