@@ -221,16 +221,80 @@ async function oneDriveDestination(token: string, rootId: string, projectId: str
   const sectionName = oneDriveSectionFolders[activity][section] ?? "99_Alte documente";
   return folder(token, projectFolder.id, sectionName);
 }
+function csvCell(value: unknown) {
+  return `"${String(value ?? "").replace(/"/g, """")}"`;
+}
+
+async function uploadSpliceSheet(token: string, projectId: string, destinationId: string) {
+  const row = await getRawDb().prepare(
+    "SELECT projects.client, projects.address, project_field_documentation.content_json AS documentation_json, project_reports.content_json AS report_json FROM projects LEFT JOIN project_field_documentation ON project_field_documentation.project_id = projects.id LEFT JOIN project_reports ON project_reports.project_id = projects.id WHERE projects.id = ? LIMIT 1"
+  ).bind(projectId).first<{ client: string; address: string; documentation_json?: string; report_json?: string }>();
+  if (!row?.documentation_json) return;
+
+  let documentation: { splices?: { noIntervention?: boolean; noInterventionReason?: string; count?: number; records?: Array<{ junction?: { code?: string; name?: string; documented?: boolean }; junctionKind?: string; network?: string; siteBuffer?: string; siteFiber?: string; clientBuffer?: string; clientFiber?: string }> } };
+  let report: { siteCode?: string; lec?: string } = {};
+  try {
+    documentation = JSON.parse(row.documentation_json);
+    if (row.report_json) report = JSON.parse(row.report_json);
+  } catch {
+    return;
+  }
+  if (!documentation.splices) return;
+
+  const splices = documentation.splices;
+  const lines: unknown[][] = [
+    ["FIȘĂ DE SUDURI FIBRĂ OPTICĂ"],
+    ["PROIECT", projectId],
+    ["CLIENT", row.client],
+    ["LOCAȚIE", row.address],
+    ["COD SITE", report.siteCode ?? ""],
+    ["CLIENT LEC", report.lec ?? ""],
+    ["TOTAL SUDURI", splices.count ?? splices.records?.length ?? 0],
+    [],
+  ];
+  if (splices.noIntervention) {
+    lines.push(["NU S-A INTERVENIT", splices.noInterventionReason ?? ""]);
+  } else {
+    lines.push(["NR.", "JONCȚIUNE", "NUME", "TIP / REȚEA", "TUB SITE", "FIBRĂ SITE", "TUB CLIENT", "FIBRĂ CLIENT"]);
+    for (const [index, record] of (splices.records ?? []).entries()) {
+      const kind = record.junction?.documented ? "Documentată" : record.junctionKind === "new" ? "Nouă" : "Existentă";
+      const network = record.network === "mobile" ? "Vodafone Mobil" : record.network === "fixed" ? "Vodafone Fixed" : "";
+      lines.push([
+        index + 1,
+        record.junction?.documented ? record.junction.code ?? "" : "Fără cod",
+        record.junction?.name ?? "",
+        [kind, network].filter(Boolean).join(" / "),
+        record.siteBuffer ?? "",
+        record.siteFiber ?? "",
+        record.clientBuffer ?? "",
+        record.clientFiber ?? "",
+      ]);
+    }
+  }
+
+  const csv = "\uFEFF" + lines.map((line) => line.map(csvCell).join(";")).join("\r\n");
+  const filename = `Fișa de suduri - ${readableFolderName(projectId)}.csv`;
+  await checked(await graph(token, `/me/drive/items/${encodeURIComponent(destinationId)}:/${encodeURIComponent(filename)}:/content`, {
+    method: "PUT",
+    headers: { "Content-Type": "text/csv; charset=utf-8" },
+    body: encoder.encode(csv),
+  }));
+}
+
 async function uploadJob(c: Connection, job: Job) {
-  // Project jobs create folders only. Records, reports and metadata stay in
-  // Cloudflare; only files explicitly uploaded by users are copied to OneDrive.
   const token = await tokenFor(c);
   if (job.kind === "project") {
     const project = await getRawDb().prepare("SELECT activity_type FROM projects WHERE id = ?").bind(job.item_id).first<{ activity_type?: OneDriveActivity }>();
     if (!project) return;
     const activity: OneDriveActivity = project.activity_type && project.activity_type in oneDriveActivityFolders ? project.activity_type : "Instalare";
     const activityFolder = await folder(token, c.root_id, oneDriveActivityFolders[activity]);
-    await folder(token, activityFolder.id, readableFolderName(job.item_id));
+    const projectFolder = await folder(token, activityFolder.id, readableFolderName(job.item_id));
+    const sections = await Promise.all(Object.entries(oneDriveSectionFolders[activity]).map(async ([section, name]) => ({
+      section,
+      item: await folder(token, projectFolder.id, name),
+    })));
+    const administrative = sections.find(({ section }) => section === "documents");
+    if (administrative) await uploadSpliceSheet(token, job.item_id, administrative.item.id);
     return;
   }
   const file = await getFileRow(job.item_id);
