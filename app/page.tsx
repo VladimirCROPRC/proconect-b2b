@@ -101,6 +101,7 @@ const emptyProject: Project = {
   cpeRequiresGrounding: false,
   sfp: false,
   mc: false,
+  mcType: "",
   terminalBox: false,
   status: "Planificat",
   date: "",
@@ -178,6 +179,7 @@ export default function Home() {
   const [ipwoFile, setIpwoFile] = useState<File | null>(null);
   const [spliceFile, setSpliceFile] = useState<File | null>(null);
   const [projectSaving, setProjectSaving] = useState(false);
+  const [mcSelected, setMcSelected] = useState(false);
   const [projectDataReady, setProjectDataReady] = useState(false);
   const [activeProjectId, setActiveProjectId] = useState("");
   const [clientService, setClientService] = useState<ServiceType>("Internet");
@@ -548,6 +550,7 @@ export default function Home() {
     setDeleteConfirmation("");
     setEditingCpe("");
     setEditingCpeRequiresGrounding(false);
+    setMcSelected(false);
     setIpwoName("");
     setSpliceName("");
     setIpwoFile(null);
@@ -557,6 +560,7 @@ export default function Home() {
   function openProjectEditor(project: Project) {
     setSelected(null);
     setEditingProject(project);
+    setMcSelected(project.mc);
     setIpwoName(project.ipwo === "Fișier neîncărcat" ? "" : project.ipwo);
     setSpliceName(project.splice === "Fișier neîncărcat" ? "" : project.splice);
     setIpwoFile(null);
@@ -597,6 +601,7 @@ export default function Home() {
       cpeRequiresGrounding: Boolean(selectedCpe?.requiresGrounding),
       sfp: form.get("sfp") === "on",
       mc: form.get("mc") === "on",
+      mcType: (form.get("mc") === "on" ? String(form.get("mcType") || "") : "") as Project["mcType"],
       terminalBox: form.get("terminalBox") === "on",
       status: "Planificat",
       date: "Astăzi",
@@ -658,6 +663,7 @@ export default function Home() {
       cpeRequiresGrounding: selectedCpe?.requiresGrounding ?? editingProject.cpeRequiresGrounding,
       sfp: form.get("sfp") === "on",
       mc: form.get("mc") === "on",
+      mcType: (form.get("mc") === "on" ? String(form.get("mcType") || "") : "") as Project["mcType"],
       terminalBox: form.get("terminalBox") === "on",
       status: String(form.get("status") || editingProject.status) as Project["status"],
       date: String(form.get("date") || editingProject.date),
@@ -955,7 +961,7 @@ export default function Home() {
       equipment: clientNoIntervention ? [] : [
         activeProject.cpe,
         ...(activeProject.sfp ? ["SFP optic"] : []),
-        ...(activeProject.mc ? ["Media Converter"] : []),
+        ...(activeProject.mc ? [`Media Converter${activeProject.mcType ? ` ${activeProject.mcType}` : ""}`] : []),
         ...(activeProject.terminalBox ? ["Terminal Box"] : []),
       ],
     };
@@ -1262,7 +1268,7 @@ export default function Home() {
                 <h1>{currentActivitySection.title}</h1>
                 <p>{currentActivityProjects.length ? <>Ai <strong>{projectMetrics.active} {projectMetrics.active === 1 ? "lucrare activă" : "lucrări active"}</strong>{projectMetrics.awaitingReview ? ` și ${projectMetrics.awaitingReview === 1 ? "o documentație care necesită verificare" : `${projectMetrics.awaitingReview} documentații care necesită verificare`}.` : "."}</> : `Nu există lucrări de ${currentActivitySection.singular} înregistrate momentan.`}</p>
               </div>
-              {canManageDocuments && <button className="primary-button" onClick={() => { setEditingProject(null); setModal("project"); }}><span>＋</span> {currentActivitySection.createLabel}</button>}
+              {canManageDocuments && <button className="primary-button" onClick={() => { setEditingProject(null); setMcSelected(false); setModal("project"); }}><span>＋</span> {currentActivitySection.createLabel}</button>}
             </section>
 
             <section className="metrics" aria-label="Rezumat proiecte">
@@ -1414,7 +1420,7 @@ export default function Home() {
                       <span className="install-state">De instalat</span>
                     </article>
                     {activeProject.sfp && <article className="install-equipment"><span className="equipment-symbol">SFP</span><div><small>MODUL OPTIC</small><strong>SFP conform proiectului</strong></div><span className="install-state">De instalat</span></article>}
-                    {activeProject.mc && <article className="install-equipment"><span className="equipment-symbol">MC</span><div><small>MEDIA CONVERTER</small><strong>MC conform proiectului</strong></div><span className="install-state">De instalat</span></article>}
+                    {activeProject.mc && <article className="install-equipment"><span className="equipment-symbol">MC</span><div><small>MEDIA CONVERTER</small><strong>{activeProject.mcType ? `MC ${activeProject.mcType}` : "MC conform proiectului"}</strong></div><span className="install-state">De instalat</span></article>}
                     {activeProject.terminalBox && <article className="install-equipment"><span className="equipment-symbol">TB</span><div><small>TERMINAȚIE</small><strong>Terminal Box</strong></div><span className="install-state">De instalat</span></article>}
                     {activeProject.cpeRequiresGrounding && <div className={clientHasNoGroundingSystem ? "grounding-requirement exception" : "grounding-requirement"}>
                       <div><span className="grounding-icon">PE</span><p><strong>Împământare obligatorie</strong><small>{clientHasNoGroundingSystem ? "Excepția va fi inclusă automat în procesul-verbal." : "Conectează echipamentul și fotografiază clar împământarea."}</small></p></div>
@@ -1568,9 +1574,9 @@ export default function Home() {
                 {editingProject && <><label><span>Status proiect *</span><select name="status" required defaultValue={editingProject.status}><option>Planificat</option><option>În desfășurare</option><option>De verificat</option><option>Finalizat</option></select></label><label><span>Programare *</span><input name="date" required defaultValue={editingProject.date} placeholder="ex. 26 aug, 09:30" /></label></>}
                 {isInstallationForm && <div className="wide"><span className="field-label">Echipamente suplimentare</span><div className="switch-row">
                   <label className="switch-card"><span><b>SFP</b><small>Modul optic</small></span><input type="checkbox" name="sfp" defaultChecked={editingProject ? editingProject.sfp : true} /><i /></label>
-                  <label className="switch-card"><span><b>MC</b><small>Media converter</small></span><input type="checkbox" name="mc" defaultChecked={editingProject?.mc} /><i /></label>
+                  <label className="switch-card"><span><b>MC</b><small>Media converter</small></span><input type="checkbox" name="mc" checked={mcSelected} onChange={(event) => setMcSelected(event.target.checked)} /><i /></label>
                   <label className="switch-card"><span><b>Terminal Box</b><small>Cutie terminală</small></span><input type="checkbox" name="terminalBox" defaultChecked={editingProject ? editingProject.terminalBox : true} /><i /></label>
-                </div></div>}
+                </div>{mcSelected && <label className="wide"><span>Tip Media Converter *</span><select name="mcType" required defaultValue={editingProject?.mcType || ""}><option value="" disabled>Selectează tipul MC</option><option value="100 Mbps">100 Mbps</option><option value="1 Gbps">1 Gbps</option><option value="JumboFrame">JumboFrame</option></select><small>Tipul selectat va apărea în documentația proiectului și în fișa de materiale.</small></label>}</div>}
               </div></div>
               {isInstallationForm && <div className="form-section"><h3><span>3</span> Documente</h3><div className="upload-grid">
                 <label className={ipwoName ? "upload-box has-file" : "upload-box"}><input type="file" accept=".pdf,.doc,.docx" onChange={(event) => { const file = event.target.files?.[0] ?? null; setIpwoFile(file); setIpwoName(file?.name ?? editingProject?.ipwo ?? ""); }} /><b>{ipwoName ? "✓" : "↑"}</b><strong>{ipwoName || "Încarcă IPWO"}</strong><small>{ipwoFile ? "Fișier nou selectat" : editingProject && ipwoName ? "Document existent · selectează pentru înlocuire" : "PDF sau DOC, max. 20 MB"}</small></label>
