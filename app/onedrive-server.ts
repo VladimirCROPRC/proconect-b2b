@@ -146,7 +146,7 @@ export async function disconnectOneDrive() {
   // Remote archives are deliberately retained. Revoke consent separately in Microsoft.
 }
 export async function queueOneDrive(kind: "file" | "project", id: string) {
-  if (kind !== "file" || !usesOneDrive(await backupMode())) return;
+  if (!usesOneDrive(await backupMode())) return;
   await getRawDb().prepare("INSERT INTO onedrive_jobs (id, kind, item_id, revision, done_revision, attempts, next_at, last_error) VALUES (?, ?, ?, 1, 0, 0, 0, '') ON CONFLICT(id) DO UPDATE SET revision = revision + 1, attempts = 0, next_at = 0, last_error = ''")
     .bind(`${kind}:${id}`, kind, id).run();
 }
@@ -154,14 +154,15 @@ export async function seedOneDrive() {
   if (!usesOneDrive(await backupMode())) return;
   await getRawDb().batch([
     getRawDb().prepare("INSERT OR IGNORE INTO onedrive_jobs (id, kind, item_id) SELECT 'file:' || id, 'file', id FROM project_files"),
-    getRawDb().prepare("DELETE FROM onedrive_jobs WHERE kind = 'project'"),
+    getRawDb().prepare("INSERT OR IGNORE INTO onedrive_jobs (id, kind, item_id) SELECT 'project:' || id, 'project', id FROM projects"),
   ]);
 }
 export async function retryOneDrive() {
   await seedOneDrive();
   await getRawDb().batch([
     getRawDb().prepare("DELETE FROM onedrive_jobs WHERE kind = 'file' AND NOT EXISTS (SELECT 1 FROM project_files WHERE project_files.id = onedrive_jobs.item_id)"),
-    getRawDb().prepare("UPDATE onedrive_jobs SET revision = revision + 1, attempts = 0, next_at = 0, last_error = '' WHERE kind = 'file' AND EXISTS (SELECT 1 FROM project_files WHERE project_files.id = onedrive_jobs.item_id)"),
+    getRawDb().prepare("DELETE FROM onedrive_jobs WHERE kind = 'project' AND NOT EXISTS (SELECT 1 FROM projects WHERE projects.id = onedrive_jobs.item_id)"),
+    getRawDb().prepare("UPDATE onedrive_jobs SET revision = revision + 1, attempts = 0, next_at = 0, last_error = '' WHERE (kind = 'file' AND EXISTS (SELECT 1 FROM project_files WHERE project_files.id = onedrive_jobs.item_id)) OR (kind = 'project' AND EXISTS (SELECT 1 FROM projects WHERE projects.id = onedrive_jobs.item_id))"),
   ]);
 }
 export async function oneDriveStatus() {
@@ -221,10 +222,17 @@ async function oneDriveDestination(token: string, rootId: string, projectId: str
   return folder(token, projectFolder.id, sectionName);
 }
 async function uploadJob(c: Connection, job: Job) {
-  // OneDrive contains only files explicitly uploaded by users. Project records,
-  // reports and metadata stay in Cloudflare and are not exported as JSON.
-  if (job.kind !== "file") return;
+  // Project jobs create folders only. Records, reports and metadata stay in
+  // Cloudflare; only files explicitly uploaded by users are copied to OneDrive.
   const token = await tokenFor(c);
+  if (job.kind === "project") {
+    const project = await getRawDb().prepare("SELECT activity_type FROM projects WHERE id = ?").bind(job.item_id).first<{ activity_type?: OneDriveActivity }>();
+    if (!project) return;
+    const activity: OneDriveActivity = project.activity_type && project.activity_type in oneDriveActivityFolders ? project.activity_type : "Instalare";
+    const activityFolder = await folder(token, c.root_id, oneDriveActivityFolders[activity]);
+    await folder(token, activityFolder.id, readableFolderName(job.item_id));
+    return;
+  }
   const file = await getFileRow(job.item_id);
   if (!file) return;
   const projectId = file.project_id;
