@@ -5785,7 +5785,7 @@ td > small {
 
 .splice-record-list article {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   gap: 8px;
   align-items: start;
   padding: 8px;
@@ -9605,7 +9605,7 @@ td > small {
 
 .intervention-records-list > article {
   display: grid;
-  grid-template-columns: 38px minmax(0, 1fr) auto;
+  grid-template-columns: 38px minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 10px;
   padding: 11px 7px;
@@ -9639,6 +9639,35 @@ td > small {
   color: #347768;
   font-size: 13px;
   white-space: nowrap;
+}
+
+.record-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.record-delete-button {
+  min-height: 34px;
+  padding: 0 11px;
+  border: 1px solid #cf5b68;
+  border-radius: 4px;
+  color: #a92f40;
+  background: #fff7f8;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.record-delete-button:hover {
+  background: #ffebee;
+}
+
+.record-delete-button:disabled {
+  cursor: default;
+  opacity: .5;
 }
 
 .intervention-documentation-layout {
@@ -10997,5 +11026,20 @@ td > small {
 
   .splice-sheet-table {
     font-size: 9pt;
+  }
+}
+
+@media (max-width: 700px) {
+  .splice-record-list article,
+  .intervention-records-list > article {
+    grid-template-columns: 32px minmax(0, 1fr);
+  }
+
+  .splice-record-list article > em,
+  .intervention-records-list > article > b,
+  .splice-record-list article > .record-delete-button,
+  .intervention-records-list > article > .record-delete-button {
+    grid-column: 2;
+    justify-self: start;
   }
 }
