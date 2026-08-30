@@ -180,7 +180,7 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
     unproject,
     mapWidth: MAP_WIDTH,
     mapHeight: MAP_HEIGHT,
-    maximumZoom: 19,
+    maximumZoom: 25,
   });
   useEffect(() => {
     let active = true;
@@ -214,20 +214,25 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
   }, [projectItem.id, initialSummary]);
 
   const tiles = useMemo(() => {
+    const sourceZoom = Math.min(zoom, 19);
+    const overzoomScale = 2 ** (zoom - sourceZoom);
+    const renderedTileSize = TILE_SIZE * overzoomScale;
     const projectedCenter = project(center, zoom);
-    const tilesAcross = 2 ** zoom;
-    const firstX = Math.floor((projectedCenter.x - MAP_WIDTH / 2) / TILE_SIZE);
-    const lastX = Math.floor((projectedCenter.x + MAP_WIDTH / 2) / TILE_SIZE);
-    const firstY = Math.floor((projectedCenter.y - MAP_HEIGHT / 2) / TILE_SIZE);
-    const lastY = Math.floor((projectedCenter.y + MAP_HEIGHT / 2) / TILE_SIZE);
-    const result: Array<{ key: string; x: number; y: number; urlX: number; urlY: number }> = [];
+    const tilesAcross = 2 ** sourceZoom;
+    const firstX = Math.floor((projectedCenter.x - MAP_WIDTH / 2) / renderedTileSize);
+    const lastX = Math.floor((projectedCenter.x + MAP_WIDTH / 2) / renderedTileSize);
+    const firstY = Math.floor((projectedCenter.y - MAP_HEIGHT / 2) / renderedTileSize);
+    const lastY = Math.floor((projectedCenter.y + MAP_HEIGHT / 2) / renderedTileSize);
+    const result: Array<{ key: string; x: number; y: number; size: number; sourceZoom: number; urlX: number; urlY: number }> = [];
     for (let tileX = firstX; tileX <= lastX; tileX += 1) {
       for (let tileY = firstY; tileY <= lastY; tileY += 1) {
         if (tileY < 0 || tileY >= tilesAcross) continue;
         result.push({
           key: `${zoom}-${tileX}-${tileY}`,
-          x: tileX * TILE_SIZE - (projectedCenter.x - MAP_WIDTH / 2),
-          y: tileY * TILE_SIZE - (projectedCenter.y - MAP_HEIGHT / 2),
+          x: tileX * renderedTileSize - (projectedCenter.x - MAP_WIDTH / 2),
+          y: tileY * renderedTileSize - (projectedCenter.y - MAP_HEIGHT / 2),
+          size: renderedTileSize,
+          sourceZoom,
           urlX: ((tileX % tilesAcross) + tilesAcross) % tilesAcross,
           urlY: tileY,
         });
@@ -516,7 +521,7 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
             aria-label="Hartă OpenStreetMap pentru alegerea joncțiunii sudurii"
           >
             <div className="fo-map-tiles" aria-hidden="true">
-              {tiles.map((tile) => <img key={tile.key} src={`https://tile.openstreetmap.org/${zoom}/${tile.urlX}/${tile.urlY}.png`} alt="" draggable={false} style={{ left: `${(tile.x / MAP_WIDTH) * 100}%`, top: `${(tile.y / MAP_HEIGHT) * 100}%`, width: `${(TILE_SIZE / MAP_WIDTH) * 100}%`, height: `${(TILE_SIZE / MAP_HEIGHT) * 100}%` }} />)}
+              {tiles.map((tile) => <img key={tile.key} src={`https://tile.openstreetmap.org/${tile.sourceZoom}/${tile.urlX}/${tile.urlY}.png`} alt="" draggable={false} style={{ left: `${(tile.x / MAP_WIDTH) * 100}%`, top: `${(tile.y / MAP_HEIGHT) * 100}%`, width: `${(tile.size / MAP_WIDTH) * 100}%`, height: `${(tile.size / MAP_HEIGHT) * 100}%` }} />)}
             </div>
             {visibleSites.map(({ site, point }) => (
               <button className={`fo-site-marker ${junction?.id === site.id ? "selected" : ""}`} style={{ left: `${(point.x / MAP_WIDTH) * 100}%`, top: `${(point.y / MAP_HEIGHT) * 100}%` }} key={site.id} title={`${site.code} · ${site.name}`} onClick={(event) => { event.stopPropagation(); chooseDocumented(site); }}><i /></button>
@@ -540,7 +545,7 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
               <span className={gpsLoading ? "loading" : ""}>{gpsLoading ? "↻" : currentLocation ? "✓" : "⌖"}</span>
               <div><strong>{gpsLoading ? "Se caută poziția…" : currentLocation ? "Locație identificată" : "Locația mea"}</strong><small>{currentLocation ? `Precizie ±${Math.round(currentLocation.accuracy)} m` : "Centrează harta sudurilor"}</small></div>
             </button>
-            <div className="fo-zoom" onClick={(event) => event.stopPropagation()}><button onClick={() => setZoom((current) => clamp(current + 1, 7, 19))}>＋</button><button onClick={() => setZoom((current) => clamp(current - 1, 7, 19))}>−</button></div>
+            <div className="fo-zoom" onClick={(event) => event.stopPropagation()}><button onClick={() => setZoom((current) => clamp(current + 1, 7, 25))}>＋</button><button onClick={() => setZoom((current) => clamp(current - 1, 7, 25))}>−</button></div>
             <a className="fo-attribution" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>© OpenStreetMap contributors</a>
           </div>
           <div className="splice-map-search">
