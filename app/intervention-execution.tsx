@@ -560,7 +560,7 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
         <div className="splice-map-head intervention-map-head"><div><small>HARTĂ OPTIX ȘI OPENSTREETMAP</small><strong>{draft?.type ? activityCatalog[draft.type].title : "Puncte și activități ale intervenției"}</strong></div>
           <div className="intervention-map-actions">
             {draft?.type !== "junction-installation" && <button type="button" className={mode === "documented" ? "active" : ""} onClick={() => setMode("documented")} disabled={!draft?.type}>Optix</button>}
-            <button type="button" className={mode === "undocumented" ? "active" : ""} onClick={() => setMode("undocumented")} disabled={!draft?.type}>Pe hartă</button>
+            <button type="button" className={mode === "undocumented" ? "active" : ""} onClick={() => setMode("undocumented")} disabled={!draft?.type}>J fără cod</button>
             {draft?.type === "fo-installation" && <button type="button" className={mode === "draw" ? "active" : ""} onClick={() => setMode("draw")}>Trasează</button>}
             <button type="button" className="fo-fullscreen-toggle" onClick={mapFullscreen.toggleFullscreen} aria-pressed={mapFullscreen.fullscreen}>{mapFullscreen.fullscreen ? "× Închide" : "⛶ Ecran complet"}</button>
           </div>
