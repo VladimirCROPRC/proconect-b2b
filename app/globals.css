@@ -2858,6 +2858,7 @@ td > small {
 }
 
 .fo-cable-input input,
+.fo-cable-input select,
 .fo-length-input input {
   width: 100%;
   height: 35px;
@@ -2871,6 +2872,7 @@ td > small {
 }
 
 .fo-cable-input input:focus,
+.fo-cable-input select:focus,
 .fo-length-input input:focus {
   border-color: #626b90;
   box-shadow: 0 0 0 3px rgba(98, 107, 144, .12);
@@ -7375,6 +7377,7 @@ td > small {
   }
 
   .fo-cable-input input,
+.fo-cable-input select,
   .fo-length-input input,
   .fo-aerial-material-grid input,
   .splice-color-field select {
