@@ -409,6 +409,68 @@ export async function deleteProject(projectId: string) {
   return { projectId: project.id, cleanupFailures };
 }
 
+function reportBullets(lines: string[]) {
+  return lines.map((line) => `–  ${line}`).join("\n");
+}
+
+async function refreshGeneratedReport(projectId: string, documentation: ProjectFieldDocumentation, project: ProjectRow, account: AuthenticatedAccount) {
+  const saved = await readReport(projectId);
+  const report: Record<string, string> = { ...(saved?.report ?? {}) };
+  report.title ||= "Raport acceptanță";
+
+  if (documentation.site) {
+    const site = documentation.site;
+    report.site = reportBullets(site.noIntervention
+      ? [`Nu s-a intervenit în secțiunea Site. Motiv: ${site.noInterventionReason}.`]
+      : [
+          `S-a cablat portul ${site.etnPort} din switch ${site.etn}.`,
+          `Conexiunea a fost realizată în ODF ${site.odf}, portul ${site.odfPort}.`,
+        ]);
+  }
+
+  const routeLines: string[] = [];
+  if (documentation.route) {
+    const route = documentation.route;
+    if (route.noIntervention) {
+      routeLines.push(`Nu s-a intervenit la traseul FO. Motiv: ${route.noInterventionReason}.`);
+    } else if (route.segments.length) {
+      routeLines.push(`S-a instalat un traseu FO între ${route.junction.label} și locația clientului, în lungime de ${route.totalLengthMeters.toLocaleString("ro-RO")} m, din care ${route.segments.map((segment) => `${segment.lengthMeters.toLocaleString("ro-RO")} m ${segment.label.toLocaleLowerCase("ro-RO")}`).join(", ")}.`);
+      routeLines.push(`Tipuri de cablu utilizate: ${route.segments.map((segment) => `${segment.cableType} (${segment.label.toLocaleLowerCase("ro-RO")})`).join(", ")}.`);
+    } else if (route.totalLengthMeters > 0) {
+      routeLines.push(`Lungimea traseului FO documentat pe hartă este de ${route.totalLengthMeters.toLocaleString("ro-RO")} m.`);
+    }
+  }
+  if (documentation.splices?.noIntervention) {
+    routeLines.push(`Nu s-a intervenit la sudurile FO. Motiv: ${documentation.splices.noInterventionReason}.`);
+  } else if (documentation.splices?.count) {
+    routeLines.push(`Total suduri FO: ${documentation.splices.count}.`);
+  }
+  if (routeLines.length) report.route = reportBullets(routeLines);
+
+  if (documentation.client) {
+    const client = documentation.client;
+    if (client.noIntervention) {
+      report.client = reportBullets([`Nu s-a intervenit la client. Motiv: ${client.noInterventionReason}.`]);
+    } else {
+      const equipment = client.equipment?.length ? client.equipment : [
+        project.cpe,
+        ...(project.sfp ? ["SFP optic"] : []),
+        ...(project.mc ? ["Media Converter"] : []),
+        ...(project.terminal_box ? ["Terminal Box"] : []),
+      ];
+      const clientLines = [
+        `S-a instalat și configurat echipamentul ${equipment[0] || project.cpe}.`,
+        ...equipment.slice(1).map((item) => `S-a instalat ${item}.`),
+      ];
+      if (client.service) clientLines.push(`Serviciul documentat: ${client.service}.`);
+      if (client.clientHasNoGroundingSystem) clientLines.push("Clientul declară că locația nu dispune de sistem de împământare, iar echipamentul nu a putut fi conectat la împământare.");
+      report.client = reportBullets(clientLines);
+    }
+  }
+
+  await writeReport(projectId, report, account);
+}
+
 export async function saveFieldDocumentation(projectId: string, section: string, content: unknown, account: AuthenticatedAccount) {
   if (!["client", "route", "splices", "site", "intervention"].includes(section)) {
     return { error: "Secțiunea de documentație nu este validă.", status: 400 as const };
@@ -594,10 +656,12 @@ export async function saveFieldDocumentation(projectId: string, section: string,
       saveDocumentation,
       getRawDb().prepare("UPDATE projects SET status = ?, updated_at = ? WHERE id = ?").bind("Finalizat", now, projectId),
     ]);
+    await refreshGeneratedReport(projectId, next, project, account);
     return { documentation: next, project: finalizedProject };
   }
 
   await saveDocumentation.run();
+  await refreshGeneratedReport(projectId, next, project, account);
   return { documentation: next };
 }
 
