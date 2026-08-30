@@ -64,6 +64,7 @@ type RoutePhoto = {
 
 type Props = {
   project: RouteProject;
+  variant?: "installation" | "survey";
   initialSummary?: RouteFieldSummary;
   onNotify: (message: string) => void;
   onSaved?: (summary: RouteFieldSummary) => Promise<void> | void;
@@ -215,7 +216,8 @@ function lowerLatitudeBound(rows: OptixSiteRow[], latitude: number) {
   return low;
 }
 
-export function FoRouteSection({ project: projectItem, initialSummary, onNotify, onSaved }: Props) {
+export function FoRouteSection({ project: projectItem, variant = "installation", initialSummary, onNotify, onSaved }: Props) {
+  const surveyMode = variant === "survey";
   const [sites, setSites] = useState<OptixSiteRow[]>([]);
   const [sitesStatus, setSitesStatus] = useState<"loading" | "ready" | "error">("loading");
   const [sourceName, setSourceName] = useState("Optix Sites.xlsx");
@@ -448,12 +450,14 @@ export function FoRouteSection({ project: projectItem, initialSummary, onNotify,
     endA &&
     endB &&
     undocumentedJunctionReady &&
-    selectedInstallationMethods.length &&
-    !incompleteCableMethod &&
-    !incompleteLengthMethod &&
-    !incompleteAerialMaterial &&
-    requiredRoutePhotos &&
-    !missingRoutePhotos
+    (surveyMode || (
+      selectedInstallationMethods.length &&
+      !incompleteCableMethod &&
+      !incompleteLengthMethod &&
+      !incompleteAerialMaterial &&
+      requiredRoutePhotos &&
+      !missingRoutePhotos
+    ))
   );
 
   function resetRoute() {
@@ -694,23 +698,23 @@ export function FoRouteSection({ project: projectItem, initialSummary, onNotify,
       onNotify("Alege dacă joncțiunea nedocumentată aparține rețelei Vodafone Mobil sau Vodafone Fixed.");
       return;
     }
-    if (!selectedInstallationMethods.length) {
+    if (!surveyMode && !selectedInstallationMethods.length) {
       onNotify("Selectează cel puțin un tip de instalare pentru traseul FO.");
       return;
     }
-    if (incompleteCableMethod) {
+    if (!surveyMode && incompleteCableMethod) {
       onNotify(`Completează tipul de cablu pentru „${installationCatalog[incompleteCableMethod].title}”.`);
       return;
     }
-    if (incompleteLengthMethod) {
+    if (!surveyMode && incompleteLengthMethod) {
       onNotify(`Completează lungimea instalată pentru „${installationCatalog[incompleteLengthMethod].title}”.`);
       return;
     }
-    if (incompleteAerialMaterial) {
+    if (!surveyMode && incompleteAerialMaterial) {
       onNotify(`Completează cantitatea pentru „${aerialMaterialCatalog[incompleteAerialMaterial]}” la instalarea aeriană.`);
       return;
     }
-    if (missingRoutePhotos) {
+    if (!surveyMode && missingRoutePhotos) {
       onNotify(`Mai sunt necesare ${missingRoutePhotos} ${missingRoutePhotos === 1 ? "fotografie geolocalizată" : "fotografii geolocalizate"} pentru această lungime.`);
       return;
     }
@@ -725,13 +729,13 @@ export function FoRouteSection({ project: projectItem, initialSummary, onNotify,
     const summary: RouteFieldSummary = {
       noIntervention: false,
       noInterventionReason: "",
-      segments: selectedInstallationMethods.map((method) => ({
+      segments: surveyMode ? [] : selectedInstallationMethods.map((method) => ({
         method,
         label: installationCatalog[method].title,
         cableType: cableTypes[method].trim(),
         lengthMeters: parseLengthMeters(installationLengths[method]),
       })),
-      totalLengthMeters: totalInstalledLength,
+      totalLengthMeters: surveyMode ? Math.round(routeDistance) : totalInstalledLength,
       junction: {
         label: endB.documented ? `${endB.code} · ${endB.name}` : `Joncțiune nedocumentată · ${undocumentedJunctionType === "new" ? "nou instalată" : "existentă"}`,
         documented: endB.documented,
@@ -749,7 +753,7 @@ export function FoRouteSection({ project: projectItem, initialSummary, onNotify,
     };
     try {
       await onSaved?.(summary);
-      onNotify(`Traseul FO pentru ${projectItem.id} a fost salvat permanent · ${junctionDetail}${networkDetail} · ${formatLengthMeters(totalInstalledLength)} instalați · ${selectedInstallationMethods.length} ${selectedInstallationMethods.length === 1 ? "tip de instalare" : "tipuri de instalare"}.`);
+      onNotify(surveyMode ? `Harta Survey pentru ${projectItem.id} a fost salvată · ${junctionDetail}${networkDetail} · ${formatDistance(routeDistance)}.` : `Traseul FO pentru ${projectItem.id} a fost salvat permanent · ${junctionDetail}${networkDetail} · ${formatLengthMeters(totalInstalledLength)} instalați · ${selectedInstallationMethods.length} ${selectedInstallationMethods.length === 1 ? "tip de instalare" : "tipuri de instalare"}.`);
     } catch (error) {
       onNotify(error instanceof Error ? error.message : "Traseul FO nu a putut fi salvat.");
     }
@@ -772,12 +776,12 @@ export function FoRouteSection({ project: projectItem, initialSummary, onNotify,
   };
 
   return (
-    <div className="page-wrap fo-route-page">
+    <div className={`page-wrap fo-route-page ${surveyMode ? "survey-route-page" : ""}`}>
       <section className="page-heading client-heading">
         <div>
-          <p className="eyebrow">DOCUMENTAȚIE TRASEU FIBRĂ OPTICĂ</p>
-          <h1>Traseu FO</h1>
-          <p>Marchează clientul, alege joncțiunea și trasează cablul direct pe hartă.</p>
+          <p className="eyebrow">{surveyMode ? "HARTĂ SURVEY" : "DOCUMENTAȚIE TRASEU FIBRĂ OPTICĂ"}</p>
+          <h1>{surveyMode ? "Hartă Survey" : "Traseu FO"}</h1>
+          <p>{surveyMode ? "Marchează clientul, traseul propus și joncțiunea observată." : "Marchează clientul, alege joncțiunea și trasează cablul direct pe hartă."}</p>
         </div>
         <div className="field-technician">
           <span className="avatar">{projectItem.technician.split(" ").map((part) => part[0]).join("").slice(0, 2)}</span>
@@ -797,15 +801,15 @@ export function FoRouteSection({ project: projectItem, initialSummary, onNotify,
         </div>
       </section>
 
-      <NoInterventionControl
+      {!surveyMode && <NoInterventionControl
         sectionLabel="Traseu FO"
         noIntervention={noIntervention}
         reason={noInterventionReason}
         onSelectionChange={setNoIntervention}
         onReasonChange={setNoInterventionReason}
-      />
+      />}
 
-      {noIntervention ? (
+      {!surveyMode && noIntervention ? (
         <section className="no-intervention-save-card">
           <span>—</span>
           <div><strong>Traseu FO fără intervenție</strong><p>Nu sunt necesare traseul pe hartă, materialele, lungimile sau fotografiile de execuție. Motivul introdus va apărea în raport.</p></div>
