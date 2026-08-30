@@ -12,6 +12,7 @@ import type { RouteFieldSummary } from "./field-documentation";
 import { NoInterventionControl } from "./no-intervention-control";
 import { useMapGestures } from "./use-map-gestures";
 import { useMapFullscreen } from "./use-map-fullscreen";
+import { fetchMapSites } from "./map-sites-client";
 
 type Coordinate = { lat: number; lon: number };
 type MapMode = "pan" | "client" | "route" | "undocumented";
@@ -272,12 +273,7 @@ export function FoRouteSection({ project: projectItem, variant = "installation",
 
   useEffect(() => {
     let active = true;
-    fetch("/data/optix-sites.json")
-      .then((response) => {
-        if (!response.ok) throw new Error("Date indisponibile");
-        return response.json() as Promise<OptixPayload>;
-      })
-      .then((payload) => {
+    fetchMapSites().then((payload) => {
         if (!active) return;
         setSites(payload.sites);
         setSourceName(payload.source);
