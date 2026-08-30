@@ -1,5 +1,5 @@
 import * as google from "./google-drive-server";
-import { backupMode, queueOneDrive } from "./onedrive-server";
+import { backupMode, deleteOneDriveFileCopy, queueOneDrive } from "./onedrive-server";
 import { usesGoogle } from "./onedrive-core";
 import { getFileRow } from "./project-server";
 
@@ -18,4 +18,16 @@ export async function syncFileIfConnected(id: string) {
   await both("file", id, () => google.syncFileIfConnected(id));
   const file = await getFileRow(id);
   if (file) await queueOneDrive("project", file.project_id);
+}
+
+export async function deleteFileBackups(fileId: string) {
+  const outcomes = await Promise.allSettled([
+    google.deleteDriveFileCopy(fileId),
+    deleteOneDriveFileCopy(fileId),
+  ]);
+  const failures = outcomes.filter((result) => result.status === "rejected") as PromiseRejectedResult[];
+  if (failures.length) {
+    const messages = failures.map((failure) => failure.reason instanceof Error ? failure.reason.message : "Destinația externă a refuzat ștergerea.");
+    throw new Error(messages.join(" "));
+  }
 }
