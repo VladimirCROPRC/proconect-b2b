@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { getRawDb } from "../db";
 import { bucket, getFileRow } from "./project-server";
+import { buildAcceptanceReportDocx } from "./report-docx";
 import { base64url, decode64, fixedOrigin, retryDelay, safeName, usesOneDrive, validMode, type BackupMode } from "./onedrive-core";
 
 type Environment = { PROCONECT_APP_URL?: string; ONEDRIVE_CLIENT_ID?: string; ONEDRIVE_TENANT_ID?: string; ONEDRIVE_CLIENT_SECRET?: string; ONEDRIVE_ENCRYPTION_KEY?: string };
@@ -225,6 +226,20 @@ function csvCell(value: unknown) {
   return `"${String(value ?? "").replace(/"/g, '""')}"`;
 }
 
+async function uploadAcceptanceReport(token: string, projectId: string, destinationId: string) {
+  const saved = await getRawDb().prepare("SELECT content_json FROM project_reports WHERE project_id = ? LIMIT 1").bind(projectId).first<{ content_json: string }>();
+  if (!saved) return;
+  let report: Record<string, string>;
+  try { report = JSON.parse(saved.content_json); } catch { return; }
+  const document = buildAcceptanceReportDocx(projectId, report);
+  const filename = `Raport acceptanță - ${readableFolderName(projectId)}.docx`;
+  await checked(await graph(token, `/me/drive/items/${encodeURIComponent(destinationId)}:/${encodeURIComponent(filename)}:/content`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document" },
+    body: document,
+  }));
+}
+
 async function uploadSpliceSheet(token: string, projectId: string, destinationId: string) {
   const row = await getRawDb().prepare(
     "SELECT projects.client, projects.address, project_field_documentation.content_json AS documentation_json, project_reports.content_json AS report_json FROM projects LEFT JOIN project_field_documentation ON project_field_documentation.project_id = projects.id LEFT JOIN project_reports ON project_reports.project_id = projects.id WHERE projects.id = ? LIMIT 1"
@@ -294,7 +309,10 @@ async function uploadJob(c: Connection, job: Job) {
       item: await folder(token, projectFolder.id, name),
     })));
     const administrative = sections.find(({ section }) => section === "documents");
-    if (administrative) await uploadSpliceSheet(token, job.item_id, administrative.item.id);
+    if (administrative) {
+      await uploadAcceptanceReport(token, job.item_id, administrative.item.id);
+      await uploadSpliceSheet(token, job.item_id, administrative.item.id);
+    }
     return;
   }
   const file = await getFileRow(job.item_id);
