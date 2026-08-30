@@ -7643,33 +7643,15 @@ td > small {
   font-weight: 500;
 }
 
-.report-code-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-  margin-top: 22px;
+.report-metadata-line {
+  margin: 0 0 12px;
+  color: #172443;
+  font-size: 16px;
+  line-height: 1.5;
 }
 
-.report-code-grid label {
-  display: grid;
-  gap: 6px;
-  color: #56627a;
-  font-size: 11px;
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
-.report-code-grid input {
-  width: 100%;
-  padding: 9px 10px;
-  border: 1px solid #dce2eb;
-  border-radius: 6px;
-  color: #1d2b4f;
-  background: #fff;
-  font: inherit;
-  font-size: 14px;
-  font-weight: 600;
-  text-transform: none;
+.report-metadata-line strong {
+  font-weight: 700;
 }
 
 .editable-report-section {
