@@ -548,7 +548,7 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
     </article>;
   }
 
-  const mapInstruction = !draft ? "Pornește cu „Activitate nouă”" : !draft.type ? "Alege tipul activității" : mode === "pan"
+  const mapInstruction = !draft ? (previewJunction ? "Joncțiune găsită · pornește Activitate nouă" : "Caută joncțiunea sau pornește Activitate nouă") : !draft.type ? "Alege tipul activității" : mode === "pan"
     ? "Trage harta pentru deplasare" : mode === "draw" ? "Atinge succesiv traseul cablului" : mode === "undocumented"
       ? `Atinge locul joncțiunii ${activeSlot === "a" ? "A" : activeSlot === "b" ? "B" : "nedocumentate"}`
       : `Alege un punct Optix${draft.type === "fo-installation" ? ` pentru capătul ${activeSlot.toUpperCase()}` : ""}`;
@@ -626,7 +626,7 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
 
       <aside className="intervention-activity-panel">
         {!draft ? <section className="splice-empty-card intervention-empty-card"><span>{previewJunction ? "✓" : "＋"}</span><h2>{previewJunction ? previewJunction.code : "Nicio activitate în editare"}</h2><p>{previewJunction ? `Joncțiune găsită la ${formatCoordinate(previewJunction)}. Va fi preselectată pentru activitatea compatibilă.` : "Caută mai întâi joncțiunea sau adaugă direct o activitate de execuție."}</p>{previewJunction && <a className="splice-preselected-maps" href={googleMapsUrl(previewJunction)} target="_blank" rel="noreferrer">Google Maps ↗</a>}<button type="button" onClick={beginActivity}>＋ Activitate nouă</button></section>
-          : !draft.type ? <section className="splice-empty-card intervention-empty-card"><span>4</span><h2>Alege tipul activității</h2><p>Selectează una dintre cele patru operațiuni pentru a activa harta și formularul dedicat.</p><button type="button" onClick={() => void cancelActivity()}>Anulează activitatea</button></section>
+          : !draft.type ? <section className="splice-empty-card intervention-empty-card"><span>1</span><h2>Alege tipul activității</h2><p>Selectează una dintre cele patru operațiuni pentru a activa harta și formularul dedicat.</p><button type="button" onClick={() => void cancelActivity()}>Anulează activitatea</button></section>
             : <><section className="project-card intervention-activity-form"><div className="card-heading"><div><h2>2. {activityCatalog[draft.type].title}</h2><p>{activityCatalog[draft.type].description}</p></div></div>
               <div className="intervention-activity-form-body">
                 {draft.type === "fo-installation" ? <>
