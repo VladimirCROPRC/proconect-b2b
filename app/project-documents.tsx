@@ -299,10 +299,10 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
             <div className="document-toolbar"><div><span>W</span><p><strong>Raport acceptanță · {project.id}</strong><small>Model: Raport acceptanta.docx</small></p></div><div><button onClick={regenerate}>↻ Generează din teren</button><button className="primary-button" onClick={saveReport}>Salvează</button></div></div>
             <article className="acceptance-paper">
               <input className="report-title-input" value={report.title} onChange={(event) => updateReport("title", event.target.value)} aria-label="Titlul raportului" />
-              <input className="report-site-input" value={report.siteLabel} onChange={(event) => updateReport("siteLabel", event.target.value)} aria-label="Identificator proiect sau site" />
+              <input className="report-site-input" value={`Site ${report.siteCode || project.id}`} readOnly aria-label="Site și cod site" />
               <div className="report-code-grid">
                 <label><span>Cod site</span><input value={report.siteCode} onChange={(event) => updateReport("siteCode", event.target.value)} placeholder="Nespecificat" aria-label="Cod site client" /></label>
-                <label><span>LEC</span><input value={report.lec} onChange={(event) => updateReport("lec", event.target.value)} placeholder="Nespecificat" aria-label="Location Engineering Code" /></label>
+                <label><span>Client LEC</span><input value={report.lec} onChange={(event) => updateReport("lec", event.target.value)} placeholder="Nespecificat" aria-label="Location Engineering Code" /></label>
               </div>
               <section className="editable-report-section site-report-section">
                 <textarea value={report.site} onChange={(event) => updateReport("site", event.target.value)} rows={Math.max(2, report.site.split("\n").length + 1)} aria-label="Conținut secțiune Site" />
@@ -310,7 +310,7 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
               </section>
               {(["route", "client"] as const).map((section) => (
                 <section className="editable-report-section" key={section}>
-                  <h2>{section === "route" ? "Traseu" : "Client"}</h2>
+                  <h2>{section === "route" ? "Traseu" : `Client ${report.lec || ""}`.trim()}</h2>
                   <textarea value={report[section]} onChange={(event) => updateReport(section, event.target.value)} rows={Math.max(2, report[section].split("\n").length + 1)} aria-label={`Conținut secțiune ${section}`} />
                   <small>Fiecare rând este inclus ca punct distinct în raport.</small>
                 </section>
@@ -347,7 +347,7 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
               <div><small>CLIENT</small><strong>{project.client}</strong></div>
               <div><small>LOCAȚIE</small><strong>{project.address}</strong></div>
               <div><small>COD SITE</small><strong>{report.siteCode || "Nespecificat"}</strong></div>
-              <div><small>LEC</small><strong>{report.lec || "Nespecificat"}</strong></div>
+              <div><small>CLIENT LEC</small><strong>{report.lec || "Nespecificat"}</strong></div>
               <div><small>DIAGRAMĂ DE REFERINȚĂ</small><strong>{project.splice || "Neîncărcată"}</strong></div>
               <div><small>TOTAL SUDURI</small><strong>{fieldData.splices?.count ?? 0}</strong></div>
             </div>
