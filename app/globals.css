@@ -10658,17 +10658,145 @@ td > small {
   }
 }
 
+.material-sheet-card {
+  overflow: hidden;
+  border: 1px solid #dde2eb;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 12px 30px rgba(31, 42, 82, .08);
+}
+
+.material-sheet-paper {
+  max-width: 980px;
+  margin: 24px auto;
+  padding: 34px;
+  color: #172443;
+  background: #fff;
+}
+
+.material-sheet-paper > header,
+.material-sheet-paper > footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.material-sheet-paper > header {
+  padding-bottom: 18px;
+  border-bottom: 3px solid #35477f;
+}
+
+.material-sheet-paper > header h1 {
+  margin: 4px 0 0;
+  font-size: 28px;
+}
+
+.material-sheet-paper > header small,
+.material-sheet-project small {
+  color: #748096;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .06em;
+}
+
+.material-sheet-project {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin: 20px 0 28px;
+}
+
+.material-sheet-project span {
+  display: grid;
+  gap: 5px;
+  padding: 12px 14px;
+  border: 1px solid #e0e4ec;
+  border-radius: 6px;
+}
+
+.material-sheet-paper section + section {
+  margin-top: 30px;
+}
+
+.material-sheet-paper section h2 {
+  margin: 0 0 10px;
+  font-size: 19px;
+}
+
+.material-sheet-paper table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.material-sheet-paper th,
+.material-sheet-paper td {
+  padding: 10px 12px;
+  border: 1px solid #dce2eb;
+  text-align: left;
+}
+
+.material-sheet-paper th {
+  color: #fff;
+  background: #35477f;
+  font-size: 11px;
+}
+
+.material-sheet-paper td:first-child {
+  width: 54px;
+  text-align: center;
+}
+
+.material-sheet-paper td:nth-child(3),
+.material-sheet-paper td:nth-child(4) {
+  width: 130px;
+}
+
+.material-sheet-paper td input {
+  width: 100%;
+  min-height: 36px;
+  padding: 5px 8px;
+  border: 1px solid #cfd6e2;
+  border-radius: 4px;
+  font: inherit;
+}
+
+.material-sheet-paper > footer {
+  margin-top: 28px;
+  padding-top: 12px;
+  border-top: 1px solid #dce2eb;
+  color: #748096;
+  font-size: 11px;
+}
+
+@media (max-width: 700px) {
+  .material-sheet-paper {
+    margin: 0;
+    padding: 18px 12px;
+  }
+
+  .material-sheet-project {
+    grid-template-columns: 1fr;
+  }
+
+  .material-sheet-paper {
+    overflow-x: auto;
+  }
+}
+
 @media print {
   body * {
     visibility: hidden !important;
   }
 
   .splice-sheet-paper,
-  .splice-sheet-paper * {
+  .splice-sheet-paper *,
+  .material-sheet-paper,
+  .material-sheet-paper * {
     visibility: visible !important;
   }
 
-  .splice-sheet-paper {
+  .splice-sheet-paper,
+  .material-sheet-paper {
     position: absolute;
     inset: 0;
     width: 100%;
