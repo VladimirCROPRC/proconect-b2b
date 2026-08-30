@@ -537,7 +537,7 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
             ))}
             {junction && (() => {
               const point = screenPoint(junction, center, zoom);
-              return <span className={`fo-end-marker end-b ${junction.documented ? "" : "undocumented"}`} style={{ left: `${(point.x / MAP_WIDTH) * 100}%`, top: `${(point.y / MAP_HEIGHT) * 100}%` }}><b>S</b><small>{junction.documented ? junction.code : "FĂRĂ COD"}</small></span>;
+              return <span className={`fo-placed-dot junction-dot ${junction.documented ? "" : "undocumented"}`} aria-label="Punct joncțiune" style={{ left: `${(point.x / MAP_WIDTH) * 100}%`, top: `${(point.y / MAP_HEIGHT) * 100}%` }} />;
             })()}
             {currentLocation && (() => {
               const point = screenPoint(currentLocation, center, zoom);
