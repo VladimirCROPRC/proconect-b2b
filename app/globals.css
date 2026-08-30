@@ -10101,3 +10101,103 @@ td > small {
     grid-column: 2;
   }
 }
+
+
+/* In-app fullscreen keeps the Web Mercator map square-scaled in portrait.
+   The map is taller than the narrow viewport and clipped horizontally, so
+   geographic X/Y proportions remain correct while technicians get maximum area. */
+.fo-map-card.map-fullscreen,
+.splice-map-card.map-fullscreen {
+  position: fixed;
+  z-index: 10000;
+  inset: 0;
+  display: flex;
+  width: 100vw;
+  height: 100dvh;
+  max-width: none;
+  min-width: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: #fff;
+  box-shadow: none;
+}
+
+.fo-map-card.map-fullscreen .fo-map-head,
+.splice-map-card.map-fullscreen .splice-map-head {
+  position: relative;
+  z-index: 2;
+  flex: 0 0 auto;
+  padding-top: max(12px, env(safe-area-inset-top));
+  padding-right: max(12px, env(safe-area-inset-right));
+  padding-left: max(12px, env(safe-area-inset-left));
+  background: #fff;
+}
+
+.fo-map-card.map-fullscreen .fo-map,
+.splice-map-card.map-fullscreen .fo-map {
+  position: relative;
+  left: 50%;
+  flex: 1 0 auto;
+  width: calc((100dvh - 150px - env(safe-area-inset-top) - env(safe-area-inset-bottom)) * 5 / 3);
+  min-width: 100vw;
+  max-width: none;
+  height: calc(100dvh - 150px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  min-height: 0;
+  max-height: none;
+  aspect-ratio: 5 / 3;
+  transform: translateX(-50%);
+  border: 0;
+}
+
+.fo-map-card.map-fullscreen .fo-map-footer {
+  position: relative;
+  z-index: 2;
+  flex: 0 0 auto;
+  padding-bottom: max(10px, env(safe-area-inset-bottom));
+  background: #fff;
+}
+
+.fo-fullscreen-toggle {
+  border-color: #4c5b92 !important;
+  color: #fff !important;
+  background: #4c5b92 !important;
+}
+
+.fo-fullscreen-toggle span {
+  font-size: 16px;
+  line-height: 1;
+}
+
+@media (max-width: 820px) and (orientation: portrait) {
+  .fo-map-card.map-fullscreen .fo-map-head,
+  .splice-map-card.map-fullscreen .splice-map-head {
+    gap: 8px;
+    padding-bottom: 8px;
+  }
+
+  .fo-map-card.map-fullscreen .fo-map-actions,
+  .splice-map-card.map-fullscreen .splice-mode-switch {
+    flex-wrap: nowrap;
+    width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .fo-map-card.map-fullscreen .fo-map-actions::-webkit-scrollbar,
+  .splice-map-card.map-fullscreen .splice-mode-switch::-webkit-scrollbar {
+    display: none;
+  }
+
+  .fo-map-card.map-fullscreen .fo-map-actions button,
+  .splice-map-card.map-fullscreen .splice-mode-switch button {
+    flex: 0 0 auto;
+    min-height: 40px;
+  }
+
+  .splice-map-card.map-fullscreen .fo-map {
+    height: calc(100dvh - 112px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    width: calc((100dvh - 112px - env(safe-area-inset-top) - env(safe-area-inset-bottom)) * 5 / 3);
+  }
+}
