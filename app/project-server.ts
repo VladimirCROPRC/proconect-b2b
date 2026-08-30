@@ -434,7 +434,7 @@ async function refreshGeneratedReport(projectId: string, documentation: ProjectF
     if (route.noIntervention) {
       routeLines.push(`Nu s-a intervenit la traseul FO. Motiv: ${route.noInterventionReason}.`);
     } else if (route.segments.length) {
-      const cableTypes = [...new Set(route.segments.map((segment) => segment.cableType.match(/\\b(4|12|24|48|96)\\s*F\\b/i)?.[1]).filter((value): value is string => Boolean(value)).map((value) => `${value}F`))];
+      const cableTypes = [...new Set(route.segments.map((segment) => segment.cableType.match(/(4|12|24|48|96)[ ]*F/i)?.[1]).filter((value): value is string => Boolean(value)).map((value) => `${value}F`))];
       const cableDescription = cableTypes.length === 1 ? `un cablu FO ${cableTypes[0]}` : `cabluri FO ${cableTypes.join(", ")}`;
       routeLines.push(`S-a instalat ${cableDescription} între ${route.junction.label} și locația clientului, în lungime de ${route.totalLengthMeters.toLocaleString("ro-RO")} m, din care ${route.segments.map((segment) => `${segment.lengthMeters.toLocaleString("ro-RO")} m ${segment.label.toLocaleLowerCase("ro-RO")}`).join(", ")}.`);
     } else if (route.totalLengthMeters > 0) {
