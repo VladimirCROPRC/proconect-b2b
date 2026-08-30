@@ -137,6 +137,10 @@ function formatCoordinate(point: Coordinate) {
   return `${point.lat.toFixed(6)}, ${point.lon.toFixed(6)}`;
 }
 
+function googleMapsUrl(point: Coordinate) {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${point.lat},${point.lon}`)}`;
+}
+
 function FiberSelect({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
   return (
     <label className="splice-color-field">
@@ -569,7 +573,7 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
           <div className="splice-map-search">
             <label><span>⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Caută după cod, nume sau localitate…" disabled={!creating} /></label>
             <div className={`splice-data-state ${sitesStatus}`}><i>{sitesStatus === "ready" ? "✓" : sitesStatus === "error" ? "!" : "↻"}</i>{sitesStatus === "ready" ? `${sites.length.toLocaleString("ro-RO")} site-uri` : sitesStatus === "error" ? "Date indisponibile" : "Se încarcă"}</div>
-            {search.trim().length >= 2 && <div className="splice-search-results">{searchResults.map((site) => <button key={site.id} onClick={() => chooseDocumented(site)}><span>{site.code}</span><div><strong>{site.name}</strong><small>{site.region}</small></div><b>→</b></button>)}{!searchResults.length && <p>Niciun site găsit.</p>}</div>}
+            {search.trim().length >= 2 && <div className="splice-search-results">{searchResults.map((site) => <article className={junction?.id === site.id ? "selected" : ""} key={site.id}><button onClick={() => chooseDocumented(site)}><span>{site.code}</span><div><strong>{site.name}</strong><small>{site.region}</small></div><b>Arată pe hartă</b></button><a href={googleMapsUrl(site)} target="_blank" rel="noreferrer" aria-label={`Deschide joncțiunea ${site.code} în Google Maps`}>Google Maps ↗</a></article>)}{!searchResults.length && <p>Nicio joncțiune găsită.</p>}</div>}
           </div>
         </section>
 
@@ -580,7 +584,7 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
             <>
               <section className="splice-form-card">
                 <div className="splice-card-title"><span>1</span><div><h2>Joncțiunea în care se execută sudura</h2><p>Documentată în registru sau introdusă manual.</p></div></div>
-                <div className={`splice-junction-result ${junction ? "selected" : ""}`}><span>{junction ? "✓" : "○"}</span><div><small>PUNCT SELECTAT</small><strong>{junction ? `${junction.code} · ${junction.name}` : "Alege punctul pe hartă"}</strong><p>{junction ? `${junction.region} · ${formatCoordinate(junction)}` : "Folosește harta sau căutarea după site."}</p></div></div>
+                <div className={`splice-junction-result ${junction ? "selected" : ""}`}><span>{junction ? "✓" : "○"}</span><div><small>PUNCT SELECTAT</small><strong>{junction ? `${junction.code} · ${junction.name}` : "Alege punctul pe hartă"}</strong><p>{junction ? `${junction.region} · ${formatCoordinate(junction)}` : "Folosește harta sau căutarea după site."}</p>{junction?.documented && <div className="splice-junction-links"><button onClick={() => { setCenter({ lat: junction.lat, lon: junction.lon }); setZoom((current) => Math.max(current, 18)); }}>Arată punctul pe hartă</button><a href={googleMapsUrl(junction)} target="_blank" rel="noreferrer">Google Maps ↗</a></div>}</div></div>
                 {junction?.documented === false && <div className="splice-undocumented-fields">
                   <fieldset><legend>SITUAȚIE ÎN TEREN *</legend><div>{(["existing", "new"] as const).map((kind) => <label className={junctionKind === kind ? "selected" : ""} key={kind}><input type="radio" name="splice-junction-kind" checked={junctionKind === kind} onChange={() => setJunctionKind(kind)} /><span>{kind === "existing" ? "EX" : "NOU"}</span><p><strong>{kind === "existing" ? "Joncțiune existentă" : "Joncțiune nou instalată"}</strong><small>{kind === "existing" ? "Prezentă deja în teren" : "Instalată în acest proiect"}</small></p><i /></label>)}</div></fieldset>
                   <fieldset><legend>REȚEA VODAFONE *</legend><div>{(["mobile", "fixed"] as const).map((item) => <label className={network === item ? "selected" : ""} key={item}><input type="radio" name="splice-network" checked={network === item} onChange={() => setNetwork(item)} /><span>{item === "mobile" ? "MOB" : "FIX"}</span><p><strong>{item === "mobile" ? "Vodafone Mobil" : "Vodafone Fixed"}</strong><small>Rețeaua joncțiunii</small></p><i /></label>)}</div></fieldset>
