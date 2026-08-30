@@ -38,6 +38,8 @@ type SpliceRecord = {
   junction: Junction;
   junctionKind: JunctionKind;
   network: JunctionNetwork;
+  siteCableType?: string;
+  clientCableType?: string;
   siteBuffer: string;
   siteFiber: string;
   clientBuffer: string;
@@ -162,6 +164,8 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
   const [junction, setJunction] = useState<Junction | null>(null);
   const [junctionKind, setJunctionKind] = useState<JunctionKind>("");
   const [network, setNetwork] = useState<JunctionNetwork>("");
+  const [siteCableType, setSiteCableType] = useState("");
+  const [clientCableType, setClientCableType] = useState("");
   const [siteBuffer, setSiteBuffer] = useState("");
   const [siteFiber, setSiteFiber] = useState("");
   const [clientBuffer, setClientBuffer] = useState("");
@@ -274,6 +278,7 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
   }, [deferredSearch, sites]);
 
   const projectRecords = records.filter((record) => record.projectId === projectItem.id);
+  const cableTypesReady = Boolean(siteCableType.trim() && clientCableType.trim());
   const colorsReady = Boolean(siteBuffer && siteFiber && clientBuffer && clientFiber);
   const completedSplicePhotos = splicePhotoKeys.filter((key) => Boolean(splicePhotos[key])).length;
   const photosReady = completedSplicePhotos === splicePhotoKeys.length;
@@ -283,6 +288,8 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
     setJunction(null);
     setJunctionKind("");
     setNetwork("");
+    setSiteCableType("");
+    setClientCableType("");
     setSiteBuffer("");
     setSiteFiber("");
     setClientBuffer("");
@@ -395,6 +402,10 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
       onNotify("Alege rețeaua Vodafone Mobil sau Vodafone Fixed.");
       return;
     }
+    if (!cableTypesReady) {
+      onNotify("Completează tipul de cablu spre site și spre client.");
+      return;
+    }
     if (!colorsReady) {
       onNotify("Completează culorile bufferului și firului pe ambele sensuri.");
       return;
@@ -409,6 +420,8 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
       junction,
       junctionKind,
       network,
+      siteCableType: siteCableType.trim(),
+      clientCableType: clientCableType.trim(),
       siteBuffer,
       siteFiber,
       clientBuffer,
@@ -577,10 +590,18 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
               <section className="splice-form-card">
                 <div className="splice-card-title"><span>2</span><div><h2>Fibre sudate</h2><p>Completează perechea pe fiecare sens.</p></div></div>
                 <div className="splice-directions">
-                  <article><div className="splice-direction-title"><span>→</span><div><small>SENS 1</small><strong>Spre site</strong></div></div><div className="splice-color-grid"><FiberSelect label="Culoare buffer" value={siteBuffer} onChange={setSiteBuffer} /><FiberSelect label="Culoare fir" value={siteFiber} onChange={setSiteFiber} /></div></article>
+                  <article><div className="splice-direction-title"><span>→</span><div><small>SENS 1</small><strong>Spre site</strong></div></div><label className="fo-cable-input"><span>TIP CABLU SPRE SITE *</span><input list="splice-cable-suggestions" value={siteCableType} onChange={(event) => setSiteCableType(event.target.value)} placeholder="ex. Cablu FO 12F G.652D" /></label><div className="splice-color-grid"><FiberSelect label="Culoare buffer" value={siteBuffer} onChange={setSiteBuffer} /><FiberSelect label="Culoare fir" value={siteFiber} onChange={setSiteFiber} /></div></article>
                   <div className="splice-fusion"><i /><span>SUDURĂ</span><i /></div>
-                  <article><div className="splice-direction-title client"><span>→</span><div><small>SENS 2</small><strong>Spre client</strong></div></div><div className="splice-color-grid"><FiberSelect label="Culoare buffer" value={clientBuffer} onChange={setClientBuffer} /><FiberSelect label="Culoare fir" value={clientFiber} onChange={setClientFiber} /></div></article>
+                  <article><div className="splice-direction-title client"><span>→</span><div><small>SENS 2</small><strong>Spre client</strong></div></div><label className="fo-cable-input"><span>TIP CABLU SPRE CLIENT *</span><input list="splice-cable-suggestions" value={clientCableType} onChange={(event) => setClientCableType(event.target.value)} placeholder="ex. Cablu FO 12F G.652D" /></label><div className="splice-color-grid"><FiberSelect label="Culoare buffer" value={clientBuffer} onChange={setClientBuffer} /><FiberSelect label="Culoare fir" value={clientFiber} onChange={setClientFiber} /></div></article>
                 </div>
+                <datalist id="splice-cable-suggestions">
+                  <option value="Cablu FO 2F G.657A2" />
+                  <option value="Cablu FO 4F G.657A2" />
+                  <option value="Cablu FO 12F G.652D" />
+                  <option value="Microcablu FO 12F G.657A1" />
+                  <option value="Cablu FO 24F G.652D" />
+                  <option value="Cablu FO 48F G.652D" />
+                </datalist>
               </section>
 
               <section className="splice-form-card splice-photo-section">
@@ -604,7 +625,7 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
                     );
                   })}
                 </div>
-                <div className="splice-readiness"><span className={junctionReady && colorsReady && photosReady ? "ready" : ""}>{junctionReady && colorsReady && photosReady ? "✓" : "i"}</span><p><strong>{junctionReady && colorsReady && photosReady ? "Sudură pregătită pentru salvare" : !junction ? "Selectează joncțiunea" : !junctionReady ? "Completează clasificarea joncțiunii" : !colorsReady ? "Completează toate culorile" : "Încarcă cele 3 fotografii obligatorii"}</strong><small>Datele obligatorii sunt marcate cu *.</small></p></div>
+                <div className="splice-readiness"><span className={junctionReady && cableTypesReady && colorsReady && photosReady ? "ready" : ""}>{junctionReady && colorsReady && photosReady ? "✓" : "i"}</span><p><strong>{junctionReady && colorsReady && photosReady ? "Sudură pregătită pentru salvare" : !junction ? "Selectează joncțiunea" : !junctionReady ? "Completează clasificarea joncțiunii" : !cableTypesReady ? "Completează tipurile de cablu" : !colorsReady ? "Completează toate culorile" : "Încarcă cele 3 fotografii obligatorii"}</strong><small>Datele obligatorii sunt marcate cu *.</small></p></div>
                 <div className="splice-form-actions"><button onClick={() => { resetDraft(); setCreating(false); }}>Renunță</button><button className="primary-button" onClick={saveSplice}>Salvează sudura <span>→</span></button></div>
               </section>
             </>
@@ -612,7 +633,7 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
 
           <section className="splice-records-card">
             <div className="splice-card-title"><span>✓</span><div><h2>Suduri documentate</h2><p>{projectItem.id} · {projectRecords.length} înregistrări</p></div></div>
-            {projectRecords.length ? <div className="splice-record-list">{projectRecords.map((record, index) => <article key={record.id}><span>{index + 1}</span><div><strong>{record.junction.documented ? `${record.junction.code} · ${record.junction.name}` : `Fără cod · ${record.junctionKind === "existing" ? "existentă" : "nou instalată"}`}</strong><small>{record.junction.documented ? "Joncțiune documentată" : record.network === "mobile" ? "Vodafone Mobil" : "Vodafone Fixed"} · 3 fotografii</small><p><b style={{ background: colorHex[record.siteBuffer] }} />{record.siteBuffer}/{record.siteFiber} <i>→</i> <b style={{ background: colorHex[record.clientBuffer] }} />{record.clientBuffer}/{record.clientFiber}</p></div><em>Salvată</em></article>)}</div> : <div className="splice-no-records"><span>○</span><p>Nicio sudură salvată pentru această lucrare.</p></div>}
+            {projectRecords.length ? <div className="splice-record-list">{projectRecords.map((record, index) => <article key={record.id}><span>{index + 1}</span><div><strong>{record.junction.documented ? `${record.junction.code} · ${record.junction.name}` : `Fără cod · ${record.junctionKind === "existing" ? "existentă" : "nou instalată"}`}</strong><small>{record.junction.documented ? "Joncțiune documentată" : record.network === "mobile" ? "Vodafone Mobil" : "Vodafone Fixed"} · 3 fotografii</small><p><b style={{ background: colorHex[record.siteBuffer] }} />{record.siteCableType || "Cablu nespecificat"} · {record.siteBuffer}/{record.siteFiber} <i>→</i> <b style={{ background: colorHex[record.clientBuffer] }} />{record.clientCableType || "Cablu nespecificat"} · {record.clientBuffer}/{record.clientFiber}</p></div><em>Salvată</em></article>)}</div> : <div className="splice-no-records"><span>○</span><p>Nicio sudură salvată pentru această lucrare.</p></div>}
           </section>
         </aside>
       </div>}
