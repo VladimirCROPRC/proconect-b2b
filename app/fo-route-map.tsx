@@ -428,7 +428,6 @@ export function FoRouteSection({ project: projectItem, initialSummary, onNotify,
     (total, point, index) => total + distanceBetween(routeCoordinates[index], point),
     0
   );
-  const endAUsesGps = Boolean(currentLocation && endA && distanceBetween(currentLocation, endA) < 2);
   const incompleteCableMethod = selectedInstallationMethods.find((method) => !cableTypes[method].trim());
   const incompleteLengthMethod = selectedInstallationMethods.find((method) => !parseLengthMeters(installationLengths[method]));
   const incompleteAerialMaterial = selectedInstallationMethods.includes("aerial")
@@ -889,14 +888,11 @@ export function FoRouteSection({ project: projectItem, initialSummary, onNotify,
 
               {endA && (() => {
                 const point = screenPoint(endA, center, zoom);
-                return <span className="fo-end-marker end-a" style={{ left: `${(point.x / MAP_WIDTH) * 100}%`, top: `${(point.y / MAP_HEIGHT) * 100}%` }}><b>A</b><small>{endAUsesGps ? "CLIENT · GPS" : "CLIENT"}</small></span>;
+                return <span className="fo-placed-dot client-dot" aria-label="Punct client" style={{ left: `${(point.x / MAP_WIDTH) * 100}%`, top: `${(point.y / MAP_HEIGHT) * 100}%` }} />;
               })()}
               {endB && (() => {
                 const point = screenPoint(endB, center, zoom);
-                const junctionMarker = undocumentedJunctionType === "existing" ? "EX" : undocumentedJunctionType === "new" ? "NOU" : "";
-                const networkMarker = undocumentedJunctionNetwork === "mobile" ? "MOBIL" : undocumentedJunctionNetwork === "fixed" ? "FIXED" : "";
-                const markerLabel = endB.documented ? endB.code : [junctionMarker, networkMarker].filter(Boolean).join(" · ") || "ALEGE DATE";
-                return <span className={`fo-end-marker end-b ${endB.documented ? "" : "undocumented"}`} style={{ left: `${(point.x / MAP_WIDTH) * 100}%`, top: `${(point.y / MAP_HEIGHT) * 100}%` }}><b>B</b><small>{markerLabel}</small></span>;
+                return <span className={`fo-placed-dot junction-dot ${endB.documented ? "" : "undocumented"}`} aria-label="Punct joncțiune" style={{ left: `${(point.x / MAP_WIDTH) * 100}%`, top: `${(point.y / MAP_HEIGHT) * 100}%` }} />;
               })()}
 
               <div className="fo-map-instruction"><span>{mode === "pan" ? "✥" : mode === "client" ? "A" : mode === "route" ? "⌁" : "B?"}</span>{mode === "pan" ? "Glisează harta · apropie două degete pentru zoom" : mode === "client" ? "Atinge pentru Client A · glisează sau folosește pinch zoom" : mode === "route" ? "Atinge pentru punct · glisează sau folosește pinch zoom" : "Atinge pentru joncțiune · glisează sau folosește pinch zoom"}</div>
