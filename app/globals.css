@@ -5210,6 +5210,18 @@ td > small {
   text-align: center;
 }
 
+.splice-preselected-maps {
+  margin: 0 0 12px;
+  padding: 8px 11px;
+  border: 1px solid #3d4d91;
+  border-radius: 4px;
+  color: #3d4d91;
+  background: #fff;
+  font-size: 11px;
+  font-weight: 850;
+  text-decoration: none;
+}
+
 .splice-empty-card > span {
   display: grid;
   width: 42px;
