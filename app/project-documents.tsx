@@ -99,8 +99,7 @@ function buildReport(project: DocumentProject, fieldData: ProjectFieldDocumentat
   if (fieldData.splices?.noIntervention) {
     routeLines.push(`Nu s-a intervenit la sudurile FO. Motiv: ${fieldData.splices.noInterventionReason}.`);
   } else if (fieldData.splices?.count) {
-    const junctions = [...new Set(fieldData.splices.junctions.map((junction) => junction.label))].join(", ");
-    routeLines.push(`S-au executat ${fieldData.splices.count} ${fieldData.splices.count === 1 ? "sudură FO" : "suduri FO"}${junctions ? ` în ${junctions}` : ""}.`);
+    routeLines.push(`Total suduri FO: ${fieldData.splices.count}.`);
   }
 
   const equipment = fieldData.client?.equipment ?? [
