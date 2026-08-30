@@ -6,6 +6,7 @@ import type { SpliceFieldSummary } from "./field-documentation";
 import { NoInterventionControl } from "./no-intervention-control";
 import { useMapGestures } from "./use-map-gestures";
 import { useMapFullscreen } from "./use-map-fullscreen";
+import { fetchMapSites } from "./map-sites-client";
 
 type Coordinate = { lat: number; lon: number };
 type OptixSiteRow = [code: string, description: string, region: string, lat: number, lon: number];
@@ -187,12 +188,7 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
 
   useEffect(() => {
     let active = true;
-    fetch("/data/optix-sites.json")
-      .then((response) => {
-        if (!response.ok) throw new Error("Date indisponibile");
-        return response.json() as Promise<OptixPayload>;
-      })
-      .then((payload) => {
+    fetchMapSites().then((payload) => {
         if (!active) return;
         setSites(payload.sites);
         setSitesStatus("ready");
