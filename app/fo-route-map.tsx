@@ -11,6 +11,7 @@ import { deleteProjectFile, fetchProjectFiles, formatCapturedAt, uploadProjectFi
 import type { RouteFieldSummary } from "./field-documentation";
 import { NoInterventionControl } from "./no-intervention-control";
 import { useMapGestures } from "./use-map-gestures";
+import { useMapFullscreen } from "./use-map-fullscreen";
 
 type Coordinate = { lat: number; lon: number };
 type MapMode = "pan" | "client" | "route" | "undocumented";
@@ -265,6 +266,7 @@ export function FoRouteSection({ project: projectItem, initialSummary, onNotify,
     maximumZoom: 25,
     mousePan: mode === "pan",
   });
+  const mapFullscreen = useMapFullscreen();
 
   useEffect(() => {
     let active = true;
@@ -812,7 +814,7 @@ export function FoRouteSection({ project: projectItem, initialSummary, onNotify,
         </section>
       ) : <div className="fo-route-layout">
         <div className="fo-map-column">
-          <section className="fo-map-card">
+          <section className={`fo-map-card ${mapFullscreen.fullscreen ? "map-fullscreen" : ""}`}>
             <div className="fo-map-head">
               <div><small>MOD ACTIV</small><strong>{modeLabel[mode]}</strong></div>
               <div className="fo-map-actions">
@@ -820,6 +822,12 @@ export function FoRouteSection({ project: projectItem, initialSummary, onNotify,
                 <button className={mode === "client" ? "active" : ""} onClick={() => setMode("client")}><span>A</span> Client</button>
                 <button className={mode === "route" ? "active" : ""} onClick={() => setMode("route")}><span>⌁</span> Trasează</button>
                 <button className={mode === "undocumented" ? "active" : ""} onClick={() => setMode("undocumented")}><span>B?</span> B fără cod</button>
+                <button
+                  className="fo-fullscreen-toggle"
+                  onClick={mapFullscreen.toggleFullscreen}
+                  aria-pressed={mapFullscreen.fullscreen}
+                  aria-label={mapFullscreen.fullscreen ? "Închide harta pe tot ecranul" : "Deschide harta pe tot ecranul"}
+                ><span>{mapFullscreen.fullscreen ? "×" : "⛶"}</span> {mapFullscreen.fullscreen ? "Închide" : "Ecran complet"}</button>
               </div>
             </div>
 
