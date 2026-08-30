@@ -6995,7 +6995,9 @@ td > small {
   }
 
   .fo-map {
-    min-height: clamp(410px, 62vh, 500px);
+    aspect-ratio: 5 / 3;
+    min-height: 0;
+    height: auto;
   }
 
   .fo-route-side {
@@ -7166,7 +7168,9 @@ td > small {
   }
 
   .fo-map {
-    min-height: clamp(390px, 62vh, 480px);
+    aspect-ratio: 5 / 3;
+    min-height: 0;
+    height: auto;
   }
 
   .fo-map-instruction {
