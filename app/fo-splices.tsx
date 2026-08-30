@@ -4,6 +4,7 @@ import { useDeferredValue, useEffect, useMemo, useState, type MouseEvent } from 
 import { fetchProjectFiles, uploadProjectFile } from "./client-storage";
 import type { SpliceFieldSummary } from "./field-documentation";
 import { NoInterventionControl } from "./no-intervention-control";
+import { useMapGestures } from "./use-map-gestures";
 
 type Coordinate = { lat: number; lon: number };
 type OptixSiteRow = [code: string, description: string, region: string, lat: number, lon: number];
@@ -151,7 +152,7 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
   const [sites, setSites] = useState<OptixSiteRow[]>([]);
   const [sitesStatus, setSitesStatus] = useState<"loading" | "ready" | "error">("loading");
   const [center, setCenter] = useState(DEFAULT_CENTER);
-  const [zoom, setZoom] = useState(13);
+  const [zoom, setZoom] = useState(15);
   const [gpsLoading, setGpsLoading] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<(Coordinate & { accuracy: number }) | null>(null);
   const [mode, setMode] = useState<SelectMode>("documented");
@@ -170,6 +171,17 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
   const [noIntervention, setNoIntervention] = useState(false);
   const [noInterventionReason, setNoInterventionReason] = useState("");
   const deferredSearch = useDeferredValue(search);
+  const mapGestures = useMapGestures({
+    center,
+    zoom,
+    setCenter,
+    setZoom,
+    project,
+    unproject,
+    mapWidth: MAP_WIDTH,
+    mapHeight: MAP_HEIGHT,
+    maximumZoom: 19,
+  });
   useEffect(() => {
     let active = true;
     fetch("/data/optix-sites.json")
@@ -297,7 +309,7 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
   }
 
   function handleMapClick(event: MouseEvent<HTMLDivElement>) {
-    if (!creating || mode !== "undocumented") return;
+    if (mapGestures.consumeSuppressedClick() || !creating || mode !== "undocumented") return;
     const rect = event.currentTarget.getBoundingClientRect();
     const point = {
       x: project(center, zoom).x + ((event.clientX - rect.left) / rect.width) * MAP_WIDTH - MAP_WIDTH / 2,
@@ -492,7 +504,17 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
               <button className={mode === "undocumented" ? "active" : ""} onClick={() => setMode("undocumented")}>Nedocumentată</button>
             </div>
           </div>
-          <div className={`fo-map splice-map ${mode === "undocumented" ? "placing" : ""}`} onClick={handleMapClick} role="application" aria-label="Hartă OpenStreetMap pentru alegerea joncțiunii sudurii">
+          <div
+            className={`fo-map splice-map ${mode === "undocumented" ? "placing" : ""}`}
+            onClick={handleMapClick}
+            onPointerDown={mapGestures.onPointerDown}
+            onPointerMove={mapGestures.onPointerMove}
+            onPointerUp={mapGestures.onPointerUp}
+            onPointerCancel={mapGestures.onPointerCancel}
+            onWheel={mapGestures.onWheel}
+            role="application"
+            aria-label="Hartă OpenStreetMap pentru alegerea joncțiunii sudurii"
+          >
             <div className="fo-map-tiles" aria-hidden="true">
               {tiles.map((tile) => <img key={tile.key} src={`https://tile.openstreetmap.org/${zoom}/${tile.urlX}/${tile.urlY}.png`} alt="" draggable={false} style={{ left: `${(tile.x / MAP_WIDTH) * 100}%`, top: `${(tile.y / MAP_HEIGHT) * 100}%`, width: `${(TILE_SIZE / MAP_WIDTH) * 100}%`, height: `${(TILE_SIZE / MAP_HEIGHT) * 100}%` }} />)}
             </div>
@@ -518,7 +540,7 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
               <span className={gpsLoading ? "loading" : ""}>{gpsLoading ? "↻" : currentLocation ? "✓" : "⌖"}</span>
               <div><strong>{gpsLoading ? "Se caută poziția…" : currentLocation ? "Locație identificată" : "Locația mea"}</strong><small>{currentLocation ? `Precizie ±${Math.round(currentLocation.accuracy)} m` : "Centrează harta sudurilor"}</small></div>
             </button>
-            <div className="fo-zoom" onClick={(event) => event.stopPropagation()}><button onClick={() => setZoom((current) => clamp(current + 1, 7, 18))}>＋</button><button onClick={() => setZoom((current) => clamp(current - 1, 7, 18))}>−</button></div>
+            <div className="fo-zoom" onClick={(event) => event.stopPropagation()}><button onClick={() => setZoom((current) => clamp(current + 1, 7, 19))}>＋</button><button onClick={() => setZoom((current) => clamp(current - 1, 7, 19))}>−</button></div>
             <a className="fo-attribution" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>© OpenStreetMap contributors</a>
           </div>
           <div className="splice-map-search">
