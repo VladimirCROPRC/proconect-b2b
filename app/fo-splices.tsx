@@ -529,7 +529,7 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
               const point = screenPoint(currentLocation, center, zoom);
               return <span className="splice-current-location" style={{ left: `${(point.x / MAP_WIDTH) * 100}%`, top: `${(point.y / MAP_HEIGHT) * 100}%` }}><i /><small>LOCAȚIA MEA</small></span>;
             })()}
-            <div className="fo-map-instruction"><span>{mode === "documented" ? "S" : "S?"}</span>{!creating ? "Începe o sudură nouă" : mode === "documented" ? "Atinge un site documentat" : "Atinge locul joncțiunii fără cod"}</div>
+            <div className="fo-map-instruction"><span>{mode === "documented" ? "S" : "S?"}</span>{!creating ? "Glisează harta sau folosește pinch zoom" : mode === "documented" ? "Atinge un site · glisează sau folosește pinch zoom" : "Atinge pentru joncțiune · glisează sau folosește pinch zoom"}</div>
             {!creating && <div className="splice-map-lock"><span>＋</span><strong>Începe cu „Sudură nouă”</strong><small>Harta devine activă pentru selectarea joncțiunii.</small></div>}
             <button
               className={`fo-locate-button splice-locate-button ${currentLocation ? "located" : ""}`}
