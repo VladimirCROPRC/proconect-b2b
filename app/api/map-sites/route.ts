@@ -1,9 +1,18 @@
+import { env } from "cloudflare:workers";
 import { getRawDb } from "../../../db";
 import { currentSession, sameOrigin } from "../../server-auth";
 
 export const dynamic = "force-dynamic";
 
 type SiteRow = [code: string, description: string, region: string, lat: number, lon: number];
+type StorageEnvironment = {
+  BUCKET?: {
+    put(key: string, value: string, options?: { httpMetadata?: { contentType?: string } }): Promise<unknown>;
+    get(key: string): Promise<{ text(): Promise<string> } | null>;
+    delete(key: string): Promise<void>;
+  };
+};
+const storage = env as unknown as StorageEnvironment;
 
 function validRow(value: unknown): value is SiteRow {
   if (!Array.isArray(value) || value.length !== 5) return false;
@@ -15,6 +24,11 @@ function validRow(value: unknown): value is SiteRow {
 }
 
 async function activeSites(marker: string) {
+  if (marker.startsWith("r2:")) {
+    const object = await storage.BUCKET?.get(marker.slice(3));
+    if (!object) throw new Error("Active map sites object is missing from R2");
+    return JSON.parse(await object.text()) as SiteRow[];
+  }
   if (!marker.startsWith("chunked:")) return JSON.parse(marker) as SiteRow[];
   const generation = marker.slice("chunked:".length);
   const chunks = await getRawDb()
@@ -51,11 +65,14 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   let stage = "validare";
+  let newKey = "";
   try {
     if (!sameOrigin(request)) return Response.json({ error: "Cerere neautorizată." }, { status: 403 });
     const session = await currentSession(request);
     if (!session || session.account.passwordResetRequired) return Response.json({ error: "Autentificare necesară." }, { status: 401 });
     if (session.account.role !== "Admin") return Response.json({ error: "Importul este rezervat administratorului." }, { status: 403 });
+    if (!storage.BUCKET) return Response.json({ error: "Bucket-ul R2 nu este configurat pentru Worker." }, { status: 503 });
+
     const body = await request.json() as { source?: unknown; sites?: unknown; rejected?: unknown };
     if (typeof body.source !== "string" || !Array.isArray(body.sites)) return Response.json({ error: "Fișierul importat nu este valid." }, { status: 400 });
     if (!body.sites.length || body.sites.length > 250_000) return Response.json({ error: "Lista trebuie să conțină între 1 și 250.000 de site-uri." }, { status: 400 });
@@ -66,34 +83,29 @@ export async function POST(request: Request) {
     );
     const rejected = typeof body.rejected === "number" && Number.isInteger(body.rejected) && body.rejected >= 0 ? body.rejected : 0;
     const generation = crypto.randomUUID();
-    const chunkSize = 1_500;
-    const statements = [];
-    stage = "salvarea fragmentelor";
-    for (let index = 0; index < sites.length; index += chunkSize) {
-      statements.push(
-        getRawDb()
-          .prepare("INSERT INTO map_site_dataset_chunks (generation, chunk_index, content_json) VALUES (?, ?, ?)")
-          .bind(generation, Math.floor(index / chunkSize), JSON.stringify(sites.slice(index, index + chunkSize)))
-      );
-    }
-    for (let index = 0; index < statements.length; index += 60) {
-      await getRawDb().batch(statements.slice(index, index + 60));
-    }
+    newKey = `system/map-sites/${generation}.json`;
+
+    stage = "salvarea în R2";
+    await storage.BUCKET.put(newKey, JSON.stringify(sites), { httpMetadata: { contentType: "application/json" } });
 
     stage = "activarea listei";
     const now = Date.now();
     const previous = await getRawDb().prepare("SELECT content_json FROM map_site_dataset WHERE id = 'active'").first<{ content_json: string }>();
     await getRawDb().prepare(
       "INSERT INTO map_site_dataset (id, source_name, content_json, site_count, rejected_count, updated_by, updated_at) VALUES ('active', ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET source_name = excluded.source_name, content_json = excluded.content_json, site_count = excluded.site_count, rejected_count = excluded.rejected_count, updated_by = excluded.updated_by, updated_at = excluded.updated_at"
-    ).bind(body.source.trim().slice(0, 240), `chunked:${generation}`, sites.length, rejected, session.account.username, now).run();
+    ).bind(body.source.trim().slice(0, 240), `r2:${newKey}`, sites.length, rejected, session.account.username, now).run();
 
-    if (previous?.content_json.startsWith("chunked:")) {
+    if (previous?.content_json.startsWith("r2:")) {
+      storage.BUCKET.delete(previous.content_json.slice(3)).catch(() => undefined);
+    } else if (previous?.content_json.startsWith("chunked:")) {
       const oldGeneration = previous.content_json.slice("chunked:".length);
       getRawDb().prepare("DELETE FROM map_site_dataset_chunks WHERE generation = ?").bind(oldGeneration).run().catch(() => undefined);
     }
     return Response.json({ source: body.source, valid: sites.length, rejected, updatedAt: now });
   } catch (error) {
-    console.error(`Map sites import error during ${stage}:`, error instanceof Error ? error.message : "Unknown error");
-    return Response.json({ error: `Lista site-urilor nu a putut fi salvată în etapa „${stage}”. Verifică dacă migrarea bazei de date este aplicată.` }, { status: 503 });
+    if (newKey && stage !== "activarea listei") storage.BUCKET?.delete(newKey).catch(() => undefined);
+    const detail = error instanceof Error ? error.message : "Unknown error";
+    console.error(`Map sites import error during ${stage}:`, detail);
+    return Response.json({ error: `Importul a eșuat la „${stage}”. ${detail.slice(0, 180)}` }, { status: 503 });
   }
 }
