@@ -590,18 +590,10 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
               <section className="splice-form-card">
                 <div className="splice-card-title"><span>2</span><div><h2>Fibre sudate</h2><p>Completează perechea pe fiecare sens.</p></div></div>
                 <div className="splice-directions">
-                  <article><div className="splice-direction-title"><span>→</span><div><small>SENS 1</small><strong>Spre site</strong></div></div><label className="fo-cable-input"><span>TIP CABLU SPRE SITE *</span><input list="splice-cable-suggestions" value={siteCableType} onChange={(event) => setSiteCableType(event.target.value)} placeholder="ex. Cablu FO 12F G.652D" /></label><div className="splice-color-grid"><FiberSelect label="Culoare buffer" value={siteBuffer} onChange={setSiteBuffer} /><FiberSelect label="Culoare fir" value={siteFiber} onChange={setSiteFiber} /></div></article>
+                  <article><div className="splice-direction-title"><span>→</span><div><small>SENS 1</small><strong>Spre site</strong></div></div><label className="fo-cable-input"><span>TIP CABLU SPRE SITE *</span><select value={siteCableType} onChange={(event) => setSiteCableType(event.target.value)}><option value="">Selectează tipul</option>{[4, 12, 24, 48, 96].map((fibers) => <option key={fibers} value={`Cablu FO ${fibers}F`}>{fibers} fibre</option>)}</select></label><div className="splice-color-grid"><FiberSelect label="Culoare buffer" value={siteBuffer} onChange={setSiteBuffer} /><FiberSelect label="Culoare fir" value={siteFiber} onChange={setSiteFiber} /></div></article>
                   <div className="splice-fusion"><i /><span>SUDURĂ</span><i /></div>
-                  <article><div className="splice-direction-title client"><span>→</span><div><small>SENS 2</small><strong>Spre client</strong></div></div><label className="fo-cable-input"><span>TIP CABLU SPRE CLIENT *</span><input list="splice-cable-suggestions" value={clientCableType} onChange={(event) => setClientCableType(event.target.value)} placeholder="ex. Cablu FO 12F G.652D" /></label><div className="splice-color-grid"><FiberSelect label="Culoare buffer" value={clientBuffer} onChange={setClientBuffer} /><FiberSelect label="Culoare fir" value={clientFiber} onChange={setClientFiber} /></div></article>
+                  <article><div className="splice-direction-title client"><span>→</span><div><small>SENS 2</small><strong>Spre client</strong></div></div><label className="fo-cable-input"><span>TIP CABLU SPRE CLIENT *</span><select value={clientCableType} onChange={(event) => setClientCableType(event.target.value)}><option value="">Selectează tipul</option>{[4, 12, 24, 48, 96].map((fibers) => <option key={fibers} value={`Cablu FO ${fibers}F`}>{fibers} fibre</option>)}</select></label><div className="splice-color-grid"><FiberSelect label="Culoare buffer" value={clientBuffer} onChange={setClientBuffer} /><FiberSelect label="Culoare fir" value={clientFiber} onChange={setClientFiber} /></div></article>
                 </div>
-                <datalist id="splice-cable-suggestions">
-                  <option value="Cablu FO 2F G.657A2" />
-                  <option value="Cablu FO 4F G.657A2" />
-                  <option value="Cablu FO 12F G.652D" />
-                  <option value="Microcablu FO 12F G.657A1" />
-                  <option value="Cablu FO 24F G.652D" />
-                  <option value="Cablu FO 48F G.652D" />
-                </datalist>
               </section>
 
               <section className="splice-form-card splice-photo-section">
