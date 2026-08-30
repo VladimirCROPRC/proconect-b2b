@@ -19,6 +19,7 @@ type ProjectRow = {
   cpe_requires_grounding: number;
   sfp: number;
   mc: number;
+  mc_type: string;
   terminal_box: number;
   status: ProjectRecord["status"];
   scheduled_label: string;
@@ -52,6 +53,13 @@ type StorageEnvironment = {
 const storageEnvironment = env as unknown as StorageEnvironment;
 const fileSections = new Set(["project", "safety", "client", "route", "splices", "site", "documents", "intervention-assessment", "intervention-execution"]);
 const maximumUploadBytes = 20 * 1024 * 1024;
+const mediaConverterTypes = new Set(["100 Mbps", "1 Gbps", "JumboFrame"]);
+
+function normalizeMediaConverterType(mc: boolean, value: unknown) {
+  if (!mc) return "";
+  const type = typeof value === "string" ? value.trim() : "";
+  return mediaConverterTypes.has(type) ? type as ProjectRecord["mcType"] : "";
+}
 
 function validWorkIdentifier(value: string, activityType: ProjectActivityType) {
   return activityType === "Intervenție"
@@ -92,6 +100,7 @@ function projectRowToRecord(row: ProjectRow): ProjectRecord {
     cpeRequiresGrounding: Boolean(row.cpe_requires_grounding),
     sfp: Boolean(row.sfp),
     mc: Boolean(row.mc),
+    mcType: normalizeMediaConverterType(Boolean(row.mc), row.mc_type),
     terminalBox: Boolean(row.terminal_box),
     status: row.status,
     date: row.scheduled_label,
@@ -103,7 +112,7 @@ function projectRowToRecord(row: ProjectRow): ProjectRecord {
 function insertProjectStatement(project: ProjectRecord, technicianUsername: string, createdBy: string, createdAt = Date.now()) {
   return getRawDb()
     .prepare(
-      "INSERT INTO projects (id, activity_type, client, address, contact, phone, email, requirements, technician, technician_username, cpe, cpe_requires_grounding, sfp, mc, terminal_box, status, scheduled_label, ipwo, splice, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO projects (id, activity_type, client, address, contact, phone, email, requirements, technician, technician_username, cpe, cpe_requires_grounding, sfp, mc, mc_type, terminal_box, status, scheduled_label, ipwo, splice, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(
       project.id,
@@ -120,6 +129,7 @@ function insertProjectStatement(project: ProjectRecord, technicianUsername: stri
       project.cpeRequiresGrounding ? 1 : 0,
       project.sfp ? 1 : 0,
       project.mc ? 1 : 0,
+      project.mcType,
       project.terminalBox ? 1 : 0,
       project.status,
       project.date,
@@ -256,6 +266,8 @@ export async function createProject(input: ProjectRecord, createdBy: Authenticat
   if (activityType === "Instalare" && !catalogItem) {
     return { error: "Selectează un echipament disponibil în catalogul CPE.", status: 400 as const };
   }
+  const mcType = normalizeMediaConverterType(Boolean(input.mc), input.mcType);
+  if (input.mc && !mcType) return { error: "Selectează tipul Media Converter: 100 Mbps, 1 Gbps sau JumboFrame.", status: 400 as const };
 
   const project: ProjectRecord = {
     ...input,
@@ -270,6 +282,8 @@ export async function createProject(input: ProjectRecord, createdBy: Authenticat
     technician: technician.name,
     cpe: catalogItem?.name ?? "",
     cpeRequiresGrounding: Boolean(catalogItem?.requires_grounding),
+    mc: Boolean(input.mc),
+    mcType,
     status: "Planificat",
     date: input.date || "Astăzi",
     ipwo: input.ipwo || "Fișier neîncărcat",
@@ -311,6 +325,8 @@ export async function updateProject(input: ProjectRecord) {
   if (activityType === "Instalare" && normalizedCpe !== existing.cpe && !catalogItem) {
     return { error: "Selectează un echipament disponibil în catalogul CPE.", status: 400 as const };
   }
+  const mcType = normalizeMediaConverterType(Boolean(input.mc), input.mcType);
+  if (input.mc && !mcType) return { error: "Selectează tipul Media Converter: 100 Mbps, 1 Gbps sau JumboFrame.", status: 400 as const };
 
   const project: ProjectRecord = {
     ...input,
@@ -327,6 +343,7 @@ export async function updateProject(input: ProjectRecord) {
     cpeRequiresGrounding: activityType === "Instalare" ? Boolean(catalogItem ? catalogItem.requires_grounding : existing.cpe_requires_grounding) : false,
     sfp: Boolean(input.sfp),
     mc: Boolean(input.mc),
+    mcType,
     terminalBox: Boolean(input.terminalBox),
     date: typeof input.date === "string" && input.date.trim() ? input.date.trim() : existing.scheduled_label,
     ipwo: typeof input.ipwo === "string" && input.ipwo.trim() ? input.ipwo.trim() : existing.ipwo,
@@ -335,7 +352,7 @@ export async function updateProject(input: ProjectRecord) {
   const now = Date.now();
   const statements = [
     getRawDb().prepare(
-      "UPDATE projects SET activity_type = ?, client = ?, address = ?, contact = ?, phone = ?, email = ?, requirements = ?, technician = ?, technician_username = ?, cpe = ?, cpe_requires_grounding = ?, sfp = ?, mc = ?, terminal_box = ?, status = ?, scheduled_label = ?, ipwo = ?, splice = ?, updated_at = ? WHERE id = ?",
+      "UPDATE projects SET activity_type = ?, client = ?, address = ?, contact = ?, phone = ?, email = ?, requirements = ?, technician = ?, technician_username = ?, cpe = ?, cpe_requires_grounding = ?, sfp = ?, mc = ?, mc_type = ?, terminal_box = ?, status = ?, scheduled_label = ?, ipwo = ?, splice = ?, updated_at = ? WHERE id = ?",
     ).bind(
       project.activityType,
       project.client,
@@ -350,6 +367,7 @@ export async function updateProject(input: ProjectRecord) {
       project.cpeRequiresGrounding ? 1 : 0,
       project.sfp ? 1 : 0,
       project.mc ? 1 : 0,
+      project.mcType,
       project.terminalBox ? 1 : 0,
       project.status,
       project.date,
@@ -466,7 +484,7 @@ async function refreshGeneratedReport(projectId: string, documentation: ProjectF
       const equipment = client.equipment?.length ? client.equipment : [
         project.cpe,
         ...(project.sfp ? ["SFP optic"] : []),
-        ...(project.mc ? ["Media Converter"] : []),
+        ...(project.mc ? [`Media Converter${project.mc_type ? ` ${project.mc_type}` : ""}`] : []),
         ...(project.terminal_box ? ["Terminal Box"] : []),
       ];
       const clientLines = [
