@@ -12,6 +12,7 @@ import {
 import type { ProjectRecord } from "./project-data";
 import { useMapGestures } from "./use-map-gestures";
 import { useMapFullscreen } from "./use-map-fullscreen";
+import { fetchMapSites } from "./map-sites-client";
 
 type Coordinate = { lat: number; lon: number };
 type OptixSiteRow = [code: string, description: string, region: string, lat: number, lon: number];
@@ -195,12 +196,7 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
 
   useEffect(() => {
     let mounted = true;
-    fetch("/data/optix-sites.json")
-      .then(async (response) => {
-        if (!response.ok) throw new Error("Registrul Optix nu este disponibil.");
-        return response.json() as Promise<OptixPayload>;
-      })
-      .then((payload) => {
+    fetchMapSites().then((payload) => {
         if (!mounted) return;
         setSites(payload.sites);
         setSitesStatus("ready");
