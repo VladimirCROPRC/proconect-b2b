@@ -403,22 +403,12 @@ export function FoRouteSection({ project: projectItem, variant = "installation",
   const searchResults = useMemo(() => {
     const query = deferredSearch.trim().toLocaleLowerCase("ro");
     if (query.length < 2) return [];
-    const resultBuckets: Array<Array<{ site: OptixSite; score: number }>> = [[], [], [], [], []];
+    const exactMatches: OptixSite[] = [];
     for (let index = 0; index < sites.length; index += 1) {
       const site = siteFromRow(sites[index], index);
-      const code = site.code.toLocaleLowerCase("ro");
-      const name = site.name.toLocaleLowerCase("ro");
-      const city = site.city.toLocaleLowerCase("ro");
-      const haystack = `${code} ${name} ${site.address} ${city} ${site.county}`.toLocaleLowerCase("ro");
-      const score = code === query ? 0 : code.startsWith(query) ? 1 : name.startsWith(query) ? 2 : city.startsWith(query) ? 3 : 4;
-      if (haystack.includes(query) && resultBuckets[score].length < 12) {
-        resultBuckets[score].push({ site, score });
-      }
+      if (site.code.trim().toLocaleLowerCase("ro") === query) exactMatches.push(site);
     }
-    return resultBuckets
-      .flat()
-      .slice(0, 6)
-      .map(({ site }) => site);
+    return exactMatches.slice(0, 6);
   }, [deferredSearch, sites]);
 
   const routeCoordinates = useMemo(
@@ -937,7 +927,7 @@ export function FoRouteSection({ project: projectItem, variant = "installation",
         <aside className="fo-route-side">
           <section className="fo-search-card">
             <div className="fo-side-title"><span>B</span><div><h2>Joncțiune documentată</h2><p>Alege un punct pe hartă sau caută în registru.</p></div></div>
-            <label className="fo-site-search"><span>⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cod, nume sau localitate…" /></label>
+            <label className="fo-site-search"><span>⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Introdu codul exact, ex. J2…" /></label>
             {search.length >= 2 && (
               <div className="fo-search-results">
                 {searchResults.map((site) => (
