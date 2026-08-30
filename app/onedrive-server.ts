@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import { getRawDb } from "../db";
 import { bucket, getFileRow } from "./project-server";
 import { buildAcceptanceReportDocx } from "./report-docx";
+import { buildSpliceSheetXlsx } from "./splice-xlsx";
 import { base64url, decode64, fixedOrigin, retryDelay, safeName, usesOneDrive, validMode, type BackupMode } from "./onedrive-core";
 
 type Environment = { PROCONECT_APP_URL?: string; ONEDRIVE_CLIENT_ID?: string; ONEDRIVE_TENANT_ID?: string; ONEDRIVE_CLIENT_SECRET?: string; ONEDRIVE_ENCRYPTION_KEY?: string };
@@ -222,10 +223,6 @@ async function oneDriveDestination(token: string, rootId: string, projectId: str
   const sectionName = oneDriveSectionFolders[activity][section] ?? "99_Alte documente";
   return folder(token, projectFolder.id, sectionName);
 }
-function csvCell(value: unknown) {
-  return `"${String(value ?? "").replace(/"/g, '""')}"`;
-}
-
 async function uploadAcceptanceReport(token: string, projectId: string, destinationId: string) {
   const saved = await getRawDb().prepare("SELECT content_json FROM project_reports WHERE project_id = ? LIMIT 1").bind(projectId).first<{ content_json: string }>();
   if (!saved) return;
@@ -246,7 +243,7 @@ async function uploadSpliceSheet(token: string, projectId: string, destinationId
   ).bind(projectId).first<{ client: string; address: string; documentation_json?: string; report_json?: string }>();
   if (!row?.documentation_json) return;
 
-  let documentation: { splices?: { noIntervention?: boolean; noInterventionReason?: string; count?: number; records?: Array<{ junction?: { code?: string; name?: string; documented?: boolean }; junctionKind?: string; network?: string; siteBuffer?: string; siteFiber?: string; clientBuffer?: string; clientFiber?: string }> } };
+  let documentation: { splices?: { noIntervention?: boolean; noInterventionReason?: string; count?: number; records?: Array<{ junction?: { code?: string; name?: string; documented?: boolean; lat?: number; lon?: number }; junctionKind?: string; network?: string; siteCableType?: string; clientCableType?: string; siteBuffer?: string; siteFiber?: string; clientBuffer?: string; clientFiber?: string }> } };
   let report: { siteCode?: string; lec?: string } = {};
   try {
     documentation = JSON.parse(row.documentation_json);
@@ -257,42 +254,22 @@ async function uploadSpliceSheet(token: string, projectId: string, destinationId
   if (!documentation.splices) return;
 
   const splices = documentation.splices;
-  const lines: unknown[][] = [
-    ["FIȘĂ DE SUDURI FIBRĂ OPTICĂ"],
-    ["PROIECT", projectId],
-    ["CLIENT", row.client],
-    ["LOCAȚIE", row.address],
-    ["COD SITE", report.siteCode ?? ""],
-    ["CLIENT LEC", report.lec ?? ""],
-    ["TOTAL SUDURI", splices.count ?? splices.records?.length ?? 0],
-    [],
-  ];
-  if (splices.noIntervention) {
-    lines.push(["NU S-A INTERVENIT", splices.noInterventionReason ?? ""]);
-  } else {
-    lines.push(["NR.", "JONCȚIUNE", "NUME", "TIP / REȚEA", "TUB SITE", "FIBRĂ SITE", "TUB CLIENT", "FIBRĂ CLIENT"]);
-    for (const [index, record] of (splices.records ?? []).entries()) {
-      const kind = record.junction?.documented ? "Documentată" : record.junctionKind === "new" ? "Nouă" : "Existentă";
-      const network = record.network === "mobile" ? "Vodafone Mobil" : record.network === "fixed" ? "Vodafone Fixed" : "";
-      lines.push([
-        index + 1,
-        record.junction?.documented ? record.junction.code ?? "" : "Fără cod",
-        record.junction?.name ?? "",
-        [kind, network].filter(Boolean).join(" / "),
-        record.siteBuffer ?? "",
-        record.siteFiber ?? "",
-        record.clientBuffer ?? "",
-        record.clientFiber ?? "",
-      ]);
-    }
-  }
-
-  const csv = "\uFEFF" + lines.map((line) => line.map(csvCell).join(";")).join("\r\n");
-  const filename = `Fișa de suduri - ${readableFolderName(projectId)}.csv`;
+  const workbook = buildSpliceSheetXlsx({
+    projectId,
+    client: row.client,
+    address: row.address,
+    siteCode: report.siteCode,
+    lec: report.lec,
+    count: splices.count ?? splices.records?.length ?? 0,
+    noIntervention: splices.noIntervention,
+    noInterventionReason: splices.noInterventionReason,
+    records: splices.records ?? [],
+  });
+  const filename = `Fișa de suduri - ${readableFolderName(projectId)}.xlsx`;
   await checked(await graph(token, `/me/drive/items/${encodeURIComponent(destinationId)}:/${encodeURIComponent(filename)}:/content`, {
     method: "PUT",
-    headers: { "Content-Type": "text/csv; charset=utf-8" },
-    body: encoder.encode(csv),
+    headers: { "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
+    body: workbook,
   }));
 }
 
