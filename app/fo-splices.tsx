@@ -38,6 +38,7 @@ type SpliceRecord = {
   junction: Junction;
   junctionKind: JunctionKind;
   network: JunctionNetwork;
+  folderName?: string;
   siteCableType?: string;
   clientCableType?: string;
   siteBuffer: string;
@@ -380,7 +381,8 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
     if (!file) return;
     setSplicePhotos((current) => ({ ...current, [key]: file.name }));
     try {
-      const undocumentedIndex = projectRecords.filter((record) => !record.junction.documented).length + 1;
+      const previousUndocumentedNumbers = projectRecords.filter((record) => !record.junction.documented).map((record, index) => Number(record.folderName?.match(/(\d+)$/)?.[1] ?? index + 1));
+      const undocumentedIndex = Math.max(0, ...previousUndocumentedNumbers) + 1;
       const folderToken = junction?.documented
         ? junction.code.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 45)
         : `J_nedocumentata_${undocumentedIndex}`;
@@ -434,6 +436,7 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
       junction,
       junctionKind,
       network,
+      folderName: junction.documented ? junction.code : `J nedocumentată ${Math.max(0, ...projectRecords.filter((record) => !record.junction.documented).map((record, index) => Number(record.folderName?.match(/(\\d+)$/)?.[1] ?? index + 1))) + 1}`,
       siteCableType: siteCableType.trim(),
       clientCableType: clientCableType.trim(),
       siteBuffer,
