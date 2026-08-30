@@ -1,7 +1,7 @@
 "use client";
 
 import { useDeferredValue, useEffect, useMemo, useState, type MouseEvent } from "react";
-import { fetchProjectFiles, uploadProjectFile } from "./client-storage";
+import { deleteProjectFile, fetchProjectFiles, uploadProjectFile } from "./client-storage";
 import type { SpliceFieldSummary } from "./field-documentation";
 import { NoInterventionControl } from "./no-intervention-control";
 import { useMapGestures } from "./use-map-gestures";
