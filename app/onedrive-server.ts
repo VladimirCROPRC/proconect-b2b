@@ -159,7 +159,10 @@ export async function seedOneDrive() {
 }
 export async function retryOneDrive() {
   await seedOneDrive();
-  await getRawDb().prepare("UPDATE onedrive_jobs SET next_at = 0 WHERE revision > done_revision").run();
+  await getRawDb().batch([
+    getRawDb().prepare("DELETE FROM onedrive_jobs WHERE kind = 'file' AND NOT EXISTS (SELECT 1 FROM project_files WHERE project_files.id = onedrive_jobs.item_id)"),
+    getRawDb().prepare("UPDATE onedrive_jobs SET revision = revision + 1, attempts = 0, next_at = 0, last_error = '' WHERE kind = 'file' AND EXISTS (SELECT 1 FROM project_files WHERE project_files.id = onedrive_jobs.item_id)"),
+  ]);
 }
 export async function oneDriveStatus() {
   const configured = oneDriveConfigured();
