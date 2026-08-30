@@ -379,6 +379,10 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
   async function captureSplicePhoto(key: SplicePhotoKey, files: FileList | null) {
     const file = files?.[0];
     if (!file) return;
+    if (!junction) {
+      onNotify("Selectează mai întâi joncțiunea pentru această sudură.");
+      return;
+    }
     setSplicePhotos((current) => ({ ...current, [key]: file.name }));
     try {
       const previousUndocumentedNumbers = projectRecords.filter((record) => !record.junction.documented).map((record, index) => Number(record.folderName?.match(/(\d+)$/)?.[1] ?? index + 1));
@@ -436,7 +440,7 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
       junction,
       junctionKind,
       network,
-      folderName: junction.documented ? junction.code : `J nedocumentată ${Math.max(0, ...projectRecords.filter((record) => !record.junction.documented).map((record, index) => Number(record.folderName?.match(/(\\d+)$/)?.[1] ?? index + 1))) + 1}`,
+      folderName: junction.documented ? junction.code : `J nedocumentată ${Math.max(0, ...projectRecords.filter((record) => !record.junction.documented).map((record, index) => Number(record.folderName?.match(/(\d+)$/)?.[1] ?? index + 1))) + 1}`,
       siteCableType: siteCableType.trim(),
       clientCableType: clientCableType.trim(),
       siteBuffer,
