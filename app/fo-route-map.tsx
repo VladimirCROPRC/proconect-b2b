@@ -170,6 +170,10 @@ function formatCoordinate(point: Coordinate) {
   return `${point.lat.toFixed(6)}, ${point.lon.toFixed(6)}`;
 }
 
+function googleMapsUrl(point: Coordinate) {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${point.lat},${point.lon}`)}`;
+}
+
 function parseLengthMeters(value: string) {
   const length = Number(value.trim().replace(",", "."));
   return Number.isFinite(length) && length > 0 ? length : 0;
@@ -937,13 +941,23 @@ export function FoRouteSection({ project: projectItem, variant = "installation",
             {search.length >= 2 && (
               <div className="fo-search-results">
                 {searchResults.map((site) => (
-                  <button key={site.id} onClick={() => setDocumentedEnd(site)}>
-                    <span>{site.code}</span>
-                    <div><strong>{site.name}</strong><small>{site.city}{site.county ? ` · ${site.county}` : ""}</small></div>
-                    <b>→</b>
-                  </button>
+                  <article className={endB?.id === site.id ? "selected" : ""} key={site.id}>
+                    <button onClick={() => setDocumentedEnd(site)}>
+                      <span>{site.code}</span>
+                      <div><strong>{site.name}</strong><small>{site.city}{site.county ? ` · ${site.county}` : ""}</small></div>
+                      <b>Arată pe hartă</b>
+                    </button>
+                    <a href={googleMapsUrl(site)} target="_blank" rel="noreferrer" aria-label={`Deschide joncțiunea ${site.code} în Google Maps`}>Google Maps ↗</a>
+                  </article>
                 ))}
                 {!searchResults.length && <p>Niciun punct găsit.</p>}
+              </div>
+            )}
+            {endB?.documented && (
+              <div className="fo-selected-junction">
+                <div><small>JONCȚIUNE SELECTATĂ</small><strong>{endB.code} · {endB.name}</strong><span>{formatCoordinate(endB)}</span></div>
+                <button onClick={() => { setCenter({ lat: endB.lat, lon: endB.lon }); setZoom((current) => Math.max(current, 18)); }}>Arată punctul</button>
+                <a href={googleMapsUrl(endB)} target="_blank" rel="noreferrer">Google Maps ↗</a>
               </div>
             )}
             <button className="fo-undocumented-button" onClick={() => setMode("undocumented")}><span>＋</span><div><strong>Joncțiune nedocumentată</strong><small>Plasează manual capătul B pe hartă</small></div></button>
