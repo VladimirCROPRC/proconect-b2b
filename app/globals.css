@@ -10201,3 +10201,26 @@ td > small {
     width: calc((100dvh - 112px - env(safe-area-inset-top) - env(safe-area-inset-bottom)) * 5 / 3);
   }
 }
+
+
+/* Compact placed points keep the map clear on small portrait screens. */
+.fo-placed-dot {
+  position: absolute;
+  z-index: 10;
+  width: 16px;
+  height: 16px;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  background: #3b4984;
+  box-shadow: 0 2px 8px rgba(23, 38, 75, .42);
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+.fo-placed-dot.junction-dot {
+  background: #d07b25;
+}
+
+.fo-placed-dot.junction-dot.undocumented {
+  background: #c6525f;
+}
