@@ -609,7 +609,13 @@ export default function Home() {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ project }),
+        body: JSON.stringify({
+          project,
+          reportMetadata: {
+            siteCode: String(form.get("siteCode") || ""),
+            lec: String(form.get("lec") || ""),
+          },
+        }),
       });
       const payload = (await response.json()) as { project?: Project; error?: string };
       if (!response.ok || !payload.project) throw new Error(payload.error || "Proiectul nu a putut fi creat.");
@@ -1546,6 +1552,10 @@ export default function Home() {
                   <label><span>Request ID *</span><div className="prefix-input"><b>RID</b><input name="requestId" required readOnly={Boolean(editingProject)} defaultValue={editingProject?.id.replace(/^RID/i, "")} inputMode="numeric" placeholder="ex. 10483" /></div></label>
                 )}
                 <label><span>Nume client *</span><input name="client" required defaultValue={editingProject?.client} placeholder="Denumirea companiei" /></label>
+                {isInstallationForm && !editingProject && <>
+                  <label><span>Cod site (opțional)</span><input name="siteCode" maxLength={100} placeholder="Codul site-ului clientului" /></label>
+                  <label><span>LEC (opțional)</span><input name="lec" maxLength={100} placeholder="Location Engineering Code" /></label>
+                </>}
                 <label className="wide"><span>{isInstallationForm ? "Adresă instalare" : "Adresă lucrare"} *</span><input name="address" required defaultValue={editingProject?.address} placeholder="Stradă, număr, localitate" /></label>
                 <label><span>Persoană de contact *</span><input name="contact" required defaultValue={editingProject?.contact} placeholder="Nume și prenume" /></label>
                 <label><span>Telefon *</span><input name="phone" required defaultValue={editingProject?.phone} placeholder="+40 7xx xxx xxx" /></label>
