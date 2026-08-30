@@ -262,7 +262,7 @@ export function FoRouteSection({ project: projectItem, initialSummary, onNotify,
     unproject,
     mapWidth: MAP_WIDTH,
     mapHeight: MAP_HEIGHT,
-    maximumZoom: 19,
+    maximumZoom: 25,
     mousePan: mode === "pan",
   });
 
@@ -335,13 +335,16 @@ export function FoRouteSection({ project: projectItem, initialSummary, onNotify,
   }, [projectItem.id, initialSummary]);
 
   const tiles = useMemo(() => {
+    const sourceZoom = Math.min(zoom, 19);
+    const overzoomScale = 2 ** (zoom - sourceZoom);
+    const renderedTileSize = TILE_SIZE * overzoomScale;
     const projectedCenter = project(center, zoom);
-    const tilesAcross = 2 ** zoom;
-    const firstX = Math.floor((projectedCenter.x - MAP_WIDTH / 2) / TILE_SIZE);
-    const lastX = Math.floor((projectedCenter.x + MAP_WIDTH / 2) / TILE_SIZE);
-    const firstY = Math.floor((projectedCenter.y - MAP_HEIGHT / 2) / TILE_SIZE);
-    const lastY = Math.floor((projectedCenter.y + MAP_HEIGHT / 2) / TILE_SIZE);
-    const result: Array<{ key: string; x: number; y: number; urlX: number; urlY: number }> = [];
+    const tilesAcross = 2 ** sourceZoom;
+    const firstX = Math.floor((projectedCenter.x - MAP_WIDTH / 2) / renderedTileSize);
+    const lastX = Math.floor((projectedCenter.x + MAP_WIDTH / 2) / renderedTileSize);
+    const firstY = Math.floor((projectedCenter.y - MAP_HEIGHT / 2) / renderedTileSize);
+    const lastY = Math.floor((projectedCenter.y + MAP_HEIGHT / 2) / renderedTileSize);
+    const result: Array<{ key: string; x: number; y: number; size: number; sourceZoom: number; urlX: number; urlY: number }> = [];
 
     for (let tileX = firstX; tileX <= lastX; tileX += 1) {
       for (let tileY = firstY; tileY <= lastY; tileY += 1) {
@@ -349,8 +352,10 @@ export function FoRouteSection({ project: projectItem, initialSummary, onNotify,
         const wrappedX = ((tileX % tilesAcross) + tilesAcross) % tilesAcross;
         result.push({
           key: `${zoom}-${tileX}-${tileY}`,
-          x: tileX * TILE_SIZE - (projectedCenter.x - MAP_WIDTH / 2),
-          y: tileY * TILE_SIZE - (projectedCenter.y - MAP_HEIGHT / 2),
+          x: tileX * renderedTileSize - (projectedCenter.x - MAP_WIDTH / 2),
+          y: tileY * renderedTileSize - (projectedCenter.y - MAP_HEIGHT / 2),
+          size: renderedTileSize,
+          sourceZoom,
           urlX: wrappedX,
           urlY: tileY,
         });
@@ -833,14 +838,14 @@ export function FoRouteSection({ project: projectItem, initialSummary, onNotify,
                 {tiles.map((tile) => (
                   <img
                     key={tile.key}
-                    src={`https://tile.openstreetmap.org/${zoom}/${tile.urlX}/${tile.urlY}.png`}
+                    src={`https://tile.openstreetmap.org/${tile.sourceZoom}/${tile.urlX}/${tile.urlY}.png`}
                     alt=""
                     draggable={false}
                     style={{
                       left: `${(tile.x / MAP_WIDTH) * 100}%`,
                       top: `${(tile.y / MAP_HEIGHT) * 100}%`,
-                      width: `${(TILE_SIZE / MAP_WIDTH) * 100}%`,
-                      height: `${(TILE_SIZE / MAP_HEIGHT) * 100}%`,
+                      width: `${(tile.size / MAP_WIDTH) * 100}%`,
+                      height: `${(tile.size / MAP_HEIGHT) * 100}%`,
                     }}
                   />
                 ))}
@@ -899,8 +904,8 @@ export function FoRouteSection({ project: projectItem, initialSummary, onNotify,
               </button>
 
               <div className="fo-zoom" onClick={(event) => event.stopPropagation()}>
-                <button onClick={() => setZoom((current) => clamp(current + 1, 7, 19))} aria-label="Mărește harta">＋</button>
-                <button onClick={() => setZoom((current) => clamp(current - 1, 7, 19))} aria-label="Micșorează harta">−</button>
+                <button onClick={() => setZoom((current) => clamp(current + 1, 7, 25))} aria-label="Mărește harta">＋</button>
+                <button onClick={() => setZoom((current) => clamp(current - 1, 7, 25))} aria-label="Micșorează harta">−</button>
               </div>
               <div className="fo-pan-pad" onClick={(event) => event.stopPropagation()}>
                 <button onClick={() => panMap(0, -160)} aria-label="Mută harta spre nord">↑</button>
