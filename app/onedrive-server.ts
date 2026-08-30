@@ -312,6 +312,23 @@ async function uploadJob(c: Connection, job: Job) {
   if (!current || current.generation !== c.generation || current.lease !== c.lease || !usesOneDrive(current.mode)) throw new Error("Sincronizarea OneDrive a fost oprită.");
   await checked(await graph(token, `/me/drive/items/${encodeURIComponent(destination.id)}:/${encodeURIComponent(filename)}:/content`, { method: "PUT", headers: { "Content-Type": file.content_type }, body }));
 }
+export async function deleteOneDriveFileCopy(fileId: string) {
+  if (!oneDriveConfigured()) return;
+  const c = await connection();
+  if (!c?.refresh_token) return;
+  const file = await getFileRow(fileId);
+  if (!file) return;
+  const project = await getRawDb().prepare("SELECT activity_type FROM projects WHERE id = ?").bind(file.project_id).first<{ activity_type?: OneDriveActivity }>();
+  if (!project) return;
+  const activity: OneDriveActivity = project.activity_type && project.activity_type in oneDriveActivityFolders ? project.activity_type : "Instalare";
+  const token = await tokenFor(c);
+  const destination = await oneDriveDestination(token, c.root_id, file.project_id, activity, file.section);
+  const filename = await safeName(file.original_name, file.id);
+  const response = await graph(token, `/me/drive/items/${encodeURIComponent(destination.id)}:/${encodeURIComponent(filename)}`, { method: "DELETE" });
+  if (!response.ok && response.status !== 404) throw new Error(`OneDrive nu a putut șterge copia fișierului (${response.status}).`);
+  await getRawDb().prepare("DELETE FROM onedrive_jobs WHERE id = ?").bind(`file:${fileId}`).run();
+}
+
 export async function drainOneDrive() {
   if (!oneDriveConfigured()) return;
   const lease = crypto.randomUUID();
