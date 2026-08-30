@@ -10,6 +10,7 @@ type DocumentProject = {
   cpe: string;
   sfp: boolean;
   mc: boolean;
+  mcType: "" | "100 Mbps" | "1 Gbps" | "JumboFrame";
   terminalBox: boolean;
   splice: string;
 };
@@ -118,7 +119,7 @@ function buildReport(project: DocumentProject, fieldData: ProjectFieldDocumentat
   const equipment = fieldData.client?.equipment ?? [
     project.cpe,
     ...(project.sfp ? ["SFP optic"] : []),
-    ...(project.mc ? ["Media Converter"] : []),
+    ...(project.mc ? [`Media Converter${project.mcType ? ` ${project.mcType}` : ""}`] : []),
     ...(project.terminalBox ? ["Terminal Box"] : []),
   ];
   const clientLines = fieldData.client?.noIntervention
@@ -266,7 +267,7 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
   const vodafoneMaterials = [
     ...(project.cpe ? [{ name: `CPE ${project.cpe}`, quantity: 1, unit: "buc." }] : []),
     ...(project.sfp ? [{ name: "SFP", quantity: 1, unit: "buc." }] : []),
-    ...(project.mc ? [{ name: "Media Converter", quantity: 1, unit: "buc." }] : []),
+    ...(project.mc ? [{ name: `Media Converter${project.mcType ? ` ${project.mcType}` : ""}`, quantity: 1, unit: "buc." }] : []),
     ...(project.terminalBox ? [{ name: "Terminal Box", quantity: 1, unit: "buc." }] : []),
     ...cableMaterials,
   ];
