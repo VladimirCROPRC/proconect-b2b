@@ -17,6 +17,8 @@ type DocumentProject = {
 type ReportDraft = {
   title: string;
   siteLabel: string;
+  siteCode: string;
+  lec: string;
   site: string;
   route: string;
   client: string;
@@ -121,6 +123,8 @@ function buildReport(project: DocumentProject, fieldData: ProjectFieldDocumentat
   return {
     title: "Raport acceptanță",
     siteLabel: inferSiteLabel(project, fieldData),
+    siteCode: "",
+    lec: "",
     site: asBullets(siteLines),
     route: asBullets(routeLines),
     client: asBullets(clientLines),
@@ -229,7 +233,7 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
         const payload = (await response.json()) as { saved?: { report: ReportDraft; updatedAt: number } | null; error?: string };
         if (!response.ok) throw new Error(payload.error || "Raportul nu este disponibil momentan.");
         if (!active || !payload.saved) return;
-        setReport(payload.saved.report);
+        setReport({ ...buildReport(project, fieldData), ...payload.saved.report });
         setSavedAt(new Intl.DateTimeFormat("ro-RO", { hour: "2-digit", minute: "2-digit" }).format(new Date(payload.saved.updatedAt)));
       })
       .catch(() => {
@@ -251,7 +255,7 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
   }
 
   function regenerate() {
-    setReport(buildReport(project, fieldData));
+    setReport((current) => ({ ...buildReport(project, fieldData), siteCode: current.siteCode, lec: current.lec }));
     onNotify("Raportul a fost regenerat din operațiunile salvate în teren.");
   }
 
@@ -296,6 +300,10 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
             <article className="acceptance-paper">
               <input className="report-title-input" value={report.title} onChange={(event) => updateReport("title", event.target.value)} aria-label="Titlul raportului" />
               <input className="report-site-input" value={report.siteLabel} onChange={(event) => updateReport("siteLabel", event.target.value)} aria-label="Identificator proiect sau site" />
+              <div className="report-code-grid">
+                <label><span>Cod site</span><input value={report.siteCode} onChange={(event) => updateReport("siteCode", event.target.value)} placeholder="Nespecificat" aria-label="Cod site client" /></label>
+                <label><span>LEC</span><input value={report.lec} onChange={(event) => updateReport("lec", event.target.value)} placeholder="Nespecificat" aria-label="Location Engineering Code" /></label>
+              </div>
               <section className="editable-report-section site-report-section">
                 <textarea value={report.site} onChange={(event) => updateReport("site", event.target.value)} rows={Math.max(2, report.site.split("\n").length + 1)} aria-label="Conținut secțiune Site" />
                 <small>Fiecare rând este inclus ca punct distinct în raport.</small>
@@ -338,6 +346,8 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
             <div className="splice-sheet-project">
               <div><small>CLIENT</small><strong>{project.client}</strong></div>
               <div><small>LOCAȚIE</small><strong>{project.address}</strong></div>
+              <div><small>COD SITE</small><strong>{report.siteCode || "Nespecificat"}</strong></div>
+              <div><small>LEC</small><strong>{report.lec || "Nespecificat"}</strong></div>
               <div><small>DIAGRAMĂ DE REFERINȚĂ</small><strong>{project.splice || "Neîncărcată"}</strong></div>
               <div><small>TOTAL SUDURI</small><strong>{fieldData.splices?.count ?? 0}</strong></div>
             </div>
