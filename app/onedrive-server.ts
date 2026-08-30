@@ -224,7 +224,9 @@ async function oneDriveDestination(token: string, rootId: string, projectId: str
   return folder(token, projectFolder.id, sectionName);
 }
 function splicePhotoFolder(category: string) {
-  const token = category.split(":")[1] ?? "";
+  const parts = category.split(":");
+  if (parts.length < 3) return "";
+  const token = parts[1] ?? "";
   if (!token) return "";
   const undocumented = /^J_nedocumentata_(\d+)$/i.exec(token);
   return undocumented ? `J nedocumentată ${undocumented[1]}` : token;
