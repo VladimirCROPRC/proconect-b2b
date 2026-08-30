@@ -10224,3 +10224,23 @@ td > small {
 .fo-placed-dot.junction-dot.undocumented {
   background: #c6525f;
 }
+
+
+/* Survey reuses the route-map engine but records planning geometry only. */
+.survey-route-page {
+  width: 100%;
+  max-width: none;
+  padding: 0;
+}
+
+.survey-route-page > .page-heading,
+.survey-route-page > .fo-project-bar,
+.survey-route-page > .fo-cable-card,
+.survey-route-page .fo-cable-card,
+.survey-route-page .fo-route-photo-card {
+  display: none;
+}
+
+.survey-route-page .fo-route-metrics.survey-metrics {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
