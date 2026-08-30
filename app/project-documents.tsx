@@ -90,10 +90,11 @@ function buildReport(project: DocumentProject, fieldData: ProjectFieldDocumentat
   const routeLines = fieldData.route?.noIntervention
     ? [`Nu s-a intervenit la traseul FO. Motiv: ${fieldData.route.noInterventionReason}.`]
     : fieldData.route?.segments.length
-    ? [
-        `S-a instalat un traseu FO între ${fieldData.route.junction.label} și locația clientului, în lungime de ${fieldData.route.totalLengthMeters.toLocaleString("ro-RO")} m, din care ${fieldData.route.segments.map((segment) => `${segment.lengthMeters.toLocaleString("ro-RO")} m ${segment.label.toLocaleLowerCase("ro-RO")}`).join(", ")}.`,
-        `Tipuri de cablu utilizate: ${fieldData.route.segments.map((segment) => `${segment.cableType} (${segment.label.toLocaleLowerCase("ro-RO")})`).join(", ")}.`,
-      ]
+    ? (() => {
+        const cableTypes = [...new Set(fieldData.route.segments.map((segment) => segment.cableType.replace(/^Cablu FO\\s*/i, "").trim()).filter(Boolean))];
+        const cableDescription = cableTypes.length === 1 ? `un cablu FO ${cableTypes[0]}` : `cabluri FO ${cableTypes.join(", ")}`;
+        return [`S-a instalat ${cableDescription} între ${fieldData.route.junction.label} și locația clientului, în lungime de ${fieldData.route.totalLengthMeters.toLocaleString("ro-RO")} m, din care ${fieldData.route.segments.map((segment) => `${segment.lengthMeters.toLocaleString("ro-RO")} m ${segment.label.toLocaleLowerCase("ro-RO")}`).join(", ")}.`];
+      })()
     : ["Traseul FO nu a fost încă salvat din teren."];
 
   if (fieldData.route?.segments.some((segment) => segment.method === "aerial")) {
