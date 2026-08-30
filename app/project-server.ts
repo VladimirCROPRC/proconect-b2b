@@ -440,6 +440,16 @@ async function refreshGeneratedReport(projectId: string, documentation: ProjectF
       routeLines.push(`Lungimea traseului FO documentat pe hartă este de ${route.totalLengthMeters.toLocaleString("ro-RO")} m.`);
     }
   }
+  if (documentation.route?.segments.some((segment) => segment.method === "aerial")) {
+    const accessories = [
+      ["Bărcuță", documentation.route.aerialMaterials.boat],
+      ["Colier tablă inox", documentation.route.aerialMaterials.stainlessClamp],
+      ["Cârlig", documentation.route.aerialMaterials.hook],
+      ["Armorod", documentation.route.aerialMaterials.armorod],
+    ].filter((item): item is [string, number] => Number(item[1]) > 0);
+    if (accessories.length) routeLines.push(`Accesorii instalare aeriană: ${accessories.map(([name, quantity]) => `${name}: ${quantity.toLocaleString("ro-RO")} buc.`).join(", ")}`);
+  }
+
   if (documentation.splices?.noIntervention) {
     routeLines.push(`Nu s-a intervenit la sudurile FO. Motiv: ${documentation.splices.noInterventionReason}.`);
   } else if (documentation.splices?.count) {
