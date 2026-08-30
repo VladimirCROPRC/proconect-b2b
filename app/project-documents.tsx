@@ -96,6 +96,16 @@ function buildReport(project: DocumentProject, fieldData: ProjectFieldDocumentat
       ]
     : ["Traseul FO nu a fost încă salvat din teren."];
 
+  if (fieldData.route?.segments.some((segment) => segment.method === "aerial")) {
+    const accessories = [
+      ["Bărcuță", fieldData.route.aerialMaterials.boat],
+      ["Colier tablă inox", fieldData.route.aerialMaterials.stainlessClamp],
+      ["Cârlig", fieldData.route.aerialMaterials.hook],
+      ["Armorod", fieldData.route.aerialMaterials.armorod],
+    ].filter((item): item is [string, number] => Number(item[1]) > 0);
+    if (accessories.length) routeLines.push(`Accesorii instalare aeriană: ${accessories.map(([name, quantity]) => `${name}: ${quantity.toLocaleString("ro-RO")} buc.`).join(", ")}`);
+  }
+
   if (fieldData.splices?.noIntervention) {
     routeLines.push(`Nu s-a intervenit la sudurile FO. Motiv: ${fieldData.splices.noInterventionReason}.`);
   } else if (fieldData.splices?.count) {
