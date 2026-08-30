@@ -43,8 +43,10 @@ function rowsToSites(rows: string[][], source: string): ImportPreview {
     const code = row[indexes.code]?.trim() ?? "";
     const description = row[indexes.description]?.trim() ?? "";
     const region = row[indexes.region]?.trim() ?? "";
-    const lat = Number((row[indexes.lat] ?? "").trim().replace(",", "."));
-    const lon = Number((row[indexes.lon] ?? "").trim().replace(",", "."));
+    const latitudeText = (row[indexes.lat] ?? "").trim();
+    const longitudeText = (row[indexes.lon] ?? "").trim();
+    const lat = latitudeText ? Number(latitudeText.replace(",", ".")) : Number.NaN;
+    const lon = longitudeText ? Number(longitudeText.replace(",", ".")) : Number.NaN;
     if (!code || !Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
       rejected += 1;
       continue;
@@ -187,8 +189,11 @@ export function MapSitesSettings({ onNotify }: { onNotify: (message: string) => 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ source: preview.source, sites: preview.sites, rejected: preview.rejected }),
       });
-      const result = await response.json() as Status;
-      if (!response.ok) throw new Error(result.error || "Importul nu a reușit.");
+      const responseText = await response.text();
+      let result: Status = {};
+      try { result = responseText ? JSON.parse(responseText) as Status : {}; }
+      catch { result = {}; }
+      if (!response.ok) throw new Error(result.error || `Importul nu a reușit (HTTP ${response.status}).`);
       setStatus({ configured: true, ...result }); setPreview(null);
       onNotify(`${result.valid?.toLocaleString("ro-RO")} site-uri au fost publicate pe toate hărțile.`);
     } catch (failure) { setError(failure instanceof Error ? failure.message : "Importul nu a reușit."); }
