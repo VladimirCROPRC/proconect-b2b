@@ -434,8 +434,9 @@ async function refreshGeneratedReport(projectId: string, documentation: ProjectF
     if (route.noIntervention) {
       routeLines.push(`Nu s-a intervenit la traseul FO. Motiv: ${route.noInterventionReason}.`);
     } else if (route.segments.length) {
-      routeLines.push(`S-a instalat un traseu FO între ${route.junction.label} și locația clientului, în lungime de ${route.totalLengthMeters.toLocaleString("ro-RO")} m, din care ${route.segments.map((segment) => `${segment.lengthMeters.toLocaleString("ro-RO")} m ${segment.label.toLocaleLowerCase("ro-RO")}`).join(", ")}.`);
-      routeLines.push(`Tipuri de cablu utilizate: ${route.segments.map((segment) => `${segment.cableType} (${segment.label.toLocaleLowerCase("ro-RO")})`).join(", ")}.`);
+      const cableTypes = [...new Set(route.segments.map((segment) => segment.cableType.replace(/^Cablu FO\\s*/i, "").trim()).filter(Boolean))];
+      const cableDescription = cableTypes.length === 1 ? `un cablu FO ${cableTypes[0]}` : `cabluri FO ${cableTypes.join(", ")}`;
+      routeLines.push(`S-a instalat ${cableDescription} între ${route.junction.label} și locația clientului, în lungime de ${route.totalLengthMeters.toLocaleString("ro-RO")} m, din care ${route.segments.map((segment) => `${segment.lengthMeters.toLocaleString("ro-RO")} m ${segment.label.toLocaleLowerCase("ro-RO")}`).join(", ")}.`);
     } else if (route.totalLengthMeters > 0) {
       routeLines.push(`Lungimea traseului FO documentat pe hartă este de ${route.totalLengthMeters.toLocaleString("ro-RO")} m.`);
     }
