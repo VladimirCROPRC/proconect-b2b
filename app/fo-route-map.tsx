@@ -895,6 +895,7 @@ export function FoRouteSection({ project: projectItem, variant = "installation",
               })()}
 
               <div className="fo-map-instruction"><span>{mode === "pan" ? "✥" : mode === "client" ? "A" : mode === "route" ? "⌁" : "B?"}</span>{mode === "pan" ? "Glisează harta · apropie două degete pentru zoom" : mode === "client" ? "Atinge pentru Client A · glisează sau folosește pinch zoom" : mode === "route" ? "Atinge pentru punct · glisează sau folosește pinch zoom" : "Atinge pentru joncțiune · glisează sau folosește pinch zoom"}</div>
+              <div className="fo-route-live-distance" aria-live="polite"><small>LUNGIME TRASEU</small><strong>{formatLengthMeters(Math.round(routeDistance))}</strong></div>
 
               <button
                 className={`fo-locate-button ${currentLocation ? "located" : ""}`}
