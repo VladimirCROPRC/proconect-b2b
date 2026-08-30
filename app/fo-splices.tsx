@@ -380,7 +380,11 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
     if (!file) return;
     setSplicePhotos((current) => ({ ...current, [key]: file.name }));
     try {
-      const stored = await uploadProjectFile({ projectId: projectItem.id, section: "splices", category: `${draftId}:${key}`, file });
+      const undocumentedIndex = projectRecords.filter((record) => !record.junction.documented).length + 1;
+      const folderToken = junction?.documented
+        ? junction.code.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 45)
+        : `J_nedocumentata_${undocumentedIndex}`;
+      const stored = await uploadProjectFile({ projectId: projectItem.id, section: "splices", category: `${draftId}:${folderToken}:${key}`, file });
       setSplicePhotos((current) => ({ ...current, [key]: stored.name }));
     } catch (error) {
       setSplicePhotos((current) => ({ ...current, [key]: "" }));
