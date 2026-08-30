@@ -353,16 +353,17 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
             ) : fieldData.splices?.records?.length ? (
               <div className="splice-sheet-table-wrap">
                 <table className="splice-sheet-table">
-                  <thead><tr><th>NR.</th><th>JONCȚIUNE</th><th>TIP / REȚEA</th><th>TUB SITE</th><th>FIBRĂ SITE</th><th>TUB CLIENT</th><th>FIBRĂ CLIENT</th></tr></thead>
+                  <thead><tr><th>NR.</th><th>JONCȚIUNE</th><th>TIP / REȚEA</th><th>COORDONATE</th><th>CABLU SITE</th><th>TUB / FIBRĂ SITE</th><th>CABLU CLIENT</th><th>TUB / FIBRĂ CLIENT</th></tr></thead>
                   <tbody>{fieldData.splices.records.map((record, index) => (
                     <tr key={record.id}>
                       <td>{index + 1}</td>
                       <td><strong>{record.junction.documented ? record.junction.code : "Fără cod"}</strong><small>{record.junction.name}</small></td>
                       <td><strong>{record.junction.documented ? "Documentată" : record.junctionKind === "new" ? "Nouă" : "Existentă"}</strong><small>{record.network === "mobile" ? "Vodafone Mobil" : record.network === "fixed" ? "Vodafone Fixed" : "—"}</small></td>
-                      <td>{record.siteBuffer}</td>
-                      <td>{record.siteFiber}</td>
-                      <td>{record.clientBuffer}</td>
-                      <td>{record.clientFiber}</td>
+                      <td>{record.junction.documented ? "—" : `${record.junction.lat.toFixed(6)}, ${record.junction.lon.toFixed(6)}`}</td>
+                      <td>{record.siteCableType || "Nespecificat"}</td>
+                      <td>{record.siteBuffer} / {record.siteFiber}</td>
+                      <td>{record.clientCableType || "Nespecificat"}</td>
+                      <td>{record.clientBuffer} / {record.clientFiber}</td>
                     </tr>
                   ))}</tbody>
                 </table>
