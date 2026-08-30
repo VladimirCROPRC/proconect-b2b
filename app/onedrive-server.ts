@@ -223,6 +223,19 @@ async function oneDriveDestination(token: string, rootId: string, projectId: str
   const sectionName = oneDriveSectionFolders[activity][section] ?? "99_Alte documente";
   return folder(token, projectFolder.id, sectionName);
 }
+function splicePhotoFolder(category: string) {
+  const token = category.split(":")[1] ?? "";
+  if (!token) return "";
+  const undocumented = /^J_nedocumentata_(\d+)$/i.exec(token);
+  return undocumented ? `J nedocumentată ${undocumented[1]}` : token;
+}
+
+async function oneDriveFileDestination(token: string, rootId: string, projectId: string, activity: OneDriveActivity, section: string, category: string) {
+  const destination = await oneDriveDestination(token, rootId, projectId, activity, section);
+  const spliceFolder = section === "splices" ? splicePhotoFolder(category) : "";
+  return spliceFolder ? folder(token, destination.id, spliceFolder) : destination;
+}
+
 async function uploadAcceptanceReport(token: string, projectId: string, destinationId: string) {
   const saved = await getRawDb().prepare("SELECT content_json FROM project_reports WHERE project_id = ? LIMIT 1").bind(projectId).first<{ content_json: string }>();
   if (!saved) return;
@@ -306,7 +319,7 @@ async function uploadJob(c: Connection, job: Job) {
   if (!stored) throw new Error("Fișierul sursă nu mai este disponibil în Cloudflare.");
   const filename = await safeName(file.original_name, file.id);
   const body = await new Response(stored.body).arrayBuffer();
-  const destination = await oneDriveDestination(token, c.root_id, projectId, activity, file.section);
+  const destination = await oneDriveFileDestination(token, c.root_id, projectId, activity, file.section, file.category);
   // Recheck before external write; switching/disconnecting does not resurrect old credentials.
   const current = await connection();
   if (!current || current.generation !== c.generation || current.lease !== c.lease || !usesOneDrive(current.mode)) throw new Error("Sincronizarea OneDrive a fost oprită.");
@@ -322,7 +335,7 @@ export async function deleteOneDriveFileCopy(fileId: string) {
   if (!project) return;
   const activity: OneDriveActivity = project.activity_type && project.activity_type in oneDriveActivityFolders ? project.activity_type : "Instalare";
   const token = await tokenFor(c);
-  const destination = await oneDriveDestination(token, c.root_id, file.project_id, activity, file.section);
+  const destination = await oneDriveFileDestination(token, c.root_id, file.project_id, activity, file.section, file.category);
   const filename = await safeName(file.original_name, file.id);
   const response = await graph(token, `/me/drive/items/${encodeURIComponent(destination.id)}:/${encodeURIComponent(filename)}`, { method: "DELETE" });
   if (!response.ok && response.status !== 404) throw new Error(`OneDrive nu a putut șterge copia fișierului (${response.status}).`);
