@@ -930,7 +930,7 @@ export function FoRouteSection({ project: projectItem, variant = "installation",
             <label className="fo-site-search"><span>⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Introdu codul exact, ex. J2…" /></label>
             {search.length >= 2 && (
               <div className="fo-search-results">
-                {searchResults.map((site) => (
+                {searchResults.filter((site) => site.code.trim().toLocaleLowerCase("ro") === search.trim().toLocaleLowerCase("ro")).map((site) => (
                   <article className={endB?.id === site.id ? "selected" : ""} key={site.id}>
                     <button className="fo-exact-junction-name" onClick={() => setDocumentedEnd(site)}>
                       <strong>{site.code}</strong>
@@ -939,7 +939,7 @@ export function FoRouteSection({ project: projectItem, variant = "installation",
                     <a href={googleMapsUrl(site)} target="_blank" rel="noreferrer" aria-label={`Deschide joncțiunea ${site.code} în Google Maps`}>Google Maps ↗</a>
                   </article>
                 ))}
-                {!searchResults.length && <p>Niciun punct găsit.</p>}
+                {!searchResults.some((site) => site.code.trim().toLocaleLowerCase("ro") === search.trim().toLocaleLowerCase("ro")) && <p>Nicio joncțiune cu acest cod.</p>}
               </div>
             )}
             {endB?.documented && (
