@@ -1140,11 +1140,11 @@ export function FoRouteSection({ project: projectItem, variant = "installation",
                 <b>{endB && undocumentedJunctionReady ? "✓" : "○"}</b>
               </article>
             </div>
-            <div className="fo-route-metrics">
+            <div className={`fo-route-metrics ${surveyMode ? "survey-metrics" : ""}`}>
               <div><small>LUNGIME DESENATĂ</small><strong>{routeCoordinates.length > 1 ? formatDistance(routeDistance) : "—"}</strong></div>
               <div><small>PUNCTE INTERMEDIARE</small><strong>{routePoints.length}</strong></div>
-              <div><small>TOTAL CABLU INSTALAT</small><strong>{totalInstalledLength ? formatLengthMeters(totalInstalledLength) : "—"}</strong></div>
-              <div><small>POZE TRASEU</small><strong>{geotaggedRoutePhotos}/{requiredRoutePhotos || "—"}</strong></div>
+              {!surveyMode && <div><small>TOTAL CABLU INSTALAT</small><strong>{totalInstalledLength ? formatLengthMeters(totalInstalledLength) : "—"}</strong></div>}
+              {!surveyMode && <div><small>POZE TRASEU</small><strong>{geotaggedRoutePhotos}/{requiredRoutePhotos || "—"}</strong></div>}
             </div>
             {selectedInstallationMethods.length > 0 && (
               <div className="fo-cable-summary">
@@ -1166,11 +1166,11 @@ export function FoRouteSection({ project: projectItem, variant = "installation",
             <div className="fo-route-status">
               <span className={routeReady ? "ready" : ""}>{routeReady ? "✓" : "i"}</span>
               <p>
-                <strong>{routeReady ? "Traseu pregătit pentru salvare" : !endA || !endB ? "Mai sunt necesare capetele A și B" : !undocumentedJunctionTypeReady ? "Clasifică joncțiunea nedocumentată" : !undocumentedJunctionNetworkReady ? "Selectează rețeaua joncțiunii" : !selectedInstallationMethods.length ? "Selectează tipul de instalare" : incompleteCableMethod ? "Completează tipul de cablu" : incompleteLengthMethod ? "Completează lungimea instalată" : incompleteAerialMaterial ? "Completează materialele instalării aeriene" : "Completează documentarea foto"}</strong>
-                {routeReady ? "Capetele, traseul, cablurile, materialele, lungimile și fotografiile sunt documentate." : !endA || !endB ? "Selectează punctele direct pe hartă." : !undocumentedJunctionTypeReady ? "Alege dacă punctul B este o joncțiune existentă sau nou instalată." : !undocumentedJunctionNetworkReady ? "Alege Vodafone Mobil sau Vodafone Fixed pentru punctul B." : !selectedInstallationMethods.length ? "Poți folosi una sau mai multe metode pe traseu." : incompleteCableMethod ? `Lipsește cablul pentru ${installationCatalog[incompleteCableMethod].title.toLowerCase()}.` : incompleteLengthMethod ? `Lipsește lungimea pentru ${installationCatalog[incompleteLengthMethod].title.toLowerCase()}.` : incompleteAerialMaterial ? `Lipsește cantitatea pentru ${aerialMaterialCatalog[incompleteAerialMaterial].toLowerCase()}.` : `Mai sunt necesare ${missingRoutePhotos} fotografii cu geolocație.`}
+                <strong>{routeReady ? (surveyMode ? "Harta Survey este pregătită pentru salvare" : "Traseu pregătit pentru salvare") : !endA || !endB ? "Mai sunt necesare capetele A și B" : !undocumentedJunctionTypeReady ? "Clasifică joncțiunea nedocumentată" : !undocumentedJunctionNetworkReady ? "Selectează rețeaua joncțiunii" : !selectedInstallationMethods.length ? "Selectează tipul de instalare" : incompleteCableMethod ? "Completează tipul de cablu" : incompleteLengthMethod ? "Completează lungimea instalată" : incompleteAerialMaterial ? "Completează materialele instalării aeriene" : "Completează documentarea foto"}</strong>
+                {routeReady ? (surveyMode ? "Clientul, traseul și joncțiunea sunt documentate." : "Capetele, traseul, cablurile, materialele, lungimile și fotografiile sunt documentate.") : !endA || !endB ? "Selectează punctele direct pe hartă." : !undocumentedJunctionTypeReady ? "Alege dacă punctul B este o joncțiune existentă sau nou instalată." : !undocumentedJunctionNetworkReady ? "Alege Vodafone Mobil sau Vodafone Fixed pentru punctul B." : !selectedInstallationMethods.length ? "Poți folosi una sau mai multe metode pe traseu." : incompleteCableMethod ? `Lipsește cablul pentru ${installationCatalog[incompleteCableMethod].title.toLowerCase()}.` : incompleteLengthMethod ? `Lipsește lungimea pentru ${installationCatalog[incompleteLengthMethod].title.toLowerCase()}.` : incompleteAerialMaterial ? `Lipsește cantitatea pentru ${aerialMaterialCatalog[incompleteAerialMaterial].toLowerCase()}.` : `Mai sunt necesare ${missingRoutePhotos} fotografii cu geolocație.`}
               </p>
             </div>
-            <button className="primary-button fo-save-route" onClick={saveRoute}>Salvează traseul FO <span>→</span></button>
+            <button className="primary-button fo-save-route" onClick={saveRoute}>{surveyMode ? "Salvează harta Survey" : "Salvează traseul FO"} <span>→</span></button>
           </section>
         </aside>
       </div>}
