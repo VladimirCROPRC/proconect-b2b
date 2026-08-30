@@ -11,6 +11,7 @@ type DocumentProject = {
   sfp: boolean;
   mc: boolean;
   terminalBox: boolean;
+  splice: string;
 };
 
 type ReportDraft = {
@@ -210,7 +211,7 @@ function buildBudgetSuggestions(fieldData: ProjectFieldDocumentation): BudgetSug
 }
 
 export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props) {
-  const [tab, setTab] = useState<"report" | "estimate">("report");
+  const [tab, setTab] = useState<"report" | "splices" | "estimate">("report");
   const [report, setReport] = useState(() => buildReport(project, fieldData));
   const [suggestions, setSuggestions] = useState(() => buildBudgetSuggestions(fieldData));
   const [savedAt, setSavedAt] = useState("");
@@ -284,6 +285,7 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
 
       <div className="documents-tabs" role="tablist" aria-label="Subsecțiuni documente">
         <button className={tab === "report" ? "active" : ""} onClick={() => setTab("report")}><span>DOC</span><div><strong>Raport de acceptanță</strong><small>Previzualizare și editare</small></div></button>
+        <button className={tab === "splices" ? "active" : ""} onClick={() => setTab("splices")}><span>FO</span><div><strong>Fișă de suduri</strong><small>Corespondență fibre</small></div><b>{fieldData.splices?.records?.length ?? 0}</b></button>
         <button className={tab === "estimate" ? "active" : ""} onClick={() => setTab("estimate")}><span>EUR</span><div><strong>Sugestii deviz</strong><small>Operațiuni și materiale</small></div><b>{suggestions.length}</b></button>
       </div>
 
@@ -320,6 +322,50 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
             <button className="secondary-button report-export" onClick={() => onNotify("Raportul va fi exportat în format DOCX după confirmarea administratorului.")}>Exportă DOCX <span>↗</span></button>
           </aside>
         </div>
+      )}
+
+      {tab === "splices" && (
+        <section className="splice-sheet-card">
+          <div className="document-toolbar splice-sheet-toolbar">
+            <div><span>FO</span><p><strong>Fișă de suduri · {project.id}</strong><small>Generată din înregistrările salvate în teren</small></p></div>
+            <div><button className="primary-button" onClick={() => window.print()}>Tipărește / Salvează PDF</button></div>
+          </div>
+          <article className="splice-sheet-paper">
+            <header>
+              <div><small>PRO CONECT</small><h1>Fișă de suduri fibră optică</h1></div>
+              <strong>{project.id}</strong>
+            </header>
+            <div className="splice-sheet-project">
+              <div><small>CLIENT</small><strong>{project.client}</strong></div>
+              <div><small>LOCAȚIE</small><strong>{project.address}</strong></div>
+              <div><small>DIAGRAMĂ DE REFERINȚĂ</small><strong>{project.splice || "Neîncărcată"}</strong></div>
+              <div><small>TOTAL SUDURI</small><strong>{fieldData.splices?.count ?? 0}</strong></div>
+            </div>
+            {fieldData.splices?.noIntervention ? (
+              <div className="splice-sheet-empty"><strong>Nu s-a intervenit la sudurile FO</strong><p>{fieldData.splices.noInterventionReason}</p></div>
+            ) : fieldData.splices?.records?.length ? (
+              <div className="splice-sheet-table-wrap">
+                <table className="splice-sheet-table">
+                  <thead><tr><th>NR.</th><th>JONCȚIUNE</th><th>TIP / REȚEA</th><th>TUB SITE</th><th>FIBRĂ SITE</th><th>TUB CLIENT</th><th>FIBRĂ CLIENT</th></tr></thead>
+                  <tbody>{fieldData.splices.records.map((record, index) => (
+                    <tr key={record.id}>
+                      <td>{index + 1}</td>
+                      <td><strong>{record.junction.documented ? record.junction.code : "Fără cod"}</strong><small>{record.junction.name}</small></td>
+                      <td><strong>{record.junction.documented ? "Documentată" : record.junctionKind === "new" ? "Nouă" : "Existentă"}</strong><small>{record.network === "mobile" ? "Vodafone Mobil" : record.network === "fixed" ? "Vodafone Fixed" : "—"}</small></td>
+                      <td>{record.siteBuffer}</td>
+                      <td>{record.siteFiber}</td>
+                      <td>{record.clientBuffer}</td>
+                      <td>{record.clientFiber}</td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="splice-sheet-empty"><strong>Nu există suduri salvate</strong><p>Completează secțiunea „Suduri FO” pentru a genera fișa.</p></div>
+            )}
+            <footer><span>{project.id} · {project.client}</span><span>Fișă generată din datele documentate în aplicație</span></footer>
+          </article>
+        </section>
       )}
 
       {tab === "estimate" && (
