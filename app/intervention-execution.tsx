@@ -187,6 +187,7 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [removingPhoto, setRemovingPhoto] = useState("");
+  const [deletingActivity, setDeletingActivity] = useState("");
   const [error, setError] = useState("");
   const deferredSearch = useDeferredValue(search);
   const mapGestures = useMapGestures({
@@ -528,6 +529,31 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
     }
   }
 
+  async function deleteSavedActivity(activity: InterventionExecutionActivity) {
+    if (!window.confirm(`Ștergi activitatea „${activityCatalog[activity.type].title}” și toate fotografiile aferente?`)) return;
+    setDeletingActivity(activity.id);
+    setError("");
+    try {
+      const nextActivities = activities.filter((item) => item.id !== activity.id);
+      const nextSummary: InterventionFieldSummary = nextActivities.length
+        ? { ...initialSummary, execution: { activities: nextActivities, documentedAt: Math.max(...nextActivities.map((item) => item.documentedAt)) } }
+        : { ...initialSummary, execution: undefined };
+      await onSaved(nextSummary);
+      setActivities(nextActivities);
+      const attachedPhotos = photos.filter((photo) => photo.category === `${activity.id}:photo`);
+      const removals = await Promise.allSettled(attachedPhotos.map((photo) => deleteProjectFile(photo.id)));
+      setPhotos((current) => current.filter((photo) => photo.category !== `${activity.id}:photo`));
+      const failed = removals.filter((result) => result.status === "rejected").length;
+      onNotify(failed
+        ? `Activitatea a fost ștearsă, dar ${failed} fotografii necesită reîncercare.`
+        : "Activitatea și fotografiile aferente au fost șterse.");
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "Activitatea nu a putut fi ștearsă.");
+    } finally {
+      setDeletingActivity("");
+    }
+  }
+
   function junctionPanel(slot: JunctionSlot, title: string, junction: DraftJunction | null) {
     const selected = activeSlot === slot;
     return <article className={`intervention-junction-panel${selected ? " selected" : ""}`}>
@@ -650,7 +676,7 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
     </div>
 
     <section className="project-card intervention-records-card"><div className="card-heading"><div><h2>Activități salvate</h2><p>{activities.length ? `${activities.length} ${activities.length === 1 ? "activitate documentată" : "activități documentate"} pentru tichetul ${project.id}.` : "Nicio activitate salvată pentru această intervenție."}</p></div></div>
-      {activities.length > 0 && <div className="intervention-records-list">{activities.map((activity) => <article key={activity.id}><span>{activityCatalog[activity.type].badge}</span><div><strong>{activityCatalog[activity.type].title}</strong><small>{activity.type === "fo-installation" ? `${activity.endpointA?.code ?? "Joncțiunea A"} → ${activity.endpointB?.code ?? "Joncțiunea B"} · ${activity.cableType} · ${activity.cableLengthMeters} m` : `${activity.junction?.documented ? activity.junction.code : "Joncțiune nedocumentată"}${activity.junction?.network ? ` · ${activity.junction.network === "mobile" ? "Vodafone Mobil" : "Vodafone Fixed"}` : ""}`}</small></div><b>{activity.photoCount}/{activity.requiredPhotoCount} foto GPS</b></article>)}</div>}
+      {activities.length > 0 && <div className="intervention-records-list">{activities.map((activity) => <article key={activity.id}><span>{activityCatalog[activity.type].badge}</span><div><strong>{activityCatalog[activity.type].title}</strong><small>{activity.type === "fo-installation" ? `${activity.endpointA?.code ?? "Joncțiunea A"} → ${activity.endpointB?.code ?? "Joncțiunea B"} · ${activity.cableType} · ${activity.cableLengthMeters} m` : `${activity.junction?.documented ? activity.junction.code : "Joncțiune nedocumentată"}${activity.junction?.network ? ` · ${activity.junction.network === "mobile" ? "Vodafone Mobil" : "Vodafone Fixed"}` : ""}`}</small></div><b>{activity.photoCount}/{activity.requiredPhotoCount} foto GPS</b><button type="button" className="record-delete-button" onClick={() => void deleteSavedActivity(activity)} disabled={Boolean(deletingActivity)}>{deletingActivity === activity.id ? "Se șterge…" : "Șterge"}</button></article>)}</div>}
     </section>
   </div>;
 }
