@@ -259,6 +259,7 @@ export function FoRouteSection({ project: projectItem, variant = "installation",
     armorod: "",
   });
   const [routePhotos, setRoutePhotos] = useState<RoutePhoto[]>([]);
+  const [deletingRoute, setDeletingRoute] = useState(false);
   const [noIntervention, setNoIntervention] = useState(false);
   const [noInterventionReason, setNoInterventionReason] = useState("");
   const mapGestures = useMapGestures({
@@ -749,6 +750,34 @@ export function FoRouteSection({ project: projectItem, variant = "installation",
     }
   }
 
+  async function deleteSavedRoute() {
+    if (!window.confirm("Ștergi traseul FO și toate fotografiile aferente?")) return;
+    setDeletingRoute(true);
+    try {
+      const emptySummary: RouteFieldSummary = {
+        noIntervention: false,
+        noInterventionReason: "",
+        segments: [],
+        totalLengthMeters: 0,
+        junction: { label: "Traseu șters", documented: true, kind: "documented" },
+        aerialMaterials: { boat: 0, stainlessClamp: 0, hook: 0, armorod: 0 },
+        routePoints: [],
+      };
+      await onSaved?.(emptySummary);
+      const removals = await Promise.allSettled(routePhotos.map((photo) => deleteProjectFile(photo.id)));
+      const failed = removals.filter((result) => result.status === "rejected").length;
+      setRoutePhotos([]);
+      resetRoute();
+      setNoIntervention(false);
+      setNoInterventionReason("");
+      onNotify(failed ? `Traseul a fost șters, dar ${failed} fotografii necesită reîncercare.` : "Traseul FO și fotografiile aferente au fost șterse.");
+    } catch (error) {
+      onNotify(error instanceof Error ? error.message : "Traseul FO nu a putut fi șters.");
+    } finally {
+      setDeletingRoute(false);
+    }
+  }
+
   async function removeRoutePhoto(photo: RoutePhoto) {
     try {
       await deleteProjectFile(photo.id);
@@ -1160,7 +1189,7 @@ export function FoRouteSection({ project: projectItem, variant = "installation",
                 {routeReady ? (surveyMode ? "Clientul, traseul și joncțiunea sunt documentate." : "Capetele, traseul, cablurile, materialele, lungimile și fotografiile sunt documentate.") : !endA || !endB ? "Selectează punctele direct pe hartă." : !undocumentedJunctionTypeReady ? "Alege dacă punctul B este o joncțiune existentă sau nou instalată." : !undocumentedJunctionNetworkReady ? "Alege Vodafone Mobil sau Vodafone Fixed pentru punctul B." : !selectedInstallationMethods.length ? "Poți folosi una sau mai multe metode pe traseu." : incompleteCableMethod ? `Lipsește cablul pentru ${installationCatalog[incompleteCableMethod].title.toLowerCase()}.` : incompleteLengthMethod ? `Lipsește lungimea pentru ${installationCatalog[incompleteLengthMethod].title.toLowerCase()}.` : incompleteAerialMaterial ? `Lipsește cantitatea pentru ${aerialMaterialCatalog[incompleteAerialMaterial].toLowerCase()}.` : `Mai sunt necesare ${missingRoutePhotos} fotografii cu geolocație.`}
               </p>
             </div>
-            <button className="primary-button fo-save-route" onClick={saveRoute}>{surveyMode ? "Salvează harta Survey" : "Salvează traseul FO"} <span>→</span></button>
+            <div className="record-actions"><button className="primary-button fo-save-route" onClick={saveRoute}>{surveyMode ? "Salvează harta Survey" : "Salvează traseul FO"} <span>→</span></button>{!surveyMode && (initialSummary || routePhotos.length > 0) && <button type="button" className="record-delete-button" onClick={() => void deleteSavedRoute()} disabled={deletingRoute}>{deletingRoute ? "Se șterge…" : "Șterge traseul FO"}</button>}</div>
           </section>
         </aside>
       </div>}
