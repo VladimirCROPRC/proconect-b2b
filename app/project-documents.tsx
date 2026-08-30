@@ -22,6 +22,8 @@ type ReportDraft = {
   site: string;
   route: string;
   client: string;
+  materialChambers: string;
+  materialPoles: string;
 };
 
 type BudgetSuggestion = {
@@ -138,6 +140,8 @@ function buildReport(project: DocumentProject, fieldData: ProjectFieldDocumentat
     site: asBullets(siteLines),
     route: asBullets(routeLines),
     client: asBullets(clientLines),
+    materialChambers: "0",
+    materialPoles: "0",
   };
 }
 
@@ -225,7 +229,7 @@ function buildBudgetSuggestions(fieldData: ProjectFieldDocumentation): BudgetSug
 }
 
 export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props) {
-  const [tab, setTab] = useState<"report" | "splices" | "estimate">("report");
+  const [tab, setTab] = useState<"report" | "splices" | "materials" | "estimate">("report");
   const [report, setReport] = useState(() => buildReport(project, fieldData));
   const [suggestions, setSuggestions] = useState(() => buildBudgetSuggestions(fieldData));
   const [savedAt, setSavedAt] = useState("");
@@ -254,6 +258,25 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
     };
   }, [project.id, fieldData]);
 
+  const cableMaterials = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const segment of fieldData.route?.segments ?? []) totals.set(segment.cableType, (totals.get(segment.cableType) ?? 0) + segment.lengthMeters);
+    return [...totals.entries()].map(([name, quantity]) => ({ name, quantity, unit: "m" }));
+  }, [fieldData.route]);
+  const vodafoneMaterials = [
+    ...(project.cpe ? [{ name: `CPE ${project.cpe}`, quantity: 1, unit: "buc." }] : []),
+    ...(project.sfp ? [{ name: "SFP", quantity: 1, unit: "buc." }] : []),
+    ...(project.mc ? [{ name: "Media Converter", quantity: 1, unit: "buc." }] : []),
+    ...(project.terminalBox ? [{ name: "Terminal Box", quantity: 1, unit: "buc." }] : []),
+    ...cableMaterials,
+  ];
+  const proconectMaterials = [
+    { name: "Bărcuță", quantity: fieldData.route?.aerialMaterials.boat ?? 0, unit: "buc." },
+    { name: "Colier tablă inox", quantity: fieldData.route?.aerialMaterials.stainlessClamp ?? 0, unit: "buc." },
+    { name: "Cârlig", quantity: fieldData.route?.aerialMaterials.hook ?? 0, unit: "buc." },
+    { name: "Armorod", quantity: fieldData.route?.aerialMaterials.armorod ?? 0, unit: "buc." },
+  ].filter((item) => item.quantity > 0);
+
   const selectedSuggestions = suggestions.filter((item) => item.selected);
   const estimateTotal = useMemo(
     () => selectedSuggestions.reduce((total, item) => total + item.quantity * item.unitPrice, 0),
@@ -269,7 +292,7 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
     onNotify("Raportul a fost regenerat din operațiunile salvate în teren.");
   }
 
-  async function saveReport() {
+  async function saveReport(successMessage = `Raportul de acceptanță pentru ${project.id} a fost salvat permanent.`) {
     try {
       const response = await fetch("/api/reports", {
         method: "PATCH",
@@ -280,7 +303,7 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
       const payload = (await response.json()) as { updatedAt?: number; error?: string };
       if (!response.ok || !payload.updatedAt) throw new Error(payload.error || "Raportul nu a putut fi salvat.");
       setSavedAt(new Intl.DateTimeFormat("ro-RO", { hour: "2-digit", minute: "2-digit" }).format(new Date(payload.updatedAt)));
-      onNotify(`Raportul de acceptanță pentru ${project.id} a fost salvat permanent.`);
+      onNotify(successMessage);
     } catch (error) {
       onNotify(error instanceof Error ? error.message : "Raportul de acceptanță nu a putut fi salvat.");
     }
@@ -300,13 +323,14 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
       <div className="documents-tabs" role="tablist" aria-label="Subsecțiuni documente">
         <button className={tab === "report" ? "active" : ""} onClick={() => setTab("report")}><span>DOC</span><div><strong>Raport de acceptanță</strong><small>Previzualizare și editare</small></div></button>
         <button className={tab === "splices" ? "active" : ""} onClick={() => setTab("splices")}><span>FO</span><div><strong>Fișă de suduri</strong><small>Corespondență fibre</small></div><b>{fieldData.splices?.records?.length ?? 0}</b></button>
+        <button className={tab === "materials" ? "active" : ""} onClick={() => setTab("materials")}><span>MAT</span><div><strong>Fișă de materiale</strong><small>Vodafone și Proconect</small></div><b>{vodafoneMaterials.length + proconectMaterials.length + 2}</b></button>
         <button className={tab === "estimate" ? "active" : ""} onClick={() => setTab("estimate")}><span>EUR</span><div><strong>Sugestii deviz</strong><small>Operațiuni și materiale</small></div><b>{suggestions.length}</b></button>
       </div>
 
       {tab === "report" && (
         <div className="report-workspace">
           <section className="acceptance-preview-card">
-            <div className="document-toolbar"><div><span>W</span><p><strong>Raport acceptanță · {project.id}</strong><small>Model: Raport acceptanta.docx</small></p></div><div><button onClick={regenerate}>↻ Generează din teren</button><button className="primary-button" onClick={saveReport}>Salvează</button></div></div>
+            <div className="document-toolbar"><div><span>W</span><p><strong>Raport acceptanță · {project.id}</strong><small>Model: Raport acceptanta.docx</small></p></div><div><button onClick={regenerate}>↻ Generează din teren</button><button className="primary-button" onClick={() => void saveReport()}>Salvează</button></div></div>
             <article className="acceptance-paper">
               <input className="report-title-input" value={report.title} onChange={(event) => updateReport("title", event.target.value)} aria-label="Titlul raportului" />
               <input className="report-site-input" value={`Site ${report.siteCode || project.id}`} readOnly aria-label="Site și cod site" />
@@ -383,6 +407,34 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
               <div className="splice-sheet-empty"><strong>Nu există suduri salvate</strong><p>Completează secțiunea „Suduri FO” pentru a genera fișa.</p></div>
             )}
             <footer><span>{project.id} · {project.client}</span><span>Fișă generată din datele documentate în aplicație</span></footer>
+          </article>
+        </section>
+      )}
+
+      {tab === "materials" && (
+        <section className="material-sheet-card">
+          <div className="document-toolbar material-sheet-toolbar">
+            <div><span>MAT</span><p><strong>Fișă de materiale · {project.id}</strong><small>Generată din echipamentele și materialele documentate</small></p></div>
+            <div><button onClick={() => window.print()}>Tipărește / PDF</button><button className="primary-button" onClick={() => void saveReport(`Fișa de materiale pentru ${project.id} a fost salvată.`)}>Salvează fișa</button></div>
+          </div>
+          <article className="material-sheet-paper">
+            <header><div><small>PRO CONECT</small><h1>Fișă de materiale</h1></div><strong>{project.id}</strong></header>
+            <div className="material-sheet-project"><span><small>CLIENT</small><strong>{project.client}</strong></span><span><small>LOCAȚIE</small><strong>{project.address}</strong></span></div>
+            <section>
+              <h2>Materiale Vodafone</h2>
+              <table><thead><tr><th>NR.</th><th>MATERIAL</th><th>CANTITATE</th><th>UM</th></tr></thead><tbody>
+                {vodafoneMaterials.length ? vodafoneMaterials.map((item, index) => <tr key={item.name}><td>{index + 1}</td><td>{item.name}</td><td>{item.quantity.toLocaleString("ro-RO")}</td><td>{item.unit}</td></tr>) : <tr><td colSpan={4}>Nu există materiale Vodafone documentate.</td></tr>}
+              </tbody></table>
+            </section>
+            <section>
+              <h2>Materiale Proconect</h2>
+              <table><thead><tr><th>NR.</th><th>MATERIAL</th><th>CANTITATE</th><th>UM</th></tr></thead><tbody>
+                {proconectMaterials.map((item, index) => <tr key={item.name}><td>{index + 1}</td><td>{item.name}</td><td>{item.quantity.toLocaleString("ro-RO")}</td><td>{item.unit}</td></tr>)}
+                <tr><td>{proconectMaterials.length + 1}</td><td>Camerete</td><td><input type="number" min="0" step="1" inputMode="numeric" value={report.materialChambers} onChange={(event) => updateReport("materialChambers", event.target.value)} aria-label="Cantitate camerete" /></td><td>buc.</td></tr>
+                <tr><td>{proconectMaterials.length + 2}</td><td>Stâlpi</td><td><input type="number" min="0" step="1" inputMode="numeric" value={report.materialPoles} onChange={(event) => updateReport("materialPoles", event.target.value)} aria-label="Cantitate stâlpi" /></td><td>buc.</td></tr>
+              </tbody></table>
+            </section>
+            <footer><span>{project.id} · {project.client}</span><span>Cantități preluate din documentația proiectului</span></footer>
           </article>
         </section>
       )}
