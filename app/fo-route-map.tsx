@@ -817,10 +817,9 @@ export function FoRouteSection({ project: projectItem, initialSummary, onNotify,
             <div className="fo-map-head">
               <div><small>MOD ACTIV</small><strong>{modeLabel[mode]}</strong></div>
               <div className="fo-map-actions">
-                <button className={mode === "pan" ? "active" : ""} onClick={() => setMode("pan")}><span>✥</span> Mută</button>
-                <button className={mode === "client" ? "active" : ""} onClick={() => setMode("client")}><span>A</span> Client</button>
+                <button className={mode === "client" ? "active" : ""} onClick={() => setMode("client")}>Client</button>
                 <button className={mode === "route" ? "active" : ""} onClick={() => setMode("route")}><span>⌁</span> Trasează</button>
-                <button className={mode === "undocumented" ? "active" : ""} onClick={() => setMode("undocumented")}><span>B?</span> B fără cod</button>
+                <button className={mode === "undocumented" ? "active" : ""} onClick={() => setMode("undocumented")}>J fără cod</button>
                 <button
                   className="fo-fullscreen-toggle"
                   onClick={mapFullscreen.toggleFullscreen}
