@@ -273,12 +273,12 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
   const searchResults = useMemo(() => {
     const query = deferredSearch.trim().toLocaleLowerCase("ro");
     if (query.length < 2) return [];
-    const matches: Junction[] = [];
-    for (let index = 0; index < sites.length && matches.length < 6; index += 1) {
-      const row = sites[index];
-      if (`${row[0]} ${row[1]} ${row[2]}`.toLocaleLowerCase("ro").includes(query)) matches.push(siteFromRow(row, index));
+    const exactMatches: Junction[] = [];
+    for (let index = 0; index < sites.length; index += 1) {
+      const site = siteFromRow(sites[index], index);
+      if (site.code.trim().toLocaleLowerCase("ro") === query) exactMatches.push(site);
     }
-    return matches;
+    return exactMatches.slice(0, 6);
   }, [deferredSearch, sites]);
 
   const projectRecords = records.filter((record) => record.projectId === projectItem.id);
@@ -576,7 +576,7 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
             <a className="fo-attribution" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>© OpenStreetMap contributors</a>
           </div>
           <div className="splice-map-search">
-            <label><span>⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Caută joncțiunea înainte sau după „Sudură nouă”…" /></label>
+            <label><span>⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Introdu codul exact, ex. J2…" /></label>
             <div className={`splice-data-state ${sitesStatus}`}><i>{sitesStatus === "ready" ? "✓" : sitesStatus === "error" ? "!" : "↻"}</i>{sitesStatus === "ready" ? `${sites.length.toLocaleString("ro-RO")} site-uri` : sitesStatus === "error" ? "Date indisponibile" : "Se încarcă"}</div>
             {search.trim().length >= 2 && <div className="splice-search-results">{searchResults.map((site) => <article className={junction?.id === site.id ? "selected" : ""} key={site.id}><button className="splice-exact-junction-name" onClick={() => chooseDocumented(site)}><strong>{site.code}</strong><b>Arată pe hartă</b></button><a href={googleMapsUrl(site)} target="_blank" rel="noreferrer" aria-label={`Deschide joncțiunea ${site.code} în Google Maps`}>Google Maps ↗</a></article>)}{!searchResults.length && <p>Nicio joncțiune găsită.</p>}</div>}
           </div>
