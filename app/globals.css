@@ -5133,6 +5133,66 @@ td > small {
   text-align: center;
 }
 
+.splice-search-results > article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  border-radius: 4px;
+}
+
+.splice-search-results > article.selected {
+  background: #eef1fa;
+  box-shadow: inset 0 0 0 1px #3d4d91;
+}
+
+.splice-search-results > article > button {
+  min-width: 0;
+}
+
+.splice-search-results > article > button > b {
+  color: #3d4d91;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.splice-search-results > article > a {
+  display: flex;
+  align-items: center;
+  padding: 7px;
+  border-left: 1px solid #e2e6ef;
+  color: #3d4d91;
+  background: #f7f8fc;
+  font-size: 10px;
+  font-weight: 850;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.splice-junction-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 7px;
+}
+
+.splice-junction-links button,
+.splice-junction-links a {
+  padding: 7px 9px;
+  border: 1px solid #3d4d91;
+  border-radius: 4px;
+  color: #fff;
+  background: #3d4d91;
+  font-size: 10px;
+  font-weight: 850;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.splice-junction-links a {
+  color: #3d4d91;
+  background: #fff;
+}
+
 .splice-side {
   display: flex;
   min-width: 0;
