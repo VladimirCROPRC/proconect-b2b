@@ -299,17 +299,15 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
             <article className="acceptance-paper">
               <input className="report-title-input" value={report.title} onChange={(event) => updateReport("title", event.target.value)} aria-label="Titlul raportului" />
               <input className="report-site-input" value={`Site ${report.siteCode || project.id}`} readOnly aria-label="Site și cod site" />
-              <div className="report-code-grid">
-                <label><span>Cod site</span><input value={report.siteCode} onChange={(event) => updateReport("siteCode", event.target.value)} placeholder="Nespecificat" aria-label="Cod site client" /></label>
-                <label><span>Client LEC</span><input value={report.lec} onChange={(event) => updateReport("lec", event.target.value)} placeholder="Nespecificat" aria-label="Location Engineering Code" /></label>
-              </div>
               <section className="editable-report-section site-report-section">
+                {report.siteCode && <p className="report-metadata-line"><strong>Cod site:</strong> {report.siteCode}</p>}
                 <textarea value={report.site} onChange={(event) => updateReport("site", event.target.value)} rows={Math.max(2, report.site.split("\n").length + 1)} aria-label="Conținut secțiune Site" />
                 <small>Fiecare rând este inclus ca punct distinct în raport.</small>
               </section>
               {(["route", "client"] as const).map((section) => (
                 <section className="editable-report-section" key={section}>
                   <h2>{section === "route" ? "Traseu" : `Client ${report.lec || ""}`.trim()}</h2>
+                  {section === "client" && report.lec && <p className="report-metadata-line"><strong>Client LEC:</strong> {report.lec}</p>}
                   <textarea value={report[section]} onChange={(event) => updateReport(section, event.target.value)} rows={Math.max(2, report[section].split("\n").length + 1)} aria-label={`Conținut secțiune ${section}`} />
                   <small>Fiecare rând este inclus ca punct distinct în raport.</small>
                 </section>
