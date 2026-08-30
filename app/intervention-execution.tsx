@@ -538,15 +538,15 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
       const nextSummary: InterventionFieldSummary = nextActivities.length
         ? { ...initialSummary, execution: { activities: nextActivities, documentedAt: Math.max(...nextActivities.map((item) => item.documentedAt)) } }
         : { ...initialSummary, execution: undefined };
-      await onSaved(nextSummary);
-      setActivities(nextActivities);
       const attachedPhotos = photos.filter((photo) => photo.category === `${activity.id}:photo`);
       const removals = await Promise.allSettled(attachedPhotos.map((photo) => deleteProjectFile(photo.id)));
-      setPhotos((current) => current.filter((photo) => photo.category !== `${activity.id}:photo`));
+      const removedIds = new Set(attachedPhotos.filter((_, index) => removals[index].status === "fulfilled").map((photo) => photo.id));
+      setPhotos((current) => current.filter((photo) => !removedIds.has(photo.id)));
       const failed = removals.filter((result) => result.status === "rejected").length;
-      onNotify(failed
-        ? `Activitatea a fost ștearsă, dar ${failed} fotografii necesită reîncercare.`
-        : "Activitatea și fotografiile aferente au fost șterse.");
+      if (failed) throw new Error(`${failed} fotografii nu au putut fi șterse din toate destinațiile. Reîncearcă ștergerea activității.`);
+      await onSaved(nextSummary);
+      setActivities(nextActivities);
+      onNotify("Activitatea și fotografiile aferente au fost șterse din aplicație, Google Drive și OneDrive.");
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : "Activitatea nu a putut fi ștearsă.");
     } finally {
