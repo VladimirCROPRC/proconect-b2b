@@ -64,8 +64,8 @@ export function OneDriveSettings() {
         {status.connected && <>
           {status.rootUrl && <a href={status.rootUrl} target="_blank" rel="noreferrer">Deschide dosarul OneDrive ↗</a>}
           <p>{status.synced} elemente sincronizate · {status.pending} în așteptare</p>
-          <div className="drive-config-actions"><button className="primary-button" disabled={busy || processing || status.mode === "google"} onClick={() => void action("retry")}>Sincronizează / reîncearcă</button>{processing && <button className="secondary-button" onClick={() => setProcessing(false)}>Oprește procesarea din acest ecran</button>}</div>
-          <p>{processing ? "Se procesează pe rând. Păstrează acest ecran deschis pentru copierea întregii arhive." : "Fișierele noi intră automat în coadă. Reîncercările se fac la activitate în aplicație sau când pornești sincronizarea aici."}</p>
+          <div className="drive-config-actions"><button className="primary-button" disabled={busy || processing || status.mode === "google"} onClick={() => void action("retry")}>Resincronizează toate fișierele</button>{processing && <button className="secondary-button" onClick={() => setProcessing(false)}>Oprește procesarea din acest ecran</button>}</div>
+          <p>{processing ? "Se procesează pe rând. Păstrează acest ecran deschis pentru copierea întregii arhive." : "Fișierele noi intră automat în coadă. Resincronizarea retrimite toate fotografiile și documentele active, inclusiv atunci când copiile OneDrive au fost șterse manual."}</p>
           {status.errors.map(item => <p role="status" key={`${item.kind}:${item.item_id}`}>{item.item_id}: {item.last_error}</p>)}
         </>}
         <small>OneDrive primește exclusiv fotografiile și documentele încărcate de utilizatori, organizate pe activitate, lucrare și secțiune. Datele interne ale aplicației nu sunt exportate. Ștergerile din aplicație nu șterg copiile OneDrive.</small>
