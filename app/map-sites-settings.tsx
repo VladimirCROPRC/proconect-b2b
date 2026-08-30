@@ -8,8 +8,8 @@ type Status = { configured?: boolean; source?: string; valid?: number; rejected?
 
 const aliases = {
   code: ["cod", "code", "sitecode", "siteid", "idsite"],
-  description: ["nume", "name", "descriere", "description", "denumire", "sitename"],
-  region: ["regiune", "region", "localitate", "oras", "city", "judet", "county"],
+  description: ["nume", "name", "descriere", "description", "denumire", "sitename", "numedescriere"],
+  region: ["regiune", "region", "localitate", "oras", "city", "judet", "county", "regiunelocalitate"],
   lat: ["lat", "latitude", "latitudine", "gpslat"],
   lon: ["lon", "lng", "longitude", "longitudine", "gpslon", "gpslng"],
 };
