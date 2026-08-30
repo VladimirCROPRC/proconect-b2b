@@ -763,14 +763,17 @@ export function FoRouteSection({ project: projectItem, variant = "installation",
         aerialMaterials: { boat: 0, stainlessClamp: 0, hook: 0, armorod: 0 },
         routePoints: [],
       };
-      await onSaved?.(emptySummary);
       const removals = await Promise.allSettled(routePhotos.map((photo) => deleteProjectFile(photo.id)));
+      const removedIds = new Set(routePhotos.filter((_, index) => removals[index].status === "fulfilled").map((photo) => photo.id));
+      setRoutePhotos((current) => current.filter((photo) => !removedIds.has(photo.id)));
       const failed = removals.filter((result) => result.status === "rejected").length;
+      if (failed) throw new Error(`${failed} fotografii nu au putut fi șterse din toate destinațiile. Reîncearcă ștergerea traseului.`);
+      await onSaved?.(emptySummary);
       setRoutePhotos([]);
       resetRoute();
       setNoIntervention(false);
       setNoInterventionReason("");
-      onNotify(failed ? `Traseul a fost șters, dar ${failed} fotografii necesită reîncercare.` : "Traseul FO și fotografiile aferente au fost șterse.");
+      onNotify("Traseul FO și fotografiile aferente au fost șterse din aplicație, Google Drive și OneDrive.");
     } catch (error) {
       onNotify(error instanceof Error ? error.message : "Traseul FO nu a putut fi șters.");
     } finally {
