@@ -222,7 +222,7 @@ async function oneDriveDestination(token: string, rootId: string, projectId: str
   return folder(token, projectFolder.id, sectionName);
 }
 function csvCell(value: unknown) {
-  return `"${String(value ?? "").replace(/"/g, """")}"`;
+  return `"${String(value ?? "").replace(/"/g, '""')}"`;
 }
 
 async function uploadSpliceSheet(token: string, projectId: string, destinationId: string) {
