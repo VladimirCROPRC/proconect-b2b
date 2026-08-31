@@ -10998,6 +10998,16 @@ td > small {
 }
 
 @media print {
+  @page {
+    size: auto;
+    margin: 0;
+  }
+
+  html,
+  body {
+    margin: 0 !important;
+  }
+
   body * {
     visibility: hidden !important;
   }
