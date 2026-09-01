@@ -54,7 +54,7 @@ export function buildSpliceSheetXlsx(data: SpliceSheetData) {
   if (data.noIntervention) {
     rows.push({ values: ["NU S-A INTERVENIT", data.noInterventionReason ?? ""] });
   } else {
-    rows.push({ values: ["NR.", "JONCȚIUNE", "NUME", "TIP / REȚEA", "COORDONATE", "CABLU SPRE SITE", "TUB / FIBRĂ SITE", "CABLU SPRE CLIENT", "TUB / FIBRĂ CLIENT"], style: 2 });
+    rows.push({ values: ["NR.", "JONCȚIUNE", "NUME", "TIP / REȚEA", "COORDONATE", "CABLU SPRE SITE", "BUFFER / FIBRĂ SITE", "CABLU SPRE CLIENT", "BUFFER / FIBRĂ CLIENT"], style: 2 });
     for (const [index, record] of data.records.entries()) {
       const documented = record.junction?.documented === true;
       const kind = documented ? "Documentată" : record.junctionKind === "new" ? "Nouă" : "Existentă";
