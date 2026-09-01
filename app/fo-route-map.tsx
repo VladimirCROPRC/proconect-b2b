@@ -13,6 +13,7 @@ import { NoInterventionControl } from "./no-intervention-control";
 import { useMapGestures } from "./use-map-gestures";
 import { useMapFullscreen } from "./use-map-fullscreen";
 import { fetchMapSites, mapSiteMarkerClass } from "./map-sites-client";
+import { MapSiteLegend } from "./map-site-legend";
 
 type Coordinate = { lat: number; lon: number };
 type MapMode = "pan" | "client" | "route" | "undocumented";
@@ -947,6 +948,7 @@ export function FoRouteSection({ project: projectItem, variant = "installation",
               <a className="fo-attribution" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>© OpenStreetMap contributors</a>
             </div>
 
+          <MapSiteLegend />
             <div className="fo-map-footer">
               <button onClick={locateCurrentPosition} disabled={gpsLoading}><span>⌖</span>{gpsLoading ? "Se caută GPS…" : "Identifică locația curentă"}</button>
               <button onClick={() => setRoutePoints((current) => current.slice(0, -1))} disabled={!routePoints.length}><span>↶</span>Anulează ultimul punct</button>
