@@ -324,7 +324,7 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
       <div className="documents-tabs" role="tablist" aria-label="Subsecțiuni documente">
         <button className={tab === "report" ? "active" : ""} onClick={() => setTab("report")}><span>DOC</span><div><strong>Raport de acceptanță</strong><small>Previzualizare și editare</small></div></button>
         <button className={tab === "splices" ? "active" : ""} onClick={() => setTab("splices")}><span>FO</span><div><strong>Fișă de suduri</strong><small>Corespondență fibre</small></div><b>{fieldData.splices?.records?.length ?? 0}</b></button>
-        <button className={tab === "materials" ? "active" : ""} onClick={() => setTab("materials")}><span>MAT</span><div><strong>Fișă de materiale</strong><small>Vodafone și Proconect</small></div><b>{vodafoneMaterials.length + proconectMaterials.length + 2}</b></button>
+        <button className={tab === "materials" ? "active" : ""} onClick={() => setTab("materials")}><span>MAT</span><div><strong>Fișă de materiale</strong><small>Vodafone și Proconect</small></div><b>{vodafoneMaterials.length + proconectMaterials.length}</b></button>
         <button className={tab === "estimate" ? "active" : ""} onClick={() => setTab("estimate")}><span>EUR</span><div><strong>Sugestii deviz</strong><small>Operațiuni și materiale</small></div><b>{suggestions.length}</b></button>
       </div>
 
@@ -431,8 +431,6 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
               <h2>Materiale Proconect</h2>
               <table><thead><tr><th>NR.</th><th>MATERIAL</th><th>CANTITATE</th><th>UM</th></tr></thead><tbody>
                 {proconectMaterials.map((item, index) => <tr key={item.name}><td>{index + 1}</td><td>{item.name}</td><td>{item.quantity.toLocaleString("ro-RO")}</td><td>{item.unit}</td></tr>)}
-                <tr><td>{proconectMaterials.length + 1}</td><td>Camerete</td><td><input type="number" min="0" step="1" inputMode="numeric" value={report.materialChambers} onChange={(event) => updateReport("materialChambers", event.target.value)} aria-label="Cantitate camerete" /></td><td>buc.</td></tr>
-                <tr><td>{proconectMaterials.length + 2}</td><td>Stâlpi</td><td><input type="number" min="0" step="1" inputMode="numeric" value={report.materialPoles} onChange={(event) => updateReport("materialPoles", event.target.value)} aria-label="Cantitate stâlpi" /></td><td>buc.</td></tr>
               </tbody></table>
             </section>
             <footer><span>{project.id} · {project.client}</span><span>Cantități preluate din documentația proiectului</span></footer>
