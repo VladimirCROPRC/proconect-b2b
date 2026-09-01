@@ -2130,6 +2130,49 @@ td > small {
   box-shadow: 0 2px 7px rgba(0, 0, 0, .46);
 }
 
+.map-site-legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  padding: 10px 14px;
+  border-top: 1px solid #e0e5ee;
+  color: #46516c;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.map-site-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.map-site-legend i {
+  width: 11px;
+  height: 11px;
+  flex: 0 0 11px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 4px rgba(24, 31, 48, .32);
+}
+
+.map-site-legend .mobile { background: #d9363e; }
+.map-site-legend .fixed { background: #2672d8; }
+.map-site-legend .clients { background: #181b22; }
+.map-site-legend .sites { background: #1d9f87; }
+
+@media (max-width: 700px) {
+  .map-site-legend {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 10px;
+    padding: 10px 12px;
+    font-size: 10px;
+  }
+}
+
 .fo-route-point {
   position: absolute;
   z-index: 6;
