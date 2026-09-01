@@ -456,7 +456,7 @@ export async function syncReportIfConnected(projectId: string) {
     await uploadDriveFile(
       materialName,
       "application/pdf",
-      materialPdf.buffer,
+      materialPdf,
       sectionFolders.documents,
       "Fisa de materiale PDF landscape generata din Proconect B2B",
       await findDriveFileByName(sectionFolders.documents, materialName),
