@@ -7,6 +7,7 @@ import { NoInterventionControl } from "./no-intervention-control";
 import { useMapGestures } from "./use-map-gestures";
 import { useMapFullscreen } from "./use-map-fullscreen";
 import { fetchMapSites, mapSiteMarkerClass } from "./map-sites-client";
+import { MapSiteLegend } from "./map-site-legend";
 
 type Coordinate = { lat: number; lon: number };
 type OptixSiteRow = [code: string, description: string, region: string, lat: number, lon: number];
@@ -618,6 +619,7 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
             <div className="fo-zoom" onClick={(event) => event.stopPropagation()}><button onClick={() => setZoom((current) => clamp(current + 1, 7, 25))}>＋</button><button onClick={() => setZoom((current) => clamp(current - 1, 7, 25))}>−</button></div>
             <a className="fo-attribution" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>© OpenStreetMap contributors</a>
           </div>
+          <MapSiteLegend />
           <div className="splice-map-search">
             <label><span>⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Introdu codul exact, ex. J2…" /></label>
             <div className={`splice-data-state ${sitesStatus}`}><i>{sitesStatus === "ready" ? "✓" : sitesStatus === "error" ? "!" : "↻"}</i>{sitesStatus === "ready" ? `${sites.length.toLocaleString("ro-RO")} site-uri` : sitesStatus === "error" ? "Date indisponibile" : "Se încarcă"}</div>
