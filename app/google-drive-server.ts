@@ -5,6 +5,7 @@ import { getRawDb } from "../db";
 import type { ProjectActivityType } from "./project-data";
 import { bucket, getFileRow, readReport } from "./project-server";
 import { buildAcceptanceReportDocx } from "./report-docx";
+import { buildMaterialSheetPdf } from "./material-pdf";
 
 type DriveEnvironment = { PROCONECT_DRIVE_ENCRYPTION_KEY?: string };
 type DriveSettingsRow = {
@@ -424,6 +425,14 @@ export async function syncFileIfConnected(fileId: string) {
   }
 }
 
+async function findDriveFileByName(folderId: string, name: string) {
+  const escaped = name.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+  const query = encodeURIComponent(`'${folderId}' in parents and name = '${escaped}' and trashed = false`);
+  const response = await googleFetch(`https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id)&pageSize=1`);
+  const payload = await response.json() as GoogleFileResponse;
+  return payload.files?.[0]?.id;
+}
+
 export async function syncReportIfConnected(projectId: string) {
   if (!usesGoogle(await backupMode())) return false;
   if (!isConnected(await settings())) return false;
@@ -441,6 +450,18 @@ export async function syncReportIfConnected(projectId: string) {
     folders.report_file_id || undefined
   );
   await getRawDb().prepare("UPDATE google_drive_project_folders SET report_file_id = ?, updated_at = ? WHERE project_id = ?").bind(driveFileId, Date.now(), projectId).run();
+  const materialPdf = await buildMaterialSheetPdf(projectId);
+  if (materialPdf) {
+    const materialName = `Fisa_materiale_${projectId}.pdf`;
+    await uploadDriveFile(
+      materialName,
+      "application/pdf",
+      materialPdf.buffer,
+      sectionFolders.documents,
+      "Fisa de materiale PDF landscape generata din Proconect B2B",
+      await findDriveFileByName(sectionFolders.documents, materialName),
+    );
+  }
   return true;
 }
 
