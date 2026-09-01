@@ -19,7 +19,7 @@ export async function fetchMapSites(): Promise<MapSitesPayload> {
 
 export function mapSiteMarkerClass(code: string) {
   const normalized = code.trim().toUpperCase();
-  if (/^(?=.*-)[0-9-]+$/.test(normalized)) return "site-code-numeric-hyphen";
+  if (/^L?[0-9]+(?:-[0-9]+)+$/.test(normalized)) return "site-code-numeric-hyphen";
   if (normalized.startsWith("JU")) return "site-code-ju";
   if (normalized.startsWith("J")) return "site-code-j";
   return "";
