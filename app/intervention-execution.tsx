@@ -12,7 +12,7 @@ import {
 import type { ProjectRecord } from "./project-data";
 import { useMapGestures } from "./use-map-gestures";
 import { useMapFullscreen } from "./use-map-fullscreen";
-import { fetchMapSites } from "./map-sites-client";
+import { fetchMapSites, mapSiteMarkerClass } from "./map-sites-client";
 
 type Coordinate = { lat: number; lon: number };
 type OptixSiteRow = [code: string, description: string, region: string, lat: number, lon: number];
@@ -619,7 +619,7 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
             {routeCoordinates.length > 1 && <><polyline className="route-shadow" points={routeCoordinates.map((point) => { const position = screenPoint(point, center, zoom); return `${position.x},${position.y}`; }).join(" ")} /><polyline className="route-cable" points={routeCoordinates.map((point) => { const position = screenPoint(point, center, zoom); return `${position.x},${position.y}`; }).join(" ")} /></>}
           </svg>
 
-          {visibleSites.map(({ site, point }) => <button type="button" className={`fo-site-marker${draft?.endpointA?.id === site.id || draft?.endpointB?.id === site.id || draft?.junction?.id === site.id || previewJunction?.id === site.id ? " selected" : ""}`} key={site.id} title={`${site.code} · ${site.name}`} aria-label={`Alege ${site.code} ${site.name}`} style={{ left: `${point.x / MAP_WIDTH * 100}%`, top: `${point.y / MAP_HEIGHT * 100}%` }} onClick={(event) => { event.stopPropagation(); pickDocumented(site); }}><i /></button>)}
+          {visibleSites.map(({ site, point }) => <button type="button" className={`fo-site-marker ${mapSiteMarkerClass(site.code)}${draft?.endpointA?.id === site.id || draft?.endpointB?.id === site.id || draft?.junction?.id === site.id || previewJunction?.id === site.id ? " selected" : ""}`} key={site.id} title={`${site.code} · ${site.name}`} aria-label={`Alege ${site.code} ${site.name}`} style={{ left: `${point.x / MAP_WIDTH * 100}%`, top: `${point.y / MAP_HEIGHT * 100}%` }} onClick={(event) => { event.stopPropagation(); pickDocumented(site); }}><i /></button>)}
 
           {savedJunctions.map((junction) => { const point = screenPoint(junction, center, zoom); return <button type="button" key={junction.id} className="fo-site-marker intervention-field-marker" title={`${junction.kind === "new" ? "Joncțiune nouă" : "Joncțiune existentă"} · ${junction.network === "mobile" ? "Vodafone Mobil" : "Vodafone Fixed"}`} style={{ left: `${point.x / MAP_WIDTH * 100}%`, top: `${point.y / MAP_HEIGHT * 100}%` }} onClick={(event) => { event.stopPropagation(); if (draft?.type === "junction-installation") return; updateJunction(draft?.type === "fo-installation" ? activeSlot : "junction", { ...junction, network: junction.network ?? "" }); }}><i /></button>; })}
 
