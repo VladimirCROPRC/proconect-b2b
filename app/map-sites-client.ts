@@ -16,3 +16,11 @@ export async function fetchMapSites(): Promise<MapSitesPayload> {
   if (!bundled.ok) throw new Error("Lista site-urilor nu este disponibilă.");
   return bundled.json() as Promise<MapSitesPayload>;
 }
+
+export function mapSiteMarkerClass(code: string) {
+  const normalized = code.trim().toUpperCase();
+  if (/^(?=.*-)[0-9-]+$/.test(normalized)) return "site-code-numeric-hyphen";
+  if (normalized.startsWith("JU")) return "site-code-ju";
+  if (normalized.startsWith("J")) return "site-code-j";
+  return "";
+}
