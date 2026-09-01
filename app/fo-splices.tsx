@@ -6,7 +6,7 @@ import type { SpliceFieldSummary } from "./field-documentation";
 import { NoInterventionControl } from "./no-intervention-control";
 import { useMapGestures } from "./use-map-gestures";
 import { useMapFullscreen } from "./use-map-fullscreen";
-import { fetchMapSites } from "./map-sites-client";
+import { fetchMapSites, mapSiteMarkerClass } from "./map-sites-client";
 
 type Coordinate = { lat: number; lon: number };
 type OptixSiteRow = [code: string, description: string, region: string, lat: number, lon: number];
@@ -594,7 +594,7 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
               {tiles.map((tile) => <img key={tile.key} src={`https://tile.openstreetmap.org/${tile.sourceZoom}/${tile.urlX}/${tile.urlY}.png`} alt="" draggable={false} style={{ left: `${(tile.x / MAP_WIDTH) * 100}%`, top: `${(tile.y / MAP_HEIGHT) * 100}%`, width: `${(tile.size / MAP_WIDTH) * 100}%`, height: `${(tile.size / MAP_HEIGHT) * 100}%` }} />)}
             </div>
             {visibleSites.map(({ site, point }) => (
-              <button className={`fo-site-marker ${junction?.id === site.id ? "selected" : ""}`} style={{ left: `${(point.x / MAP_WIDTH) * 100}%`, top: `${(point.y / MAP_HEIGHT) * 100}%` }} key={site.id} title={`${site.code} · ${site.name}`} onClick={(event) => { event.stopPropagation(); chooseDocumented(site); }}><i /></button>
+              <button className={`fo-site-marker ${mapSiteMarkerClass(site.code)} ${junction?.id === site.id ? "selected" : ""}`} style={{ left: `${(point.x / MAP_WIDTH) * 100}%`, top: `${(point.y / MAP_HEIGHT) * 100}%` }} key={site.id} title={`${site.code} · ${site.name}`} onClick={(event) => { event.stopPropagation(); chooseDocumented(site); }}><i /></button>
             ))}
             {junction && (() => {
               const point = screenPoint(junction, center, zoom);
