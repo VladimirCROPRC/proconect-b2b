@@ -13,6 +13,7 @@ import type { ProjectRecord } from "./project-data";
 import { useMapGestures } from "./use-map-gestures";
 import { useMapFullscreen } from "./use-map-fullscreen";
 import { fetchMapSites, mapSiteMarkerClass } from "./map-sites-client";
+import { MapSiteLegend } from "./map-site-legend";
 
 type Coordinate = { lat: number; lon: number };
 type OptixSiteRow = [code: string, description: string, region: string, lat: number, lon: number];
@@ -638,6 +639,7 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
           <a className="fo-attribution" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>© OpenStreetMap contributors</a>
         </div>
 
+          <MapSiteLegend />
         <div className="fo-map-footer intervention-map-footer">
           <button type="button" onClick={locate} disabled={gpsLoading}><span>⌖</span>{gpsLoading ? "Se caută GPS…" : "Identifică locația curentă"}</button>
           <button type="button" onClick={() => setDraft((current) => current ? { ...current, routePoints: current.routePoints.slice(0, -1) } : current)} disabled={!draft?.routePoints.length}><span>↶</span>Anulează ultimul punct</button>
