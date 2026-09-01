@@ -3,6 +3,7 @@ import { getRawDb } from "../db";
 import { bucket, getFileRow } from "./project-server";
 import { buildAcceptanceReportDocx } from "./report-docx";
 import { buildSpliceSheetXlsx } from "./splice-xlsx";
+import { buildMaterialSheetPdf } from "./material-pdf";
 import { base64url, decode64, fixedOrigin, retryDelay, safeName, usesOneDrive, validMode, type BackupMode } from "./onedrive-core";
 
 type Environment = { PROCONECT_APP_URL?: string; ONEDRIVE_CLIENT_ID?: string; ONEDRIVE_TENANT_ID?: string; ONEDRIVE_CLIENT_SECRET?: string; ONEDRIVE_ENCRYPTION_KEY?: string };
@@ -291,6 +292,17 @@ async function uploadSpliceSheet(token: string, projectId: string, destinationId
   }));
 }
 
+async function uploadMaterialSheet(token: string, projectId: string, destinationId: string) {
+  const document = await buildMaterialSheetPdf(projectId);
+  if (!document) return;
+  const filename = `Fisa materiale - ${readableFolderName(projectId)}.pdf`;
+  await checked(await graph(token, `/me/drive/items/${encodeURIComponent(destinationId)}:/${encodeURIComponent(filename)}:/content`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/pdf" },
+    body: document,
+  }));
+}
+
 async function uploadJob(c: Connection, job: Job) {
   const token = await tokenFor(c);
   if (job.kind === "project") {
@@ -307,6 +319,7 @@ async function uploadJob(c: Connection, job: Job) {
     if (administrative) {
       await uploadAcceptanceReport(token, job.item_id, administrative.item.id);
       await uploadSpliceSheet(token, job.item_id, administrative.item.id);
+      await uploadMaterialSheet(token, job.item_id, administrative.item.id);
     }
     return;
   }
