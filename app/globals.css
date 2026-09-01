@@ -2115,6 +2115,21 @@ td > small {
   box-shadow: 0 0 0 5px rgba(208, 123, 37, .2), 0 3px 9px rgba(93, 57, 20, .28);
 }
 
+.fo-site-marker.site-code-j {
+  background: #d9363e;
+  box-shadow: 0 2px 7px rgba(153, 24, 31, .42);
+}
+
+.fo-site-marker.site-code-ju {
+  background: #2672d8;
+  box-shadow: 0 2px 7px rgba(25, 72, 145, .42);
+}
+
+.fo-site-marker.site-code-numeric-hyphen {
+  background: #181b22;
+  box-shadow: 0 2px 7px rgba(0, 0, 0, .46);
+}
+
 .fo-route-point {
   position: absolute;
   z-index: 6;
