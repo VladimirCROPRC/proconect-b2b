@@ -78,7 +78,7 @@ function materialPdf(input: { projectId: string; client: string; address: string
   output += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
   for (let index = 1; index <= objects.length; index += 1) output += `${String(offsets[index]).padStart(10, "0")} 00000 n \n`;
   output += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
-  return new TextEncoder().encode(output);
+  return new TextEncoder().encode(output).buffer as ArrayBuffer;
 }
 
 export async function buildMaterialSheetPdf(projectId: string) {
