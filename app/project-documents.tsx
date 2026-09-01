@@ -389,7 +389,7 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
             ) : fieldData.splices?.records?.length ? (
               <div className="splice-sheet-table-wrap">
                 <table className="splice-sheet-table">
-                  <thead><tr><th>NR.</th><th>JONCȚIUNE</th><th>TIP / REȚEA</th><th>COORDONATE</th><th>CABLU SITE</th><th>TUB / FIBRĂ SITE</th><th>CABLU CLIENT</th><th>TUB / FIBRĂ CLIENT</th></tr></thead>
+                  <thead><tr><th>NR.</th><th>JONCȚIUNE</th><th>TIP / REȚEA</th><th>COORDONATE</th><th>CABLU SITE</th><th>BUFFER / FIBRĂ SITE</th><th>CABLU CLIENT</th><th>BUFFER / FIBRĂ CLIENT</th></tr></thead>
                   <tbody>{fieldData.splices.records.map((record, index) => (
                     <tr key={record.id}>
                       <td>{index + 1}</td>
