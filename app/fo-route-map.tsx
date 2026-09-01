@@ -12,7 +12,7 @@ import type { RouteFieldSummary } from "./field-documentation";
 import { NoInterventionControl } from "./no-intervention-control";
 import { useMapGestures } from "./use-map-gestures";
 import { useMapFullscreen } from "./use-map-fullscreen";
-import { fetchMapSites } from "./map-sites-client";
+import { fetchMapSites, mapSiteMarkerClass } from "./map-sites-client";
 
 type Coordinate = { lat: number; lon: number };
 type MapMode = "pan" | "client" | "route" | "undocumented";
@@ -894,7 +894,7 @@ export function FoRouteSection({ project: projectItem, variant = "installation",
 
               {visibleSites.map(({ site, point }) => (
                 <button
-                  className={`fo-site-marker ${endB?.id === site.id ? "selected" : ""}`}
+                  className={`fo-site-marker ${mapSiteMarkerClass(site.code)} ${endB?.id === site.id ? "selected" : ""}`}
                   style={{ left: `${(point.x / MAP_WIDTH) * 100}%`, top: `${(point.y / MAP_HEIGHT) * 100}%` }}
                   key={site.id}
                   title={`${site.code} · ${site.name}`}
