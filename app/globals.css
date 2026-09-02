@@ -10603,6 +10603,34 @@ td > small {
 
 }
 
+@media (max-width: 820px) and (orientation: portrait) {
+  .splice-map-card.map-fullscreen .splice-mode-switch {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    overflow: visible;
+  }
+
+  .splice-map-card.map-fullscreen .splice-mode-switch button {
+    width: 100%;
+    min-width: 0;
+    min-height: 40px;
+    justify-content: center;
+    padding: 5px 7px;
+    white-space: nowrap;
+  }
+
+  .splice-map-card.map-fullscreen .splice-header-locate.located {
+    color: #fff;
+    border-color: #21865b;
+    background: #21865b;
+  }
+
+  .splice-map-card.map-fullscreen .splice-map .splice-locate-button {
+    display: none;
+  }
+}
+
 /* Compact placed points keep the map clear on small portrait screens. */
 .fo-placed-dot {
   position: absolute;
