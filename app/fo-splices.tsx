@@ -572,6 +572,12 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
             <div className="splice-mode-switch">
               <button className={mode === "documented" ? "active" : ""} onClick={() => setMode("documented")}>Documentată</button>
               <button className={mode === "undocumented" ? "active" : ""} onClick={() => setMode("undocumented")}>Nedocumentată</button>
+              {mapFullscreen.fullscreen && <button
+                className={`splice-header-locate ${currentLocation ? "located" : ""}`}
+                onClick={locateCurrentPosition}
+                disabled={gpsLoading}
+                aria-label="Identifică locația curentă pe harta sudurilor"
+              ><span>{gpsLoading ? "↻" : currentLocation ? "✓" : "⌖"}</span> {gpsLoading ? "Se caută…" : "Locația mea"}</button>}
               <button
                 className="fo-fullscreen-toggle"
                 onClick={mapFullscreen.toggleFullscreen}
