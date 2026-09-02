@@ -10601,10 +10601,6 @@ td > small {
     box-shadow: 0 -2px 10px rgba(23, 38, 75, .1);
   }
 
-  .fo-map-card.map-fullscreen .fo-map,
-  .splice-map-card.map-fullscreen .fo-map {
-    padding-bottom: 170px;
-  }
 }
 
 /* Compact placed points keep the map clear on small portrait screens. */
