@@ -382,7 +382,6 @@ export default function Home() {
   const technicians = accounts.filter((account) => account.role === "Tehnician" && account.active);
   const currentAccount = authenticatedAccount ?? accounts[0];
   const canManageDocuments = currentAccount?.role === "Admin" || currentAccount?.role === "Manager" || currentAccount?.role === "Coordonator";
-  const canCreateCurrentActivity = canManageDocuments || (currentAccount?.role === "Tehnician" && currentListView === "interventions");
   const activeProject = projects.find((project) => project.id === activeProjectId) ?? projects[0] ?? emptyProject;
   const isDocumentationView = view === "client" || view === "route" || view === "splices" || view === "site";
   const isInterventionWorkspace = view === "intervention-workspace" || view === "intervention-execution" || view === "intervention-documentation";
@@ -395,6 +394,7 @@ export default function Home() {
       ? "surveys"
       : "projects";
   const currentActivitySection = activitySections[currentListView];
+  const canCreateCurrentActivity = canManageDocuments || (currentAccount?.role === "Tehnician" && currentListView === "interventions");
   const currentActivityProjects = useMemo(() => projects.filter((project) => project.activityType === currentActivitySection.type), [currentActivitySection.type, projects]);
   const formActivityType = editingProject?.activityType ?? currentActivitySection.type;
   const isInstallationForm = formActivityType === "Instalare";
