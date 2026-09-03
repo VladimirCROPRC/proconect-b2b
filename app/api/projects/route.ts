@@ -22,11 +22,17 @@ export async function POST(request: Request) {
     if (!sameOrigin(request)) return Response.json({ error: "Cerere neautorizată." }, { status: 403 });
     const session = await currentSession(request);
     if (!session || session.account.passwordResetRequired) return Response.json({ error: "Autentificare necesară." }, { status: 401 });
-    if (!isManagementRole(session.account)) return Response.json({ error: "Numai administratorul poate crea proiecte." }, { status: 403 });
-    await ensureProjectData();
     const body = (await request.json()) as { project?: ProjectRecord; reportMetadata?: { siteCode?: unknown; lec?: unknown } };
     if (!body.project || typeof body.project !== "object") return Response.json({ error: "Datele proiectului lipsesc." }, { status: 400 });
-    const result = await createProject(body.project, session.account);
+    const technicianCreatesIntervention = session.account.role === "Tehnician" && body.project.activityType === "Intervenție";
+    if (!isManagementRole(session.account) && !technicianCreatesIntervention) {
+      return Response.json({ error: "Tehnicienii pot crea numai tichete de intervenție." }, { status: 403 });
+    }
+    await ensureProjectData();
+    const project = technicianCreatesIntervention
+      ? { ...body.project, technician: session.account.name }
+      : body.project;
+    const result = await createProject(project, session.account);
     if ("error" in result) return Response.json({ error: result.error }, { status: result.status });
     const siteCode = typeof body.reportMetadata?.siteCode === "string" ? body.reportMetadata.siteCode.trim().slice(0, 100) : "";
     const lec = typeof body.reportMetadata?.lec === "string" ? body.reportMetadata.lec.trim().slice(0, 100) : "";
