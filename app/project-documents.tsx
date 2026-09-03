@@ -28,6 +28,13 @@ type ReportDraft = {
   materialPoles: string;
 };
 
+type ReferenceCategory = "optix" | "mapxtreme";
+
+const referenceReportLines: Record<ReferenceCategory, string> = {
+  optix: "Nu necesită Optix.",
+  mapxtreme: "Nu necesită MapXtreme.",
+};
+
 type BudgetSuggestion = {
   id: string;
   category: "Manoperă" | "Material";
@@ -276,7 +283,22 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
     };
   }, [project.id]);
 
-  async function uploadReferencePhoto(category: "optix" | "mapxtreme", file: File | null) {
+  function referenceNotRequired(category: ReferenceCategory) {
+    const expected = referenceReportLines[category].toLocaleLowerCase("ro-RO");
+    return report.client.split("\n").some((line) => line.replace(/^[–—-]\s*/, "").trim().toLocaleLowerCase("ro-RO") === expected);
+  }
+
+  function setReferenceNotRequired(category: ReferenceCategory, checked: boolean) {
+    const text = referenceReportLines[category];
+    setReport((current) => {
+      const retained = current.client
+        .split("\n")
+        .filter((line) => line.replace(/^[–—-]\s*/, "").trim().toLocaleLowerCase("ro-RO") !== text.toLocaleLowerCase("ro-RO"));
+      return { ...current, client: [...retained, ...(checked ? [`–  ${text}`] : [])].filter(Boolean).join("\n") };
+    });
+  }
+
+  async function uploadReferencePhoto(category: ReferenceCategory, file: File | null) {
     if (!file) return;
     setReferenceUploading(category);
     try {
@@ -320,7 +342,13 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
   }
 
   function regenerate() {
-    setReport((current) => ({ ...buildReport(project, fieldData), siteCode: current.siteCode, lec: current.lec }));
+    setReport((current) => {
+      const generated = buildReport(project, fieldData);
+      const referenceLines = (Object.keys(referenceReportLines) as ReferenceCategory[])
+        .filter((category) => current.client.split("\n").some((line) => line.replace(/^[–—-]\s*/, "").trim().toLocaleLowerCase("ro-RO") === referenceReportLines[category].toLocaleLowerCase("ro-RO")))
+        .map((category) => `–  ${referenceReportLines[category]}`);
+      return { ...generated, siteCode: current.siteCode, lec: current.lec, client: [generated.client, ...referenceLines].join("\n") };
+    });
     onNotify("Raportul a fost regenerat din operațiunile salvate în teren.");
   }
 
@@ -370,13 +398,20 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
               {(["optix", "mapxtreme"] as const).map((category) => {
                 const saved = referenceFiles.find((file) => file.category === category);
                 const label = category === "optix" ? "Optix" : "MapXtreme";
+                const notRequired = referenceNotRequired(category);
                 return (
-                  <label className={saved ? "upload-box has-file" : "upload-box"} key={category}>
-                    <input type="file" accept=".png,.jpg,.jpeg,image/*" disabled={Boolean(referenceUploading)} onChange={(event) => void uploadReferencePhoto(category, event.target.files?.[0] ?? null)} />
-                    <b>{referenceUploading === category ? "…" : saved ? "✓" : "↑"}</b>
-                    <strong>{saved?.name || "Încarcă poza " + label}</strong>
-                    <small>{saved ? "Poză salvată · selectează alta pentru înlocuire" : "PNG sau JPG, max. 20 MB"}</small>
-                  </label>
+                  <div className="reference-upload-item" key={category}>
+                    <label className={saved ? "upload-box has-file" : "upload-box"}>
+                      <input type="file" accept=".png,.jpg,.jpeg,image/*" disabled={Boolean(referenceUploading) || notRequired} onChange={(event) => void uploadReferencePhoto(category, event.target.files?.[0] ?? null)} />
+                      <b>{referenceUploading === category ? "…" : saved ? "✓" : "↑"}</b>
+                      <strong>{saved?.name || "Încarcă poza " + label}</strong>
+                      <small>{notRequired ? "Marcată ca nefiind necesară" : saved ? "Poză salvată · selectează alta pentru o versiune nouă" : "PNG sau JPG, max. 20 MB"}</small>
+                    </label>
+                    <label className="reference-not-required">
+                      <input type="checkbox" checked={notRequired} onChange={(event) => setReferenceNotRequired(category, event.target.checked)} />
+                      <span>Nu e necesar</span>
+                    </label>
+                  </div>
                 );
               })}
             </div>
