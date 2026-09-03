@@ -4422,6 +4422,38 @@ td > small {
   background: #f2f4f9;
 }
 
+.reference-upload-item {
+  display: grid;
+  gap: 8px;
+}
+
+.reference-not-required {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 12px;
+  border: 1px solid #dce1eb;
+  border-radius: 9px;
+  color: #3c4662;
+  background: #fff;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.reference-not-required input {
+  width: 17px;
+  height: 17px;
+  accent-color: #435491;
+}
+
+.reference-upload-item:has(.reference-not-required input:checked) .upload-box {
+  border-color: #cfd4df;
+  background: #f4f5f8;
+  cursor: default;
+  opacity: .72;
+}
+
 .upload-box input {
   position: absolute;
   width: 1px;
