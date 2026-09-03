@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { ProjectFieldDocumentation, RouteMethod } from "./field-documentation";
+import { fetchProjectFiles, uploadProjectFile, type StoredProjectFile } from "./client-storage";
 
 type DocumentProject = {
   id: string;
@@ -230,7 +231,9 @@ function buildBudgetSuggestions(fieldData: ProjectFieldDocumentation): BudgetSug
 }
 
 export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props) {
-  const [tab, setTab] = useState<"report" | "splices" | "materials" | "estimate">("report");
+  const [tab, setTab] = useState<"report" | "splices" | "materials" | "estimate" | "references">("report");
+  const [referenceFiles, setReferenceFiles] = useState<StoredProjectFile[]>([]);
+  const [referenceUploading, setReferenceUploading] = useState<"optix" | "mapxtreme" | "">("");
   const [report, setReport] = useState(() => buildReport(project, fieldData));
   const [suggestions, setSuggestions] = useState(() => buildBudgetSuggestions(fieldData));
   const [savedAt, setSavedAt] = useState("");
@@ -258,6 +261,34 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
       active = false;
     };
   }, [project.id, fieldData]);
+
+  useEffect(() => {
+    let active = true;
+    fetchProjectFiles(project.id, "project")
+      .then((files) => {
+        if (active) setReferenceFiles(files.filter((file) => file.category === "optix" || file.category === "mapxtreme"));
+      })
+      .catch(() => {
+        if (active) setReferenceFiles([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [project.id]);
+
+  async function uploadReferencePhoto(category: "optix" | "mapxtreme", file: File | null) {
+    if (!file) return;
+    setReferenceUploading(category);
+    try {
+      const stored = await uploadProjectFile({ projectId: project.id, section: "project", category, file });
+      setReferenceFiles((current) => [stored, ...current.filter((item) => item.category !== category)]);
+      onNotify("Poza " + (category === "optix" ? "Optix" : "MapXtreme") + " a fost salvată.");
+    } catch (error) {
+      onNotify(error instanceof Error ? error.message : "Poza nu a putut fi încărcată.");
+    } finally {
+      setReferenceUploading("");
+    }
+  }
 
   const cableMaterials = useMemo(() => {
     const totals = new Map<string, number>();
@@ -326,7 +357,33 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
         <button className={tab === "splices" ? "active" : ""} onClick={() => setTab("splices")}><span>FO</span><div><strong>Fișă de suduri</strong><small>Corespondență fibre</small></div><b>{fieldData.splices?.records?.length ?? 0}</b></button>
         <button className={tab === "materials" ? "active" : ""} onClick={() => setTab("materials")}><span>MAT</span><div><strong>Fișă de materiale</strong><small>Vodafone și Proconect</small></div><b>{vodafoneMaterials.length + proconectMaterials.length}</b></button>
         <button className={tab === "estimate" ? "active" : ""} onClick={() => setTab("estimate")}><span>EUR</span><div><strong>Sugestii deviz</strong><small>Operațiuni și materiale</small></div><b>{suggestions.length}</b></button>
+        <button className={tab === "references" ? "active" : ""} onClick={() => setTab("references")}><span>IMG</span><div><strong>Optix și MapXtreme</strong><small>Imagini de referință</small></div><b>{referenceFiles.length}</b></button>
       </div>
+
+      {tab === "references" && (
+        <section className="splice-sheet-card">
+          <div className="document-toolbar">
+            <div><span>IMG</span><p><strong>Imagini de referință · {project.id}</strong><small>Încarcă separat capturile Optix și MapXtreme</small></p></div>
+          </div>
+          <div className="form-section">
+            <div className="upload-grid">
+              {(["optix", "mapxtreme"] as const).map((category) => {
+                const saved = referenceFiles.find((file) => file.category === category);
+                const label = category === "optix" ? "Optix" : "MapXtreme";
+                return (
+                  <label className={saved ? "upload-box has-file" : "upload-box"} key={category}>
+                    <input type="file" accept=".png,.jpg,.jpeg,image/*" disabled={Boolean(referenceUploading)} onChange={(event) => void uploadReferencePhoto(category, event.target.files?.[0] ?? null)} />
+                    <b>{referenceUploading === category ? "…" : saved ? "✓" : "↑"}</b>
+                    <strong>{saved?.name || "Încarcă poza " + label}</strong>
+                    <small>{saved ? "Poză salvată · selectează alta pentru înlocuire" : "PNG sau JPG, max. 20 MB"}</small>
+                  </label>
+                );
+              })}
+            </div>
+            {referenceFiles.length > 0 && <div className="drive-note"><span>✓</span><div><strong>{referenceFiles.length === 2 ? "Ambele imagini sunt salvate" : "O imagine este salvată"}</strong><p>Fișierele sunt incluse în dosarul de documente al instalării și în sincronizarea configurată.</p></div></div>}
+          </div>
+        </section>
+      )}
 
       {tab === "report" && (
         <div className="report-workspace">
