@@ -178,6 +178,8 @@ export default function Home() {
   const [spliceName, setSpliceName] = useState("");
   const [ipwoFile, setIpwoFile] = useState<File | null>(null);
   const [spliceFile, setSpliceFile] = useState<File | null>(null);
+  const [optixFile, setOptixFile] = useState<File | null>(null);
+  const [mapXtremeFile, setMapXtremeFile] = useState<File | null>(null);
   const [projectSaving, setProjectSaving] = useState(false);
   const [mcSelected, setMcSelected] = useState(false);
   const [projectDataReady, setProjectDataReady] = useState(false);
@@ -380,6 +382,7 @@ export default function Home() {
   const technicians = accounts.filter((account) => account.role === "Tehnician" && account.active);
   const currentAccount = authenticatedAccount ?? accounts[0];
   const canManageDocuments = currentAccount?.role === "Admin" || currentAccount?.role === "Manager" || currentAccount?.role === "Coordonator";
+  const canCreateCurrentActivity = canManageDocuments || (currentAccount?.role === "Tehnician" && currentListView === "interventions");
   const activeProject = projects.find((project) => project.id === activeProjectId) ?? projects[0] ?? emptyProject;
   const isDocumentationView = view === "client" || view === "route" || view === "splices" || view === "site";
   const isInterventionWorkspace = view === "intervention-workspace" || view === "intervention-execution" || view === "intervention-documentation";
@@ -555,6 +558,8 @@ export default function Home() {
     setSpliceName("");
     setIpwoFile(null);
     setSpliceFile(null);
+    setOptixFile(null);
+    setMapXtremeFile(null);
   }
 
   function openProjectEditor(project: Project) {
@@ -565,6 +570,8 @@ export default function Home() {
     setSpliceName(project.splice === "Fișier neîncărcat" ? "" : project.splice);
     setIpwoFile(null);
     setSpliceFile(null);
+    setOptixFile(null);
+    setMapXtremeFile(null);
     setModal("edit-project");
   }
 
@@ -628,6 +635,8 @@ export default function Home() {
       const uploadResults = await Promise.allSettled([
         ...(ipwoFile ? [uploadProjectFile({ projectId: id, section: "project", category: "ipwo", file: ipwoFile })] : []),
         ...(spliceFile ? [uploadProjectFile({ projectId: id, section: "project", category: "splice-diagram", file: spliceFile })] : []),
+        ...(optixFile ? [uploadProjectFile({ projectId: id, section: "project", category: "optix", file: optixFile })] : []),
+        ...(mapXtremeFile ? [uploadProjectFile({ projectId: id, section: "project", category: "mapxtreme", file: mapXtremeFile })] : []),
       ]);
       setProjects((current) => [payload.project!, ...current]);
       setSafetyChecks((current) => ({ ...current, [payload.project!.id]: { pretask: false, ppe: false, completed: false } }));
@@ -685,6 +694,8 @@ export default function Home() {
       const uploadResults = await Promise.allSettled([
         ...(ipwoFile ? [uploadProjectFile({ projectId: project.id, section: "project", category: "ipwo", file: ipwoFile })] : []),
         ...(spliceFile ? [uploadProjectFile({ projectId: project.id, section: "project", category: "splice-diagram", file: spliceFile })] : []),
+        ...(optixFile ? [uploadProjectFile({ projectId: project.id, section: "project", category: "optix", file: optixFile })] : []),
+        ...(mapXtremeFile ? [uploadProjectFile({ projectId: project.id, section: "project", category: "mapxtreme", file: mapXtremeFile })] : []),
       ]);
       setProjects((current) => current.map((item) => item.id === project.id ? payload.project! : item));
       if (editingProject.technician !== payload.project.technician) {
@@ -1268,7 +1279,7 @@ export default function Home() {
                 <h1>{currentActivitySection.title}</h1>
                 <p>{currentActivityProjects.length ? <>Ai <strong>{projectMetrics.active} {projectMetrics.active === 1 ? "lucrare activă" : "lucrări active"}</strong>{projectMetrics.awaitingReview ? ` și ${projectMetrics.awaitingReview === 1 ? "o documentație care necesită verificare" : `${projectMetrics.awaitingReview} documentații care necesită verificare`}.` : "."}</> : `Nu există lucrări de ${currentActivitySection.singular} înregistrate momentan.`}</p>
               </div>
-              {canManageDocuments && <button className="primary-button" onClick={() => { setEditingProject(null); setMcSelected(false); setModal("project"); }}><span>＋</span> {currentActivitySection.createLabel}</button>}
+              {canCreateCurrentActivity && <button className="primary-button" onClick={() => { setEditingProject(null); setMcSelected(false); setOptixFile(null); setMapXtremeFile(null); setModal("project"); }}><span>＋</span> {currentActivitySection.createLabel}</button>}
             </section>
 
             <section className="metrics" aria-label="Rezumat proiecte">
@@ -1569,7 +1580,9 @@ export default function Home() {
                 <label className="wide work-requirements"><span>{formActivityType === "Intervenție" ? "Cerințele intervenției" : formActivityType === "Survey" ? "Obiectivele survey-ului" : "Cerințele lucrării"} *</span><textarea name="requirements" required defaultValue={editingProject?.requirements} rows={5} placeholder={formActivityType === "Intervenție" ? "Descrie problema semnalată, simptomele, verificările cerute și informațiile utile tehnicianului..." : formActivityType === "Survey" ? "Descrie locația, obiectivele vizitei și informațiile care trebuie verificate în teren..." : "Descrie lucrările solicitate, condițiile de instalare, echipamentele sau configurațiile speciale și orice alte informații utile tehnicianului..."} /></label>
               </div></div>
               <div className="form-section"><h3><span>2</span> {isInstallationForm ? "Alocare și echipamente" : "Alocare tehnician"}</h3><div className="form-grid">
-                <label><span>Tehnician alocat *</span><select name="technician" required defaultValue={editingProject?.technician || ""}><option value="" disabled>Selectează tehnicianul</option>{technicians.map((tech) => <option key={tech.username}>{tech.name}</option>)}</select></label>
+                {currentAccount.role === "Tehnician" && formActivityType === "Intervenție" && !editingProject
+                  ? <label><span>Tehnician alocat</span><input name="technician" readOnly value={currentAccount.name} /><small>Tichetul va fi alocat automat contului tău.</small></label>
+                  : <label><span>Tehnician alocat *</span><select name="technician" required defaultValue={editingProject?.technician || ""}><option value="" disabled>Selectează tehnicianul</option>{technicians.map((tech) => <option key={tech.username}>{tech.name}</option>)}</select></label>}
                 {isInstallationForm && <label><span>Tip CPE *</span><select name="cpe" required defaultValue={editingProject?.cpe || ""}><option value="" disabled>{cpeList.length ? "Selectează echipamentul" : "Catalogul CPE este gol"}</option>{editingProject?.cpe && !cpeList.some((cpe) => cpe.name === editingProject.cpe) && <option value={editingProject.cpe}>{editingProject.cpe} (echipament istoric)</option>}{cpeList.map((cpe) => <option key={cpe.name} value={cpe.name}>{cpe.name}{cpe.requiresGrounding ? " · necesită împământare" : ""}</option>)}</select><small>Adaugă și configurează echipamentele din secțiunea CPE.</small></label>}
                 {editingProject && <><label><span>Status proiect *</span><select name="status" required defaultValue={editingProject.status}><option>Planificat</option><option>În desfășurare</option><option>De verificat</option><option>Finalizat</option></select></label><label><span>Programare *</span><input name="date" required defaultValue={editingProject.date} placeholder="ex. 26 aug, 09:30" /></label></>}
                 {isInstallationForm && <div className="wide"><span className="field-label">Echipamente suplimentare</span><div className="switch-row">
@@ -1581,6 +1594,8 @@ export default function Home() {
               {isInstallationForm && <div className="form-section"><h3><span>3</span> Documente</h3><div className="upload-grid">
                 <label className={ipwoName ? "upload-box has-file" : "upload-box"}><input type="file" accept=".pdf,.doc,.docx" onChange={(event) => { const file = event.target.files?.[0] ?? null; setIpwoFile(file); setIpwoName(file?.name ?? editingProject?.ipwo ?? ""); }} /><b>{ipwoName ? "✓" : "↑"}</b><strong>{ipwoName || "Încarcă IPWO"}</strong><small>{ipwoFile ? "Fișier nou selectat" : editingProject && ipwoName ? "Document existent · selectează pentru înlocuire" : "PDF sau DOC, max. 20 MB"}</small></label>
                 <label className={spliceName ? "upload-box has-file" : "upload-box"}><input type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={(event) => { const file = event.target.files?.[0] ?? null; setSpliceFile(file); setSpliceName(file?.name ?? editingProject?.splice ?? ""); }} /><b>{spliceName ? "✓" : "↑"}</b><strong>{spliceName || "Diagrama de suduri"}</strong><small>{spliceFile ? "Fișier nou selectat" : editingProject && spliceName ? "Document existent · selectează pentru înlocuire" : "PDF, PNG sau JPG, max. 20 MB"}</small></label>
+                <label className={optixFile ? "upload-box has-file" : "upload-box"}><input type="file" accept=".png,.jpg,.jpeg,image/*" onChange={(event) => setOptixFile(event.target.files?.[0] ?? null)} /><b>{optixFile ? "✓" : "↑"}</b><strong>{optixFile?.name || "Încarcă poza Optix"}</strong><small>{optixFile ? "Poză nouă selectată" : "PNG sau JPG, max. 20 MB"}</small></label>
+                <label className={mapXtremeFile ? "upload-box has-file" : "upload-box"}><input type="file" accept=".png,.jpg,.jpeg,image/*" onChange={(event) => setMapXtremeFile(event.target.files?.[0] ?? null)} /><b>{mapXtremeFile ? "✓" : "↑"}</b><strong>{mapXtremeFile?.name || "Încarcă poza MapXtreme"}</strong><small>{mapXtremeFile ? "Poză nouă selectată" : "PNG sau JPG, max. 20 MB"}</small></label>
               </div></div>}
               <div className="drive-note"><span className="drive-mark"><i /><i /><i /></span><div><strong>{driveStatus?.connected ? "Google Drive conectat" : "Stocare securizată proiect"}</strong><p>{driveStatus?.connected ? <>Dosarul lucrării se creează automat în <b>{formActivityType === "Intervenție" ? "Interventii" : formActivityType === "Survey" ? "Survey" : "Instalari"}</b>.</> : <>Documentele sunt salvate permanent. Configurează <b>Google Drive</b> din secțiunea administrativă pentru sincronizare automată.</>}</p></div></div>
             </div>
