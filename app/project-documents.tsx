@@ -290,12 +290,15 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
 
   function setReferenceNotRequired(category: ReferenceCategory, checked: boolean) {
     const text = referenceReportLines[category];
-    setReport((current) => {
-      const retained = current.client
-        .split("\n")
-        .filter((line) => line.replace(/^[–—-]\s*/, "").trim().toLocaleLowerCase("ro-RO") !== text.toLocaleLowerCase("ro-RO"));
-      return { ...current, client: [...retained, ...(checked ? [`–  ${text}`] : [])].filter(Boolean).join("\n") };
-    });
+    const retained = report.client
+      .split("\n")
+      .filter((line) => line.replace(/^[–—-]\s*/, "").trim().toLocaleLowerCase("ro-RO") !== text.toLocaleLowerCase("ro-RO"));
+    const updatedReport = { ...report, client: [...retained, ...(checked ? [`–  ${text}`] : [])].filter(Boolean).join("\n") };
+    setReport(updatedReport);
+    void saveReport(
+      checked ? `Raportul a fost actualizat cu „${text}”` : `Mențiunea pentru ${category === "optix" ? "Optix" : "MapXtreme"} a fost eliminată din raport.`,
+      updatedReport,
+    );
   }
 
   async function uploadReferencePhoto(category: ReferenceCategory, file: File | null) {
@@ -352,13 +355,13 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
     onNotify("Raportul a fost regenerat din operațiunile salvate în teren.");
   }
 
-  async function saveReport(successMessage = `Raportul de acceptanță pentru ${project.id} a fost salvat permanent.`) {
+  async function saveReport(successMessage = `Raportul de acceptanță pentru ${project.id} a fost salvat permanent.`, reportToSave: ReportDraft = report) {
     try {
       const response = await fetch("/api/reports", {
         method: "PATCH",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId: project.id, report }),
+        body: JSON.stringify({ projectId: project.id, report: reportToSave }),
       });
       const payload = (await response.json()) as { updatedAt?: number; error?: string };
       if (!response.ok || !payload.updatedAt) throw new Error(payload.error || "Raportul nu a putut fi salvat.");
