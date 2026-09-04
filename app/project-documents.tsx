@@ -95,6 +95,8 @@ function buildReport(project: DocumentProject, fieldData: ProjectFieldDocumentat
     ? [
         `S-a cablat portul ${fieldData.site.etnPort} din switch ${fieldData.site.etn}.`,
         `Conexiunea a fost realizată în ODF ${fieldData.site.odf}, portul ${fieldData.site.odfPort}.`,
+        ...(fieldData.site.mediaConverterInstalled && fieldData.site.mediaConverterType ? [`S-a instalat Media Converter ${fieldData.site.mediaConverterType} în site.`] : []),
+        ...(fieldData.site.sfpInstalled && fieldData.site.sfpType ? [`S-a instalat ${fieldData.site.sfpType} în site.`] : []),
       ]
     : ["Datele pentru ODF și eTN nu au fost încă salvate din teren."];
 
@@ -322,9 +324,11 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
   }, [fieldData.route]);
   const vodafoneMaterials = [
     ...(project.cpe ? [{ name: `CPE ${project.cpe}`, quantity: 1, unit: "buc." }] : []),
-    ...(project.sfp ? [{ name: "SFP", quantity: 1, unit: "buc." }] : []),
+    ...(project.sfp ? [{ name: fieldData.client?.sfpType || "SFP", quantity: fieldData.client?.sfpQuantity || 1, unit: "buc." }] : []),
     ...(project.mc ? [{ name: `Media Converter${project.mcType ? ` ${project.mcType}` : ""}`, quantity: 1, unit: "buc." }] : []),
     ...(project.terminalBox ? [{ name: "Terminal Box", quantity: 1, unit: "buc." }] : []),
+    ...(fieldData.site?.mediaConverterInstalled && fieldData.site.mediaConverterType ? [{ name: `Media Converter ${fieldData.site.mediaConverterType} · site`, quantity: 1, unit: "buc." }] : []),
+    ...(fieldData.site?.sfpInstalled && fieldData.site.sfpType ? [{ name: `${fieldData.site.sfpType} · site`, quantity: 1, unit: "buc." }] : []),
     ...cableMaterials,
   ];
   const proconectMaterials = [
