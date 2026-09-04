@@ -11419,3 +11419,80 @@ td > small {
     text-align: center;
   }
 }
+
+
+/* Structured optical equipment controls */
+.client-sfp-options,
+.site-equipment-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.client-sfp-options {
+  padding: 13px;
+  border: 1px solid #dde3ed;
+  border-radius: 10px;
+  background: #f8f9fc;
+}
+
+.client-sfp-options label,
+.site-equipment-select {
+  display: grid;
+  gap: 7px;
+}
+
+.client-sfp-options label > span,
+.site-equipment-select > span {
+  color: #46516d;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.client-sfp-options input,
+.client-sfp-options select,
+.site-equipment-select select {
+  width: 100%;
+  height: 42px;
+  padding: 0 11px;
+  border: 1px solid #ccd4e2;
+  border-radius: 8px;
+  color: #243150;
+  background: #fff;
+  font: inherit;
+}
+
+.site-equipment-section {
+  margin: 0 18px 18px;
+  overflow: hidden;
+  border: 1px solid #dde3ed;
+  border-radius: 11px;
+  background: #fafbfe;
+}
+
+.site-equipment-grid {
+  padding: 14px;
+}
+
+.site-equipment-choice {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+
+.site-equipment-choice .switch-card {
+  width: 100%;
+}
+
+@media (max-width: 700px) {
+  .client-sfp-options,
+  .site-equipment-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .site-equipment-section {
+    margin: 0 12px 14px;
+  }
+}
