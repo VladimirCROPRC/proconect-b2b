@@ -12,7 +12,7 @@ import { MapSitesSettings } from "./map-sites-settings";
 import { TechnicianMap } from "./technician-map";
 import { fetchProjectFiles, formatCapturedAt, uploadProjectFile } from "./client-storage";
 import { initialCpeCatalog, type CpeCatalogItem, type ProjectActivityType, type ProjectRecord } from "./project-data";
-import type { ClientFieldSummary, InterventionFieldSummary, ProjectFieldDocumentation, RouteFieldSummary, SiteFieldSummary, SpliceFieldSummary } from "./field-documentation";
+import type { ClientFieldSummary, ClientSfpType, InterventionFieldSummary, ProjectFieldDocumentation, RouteFieldSummary, SiteFieldSummary, SpliceFieldSummary } from "./field-documentation";
 import { TechnicianProjectSafety, type ProjectSafetyStatus } from "./technician-project-safety";
 import { NoInterventionControl } from "./no-intervention-control";
 
@@ -189,6 +189,8 @@ export default function Home() {
   const [clientNoIntervention, setClientNoIntervention] = useState(false);
   const [clientNoInterventionReason, setClientNoInterventionReason] = useState("");
   const [clientHasNoGroundingSystem, setClientHasNoGroundingSystem] = useState(false);
+  const [clientSfpQuantity, setClientSfpQuantity] = useState(1);
+  const [clientSfpType, setClientSfpType] = useState<ClientSfpType | "">("");
   const [clientPhotos, setClientPhotos] = useState<Partial<Record<ClientPhotoKey, ClientPhoto[]>>>({});
   const [fieldDocumentation, setFieldDocumentation] = useState<Record<string, ProjectFieldDocumentation>>({});
   const [driveStatus, setDriveStatus] = useState<GoogleDriveStatus | null>(null);
@@ -377,6 +379,8 @@ export default function Home() {
       setClientNoIntervention(Boolean(summary?.noIntervention));
       setClientNoInterventionReason(summary?.noInterventionReason ?? "");
       setClientHasNoGroundingSystem(Boolean(summary?.clientHasNoGroundingSystem));
+      setClientSfpQuantity(summary?.sfpQuantity && summary.sfpQuantity > 0 ? summary.sfpQuantity : 1);
+      setClientSfpType(summary?.sfpType ?? "");
     });
   }, [activeProjectId, fieldDocumentation]);
 
@@ -960,6 +964,10 @@ export default function Home() {
       showToast("Completează motivul pentru care nu s-a intervenit la client.");
       return;
     }
+    if (!clientNoIntervention && activeProject.sfp && (!clientSfpType || !Number.isInteger(clientSfpQuantity) || clientSfpQuantity < 1 || clientSfpQuantity > 100)) {
+      showToast("Selectează tipul SFP și introdu o cantitate între 1 și 100.");
+      return;
+    }
     const missing = requiredClientPhotoKeys.filter((key) => !(clientPhotos[key]?.length));
     if (missing.length) {
       showToast(`Mai trebuie încărcate ${missing.length} fotografii obligatorii.`);
@@ -972,10 +980,12 @@ export default function Home() {
       service: clientService,
       equipment: clientNoIntervention ? [] : [
         activeProject.cpe,
-        ...(activeProject.sfp ? ["SFP optic"] : []),
+        ...(activeProject.sfp ? [`${clientSfpQuantity} × ${clientSfpType}`] : []),
         ...(activeProject.mc ? [`Media Converter${activeProject.mcType ? ` ${activeProject.mcType}` : ""}`] : []),
         ...(activeProject.terminalBox ? ["Terminal Box"] : []),
       ],
+      sfpQuantity: clientNoIntervention || !activeProject.sfp ? 0 : clientSfpQuantity,
+      sfpType: clientNoIntervention || !activeProject.sfp ? "" : clientSfpType,
     };
     try {
       await persistFieldSection("client", clientSummary);
@@ -1439,7 +1449,13 @@ export default function Home() {
                       <div><small>ECHIPAMENT PRINCIPAL</small><strong>{activeProject.cpe}</strong></div>
                       <span className="install-state">De instalat</span>
                     </article>
-                    {activeProject.sfp && <article className="install-equipment"><span className="equipment-symbol">SFP</span><div><small>MODUL OPTIC</small><strong>SFP conform proiectului</strong></div><span className="install-state">De instalat</span></article>}
+                    {activeProject.sfp && <>
+                      <article className="install-equipment"><span className="equipment-symbol">SFP</span><div><small>MODUL OPTIC</small><strong>{clientSfpType ? `${clientSfpQuantity} × ${clientSfpType}` : "Selectează cantitatea și tipul"}</strong></div><span className="install-state">De instalat</span></article>
+                      <div className="client-sfp-options">
+                        <label><span>Număr bucăți SFP *</span><input type="number" min="1" max="100" step="1" value={clientSfpQuantity} onChange={(event) => setClientSfpQuantity(Math.max(1, Math.min(100, Number(event.target.value) || 1)))} /></label>
+                        <label><span>Tip SFP *</span><select value={clientSfpType} onChange={(event) => setClientSfpType(event.target.value as ClientSfpType | "")}><option value="">Selectează tipul</option><option>SFP 1Gb A SC</option><option>SFP 1Gb A LC</option><option>SFP 10Gb A LC</option></select></label>
+                      </div>
+                    </>}
                     {activeProject.mc && <article className="install-equipment"><span className="equipment-symbol">MC</span><div><small>MEDIA CONVERTER</small><strong>{activeProject.mcType ? `MC ${activeProject.mcType}` : "MC conform proiectului"}</strong></div><span className="install-state">De instalat</span></article>}
                     {activeProject.terminalBox && <article className="install-equipment"><span className="equipment-symbol">TB</span><div><small>TERMINAȚIE</small><strong>Terminal Box</strong></div><span className="install-state">De instalat</span></article>}
                     {activeProject.cpeRequiresGrounding && <div className={clientHasNoGroundingSystem ? "grounding-requirement exception" : "grounding-requirement"}>
