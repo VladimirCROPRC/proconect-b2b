@@ -11412,7 +11412,7 @@ td > small {
 
   .technician-map-card:not(.map-fullscreen) .fo-map {
     min-height: 0;
-    aspect-ratio: 4 / 5;
+    aspect-ratio: 5 / 3;
   }
 
   .technician-map-selection {
