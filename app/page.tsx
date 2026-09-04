@@ -9,13 +9,14 @@ import { ProjectDocumentsSection } from "./project-documents";
 import { GoogleDriveSettings, type GoogleDriveStatus } from "./google-drive-settings";
 import { OneDriveSettings } from "./onedrive-settings";
 import { MapSitesSettings } from "./map-sites-settings";
+import { TechnicianMap } from "./technician-map";
 import { fetchProjectFiles, formatCapturedAt, uploadProjectFile } from "./client-storage";
 import { initialCpeCatalog, type CpeCatalogItem, type ProjectActivityType, type ProjectRecord } from "./project-data";
 import type { ClientFieldSummary, InterventionFieldSummary, ProjectFieldDocumentation, RouteFieldSummary, SiteFieldSummary, SpliceFieldSummary } from "./field-documentation";
 import { TechnicianProjectSafety, type ProjectSafetyStatus } from "./technician-project-safety";
 import { NoInterventionControl } from "./no-intervention-control";
 
-type View = "projects" | "interventions" | "surveys" | "intervention-workspace" | "intervention-execution" | "intervention-documentation" | "survey-workspace" | "team" | "cpe" | "drive" | "documents" | "client" | "route" | "splices" | "site";
+type View = "projects" | "interventions" | "surveys" | "map" | "intervention-workspace" | "intervention-execution" | "intervention-documentation" | "survey-workspace" | "team" | "cpe" | "drive" | "documents" | "client" | "route" | "splices" | "site";
 type ActivityListView = "projects" | "interventions" | "surveys";
 type Modal = "project" | "edit-project" | "delete-project" | "account" | "cpe" | "edit-cpe" | null;
 type ServiceType = "Internet" | "VPN" | "Internet+OL" | "OL";
@@ -1058,6 +1059,10 @@ export default function Home() {
   }
 
   function goTo(next: View) {
+    if (next === "map" && currentAccount.role !== "Tehnician") {
+      showToast("Harta dedicată este disponibilă conturilor de tehnician.");
+      return;
+    }
     if ((next === "documents" || next === "intervention-documentation" || next === "team" || next === "cpe" || next === "drive") && !canManageDocuments) {
       showToast("Nu ai permisiunea de a accesa această secțiune administrativă.");
       return;
@@ -1174,6 +1179,9 @@ export default function Home() {
           <button className={view === "surveys" || view === "survey-workspace" ? "active" : ""} onClick={() => goTo("surveys")}>
             <span className="nav-symbol">SV</span> Survey
           </button>
+          {currentAccount.role === "Tehnician" && <button className={view === "map" ? "active" : ""} onClick={() => goTo("map")}>
+            <span className="nav-symbol">H</span> Hartă
+          </button>}
           {canManageDocuments && <p>MANAGEMENT</p>}
           {canManageDocuments && <button className={view === "team" ? "active" : ""} onClick={() => goTo("team")}>
             <span className="nav-symbol">E</span> Echipă
@@ -1222,7 +1230,7 @@ export default function Home() {
             <img className="proconect-logo mobile-proconect-logo" src={proconectLogoUrl} alt="PRO CONECT" />
             <strong>B2B</strong>
           </button>
-          <div className="breadcrumb"><span>{isProjectView ? `${activitySections[listViewForActivity(activeProject.activityType)].title} · ${activeProject.id}` : "Management"}</span><b>/</b><strong>{view === "projects" ? "Instalări" : view === "interventions" ? "Intervenții" : view === "surveys" ? "Survey" : view === "intervention-workspace" ? "Constatare" : view === "intervention-execution" ? "Execuție" : view === "intervention-documentation" ? "Documentare" : view === "survey-workspace" ? "Fișa survey" : view === "team" ? "Echipă" : view === "cpe" ? "Echipamente CPE" : view === "drive" ? "Administrare" : view === "client" ? "Client" : view === "route" ? "Traseu FO" : view === "splices" ? "Suduri FO" : view === "documents" ? "Documente" : "Operațiuni site"}</strong></div>
+          <div className="breadcrumb"><span>{isProjectView ? `${activitySections[listViewForActivity(activeProject.activityType)].title} · ${activeProject.id}` : "Management"}</span><b>/</b><strong>{view === "projects" ? "Instalări" : view === "interventions" ? "Intervenții" : view === "surveys" ? "Survey" : view === "intervention-workspace" ? "Constatare" : view === "intervention-execution" ? "Execuție" : view === "intervention-documentation" ? "Documentare" : view === "survey-workspace" ? "Fișa survey" : view === "team" ? "Echipă" : view === "cpe" ? "Echipamente CPE" : view === "drive" ? "Administrare" : view === "map" ? "Hartă" : view === "client" ? "Client" : view === "route" ? "Traseu FO" : view === "splices" ? "Suduri FO" : view === "documents" ? "Documente" : "Operațiuni site"}</strong></div>
           <div className="top-actions">
             <button className="help-button" aria-label="Ajutor">?</button>
             <button className="bell" aria-label="Notificări">●<span>3</span></button>
@@ -1236,6 +1244,7 @@ export default function Home() {
             <button className={view === "projects" ? "active" : ""} onClick={() => goTo("projects")}>Instalări</button>
             <button className={view === "interventions" ? "active" : ""} onClick={() => goTo("interventions")}>Intervenții</button>
             <button className={view === "surveys" ? "active" : ""} onClick={() => goTo("surveys")}>Survey</button>
+            {currentAccount.role === "Tehnician" && <button className={view === "map" ? "active" : ""} onClick={() => goTo("map")}>Hartă</button>}
             {canManageDocuments && <button className={view === "team" ? "active" : ""} onClick={() => goTo("team")}>Echipă</button>}
             {canManageDocuments && <button className={view === "cpe" ? "active" : ""} onClick={() => goTo("cpe")}>CPE</button>}
             {canManageDocuments && <button className={view === "drive" ? "active" : ""} onClick={() => goTo("drive")}>Administrare</button>}
@@ -1547,6 +1556,7 @@ export default function Home() {
           onNotify={showToast}
           onSaved={saveInterventionSummary}
         />}
+        {view === "map" && currentAccount.role === "Tehnician" && <TechnicianMap />}
         {view === "drive" && authenticatedAccount?.role === "Admin" && <MapSitesSettings onNotify={showToast} />}
         {view === "drive" && authenticatedAccount?.role === "Admin" && <OneDriveSettings />}
         {view === "drive" && canManageDocuments && <GoogleDriveSettings initialStatus={driveStatus} onStatusChange={setDriveStatus} onNotify={showToast} />}
