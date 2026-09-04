@@ -56,6 +56,10 @@ export type SpliceFieldSummary = {
   }>;
 };
 
+export type ClientSfpType = "SFP 1Gb A SC" | "SFP 1Gb A LC" | "SFP 10Gb A LC";
+export type SiteSfpType = "SFP 1Gb B SC" | "SFP 1Gb B LC" | "SFP 10Gb B LC";
+export type FieldMediaConverterType = "100 Mbps" | "1 Gbps" | "JumboFrame";
+
 export type SiteFieldSummary = {
   noIntervention?: boolean;
   noInterventionReason?: string;
@@ -63,6 +67,10 @@ export type SiteFieldSummary = {
   odfPort: string;
   etn: string;
   etnPort: string;
+  mediaConverterInstalled?: boolean;
+  mediaConverterType?: FieldMediaConverterType | "";
+  sfpInstalled?: boolean;
+  sfpType?: SiteSfpType | "";
   photos?: Record<"odfPort" | "etn" | "overview", string>;
 };
 
@@ -72,6 +80,8 @@ export type ClientFieldSummary = {
   clientHasNoGroundingSystem?: boolean;
   service: "Internet" | "VPN" | "Internet+OL" | "OL";
   equipment: string[];
+  sfpQuantity?: number;
+  sfpType?: ClientSfpType | "";
 };
 
 export type InterventionDamageType = "FO cut" | "Atenuare" | "Echipament";
