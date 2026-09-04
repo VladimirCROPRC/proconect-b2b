@@ -266,7 +266,7 @@ export function SiteOperationsSection({ project: projectItem, initialSummary, on
         <section className="site-operation-card">
           <div className="site-operation-head">
             <div><span>↔</span><p><small>LEGĂTURĂ ÎN SITE</small><strong>ODF și echipament eTN</strong></p></div>
-            <b>{completedItems}/7 elemente completate</b>
+            <b>{completedItems}/{requiredItems.length} elemente completate</b>
           </div>
 
           <div className="site-operation-body">
