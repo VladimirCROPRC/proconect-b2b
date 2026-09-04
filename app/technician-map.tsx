@@ -257,7 +257,7 @@ export function TechnicianMap() {
           {selected && !selected.code && (() => { const point = screenPoint(selected, center, zoom); return <span className="technician-address-marker" style={{ left: `${(point.x / MAP_WIDTH) * 100}%`, top: `${(point.y / MAP_HEIGHT) * 100}%` }}>⌖</span>; })()}
           <div className="fo-map-instruction"><span>✥</span>Glisează harta · folosește pinch zoom</div>
         </div>
-        <MapSiteLegend />
+        <div className="fo-map-footer"><MapSiteLegend /></div>
       </section>
       {selected && <section className="technician-map-selection"><div><small>{selected.code ? "COD SITE" : "ADRESĂ SELECTATĂ"}</small><strong>{selected.title}</strong><p>{selected.detail}</p><span>{selected.lat.toFixed(6)}, {selected.lon.toFixed(6)}</span></div><a href={googleMapsUrl(selected)} target="_blank" rel="noreferrer">Google Maps ↗</a></section>}
     </div>
