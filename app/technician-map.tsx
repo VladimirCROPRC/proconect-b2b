@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { fetchMapSites, mapSiteMarkerClass, type MapSiteRow } from "./map-sites-client";
 import { MapSiteLegend } from "./map-site-legend";
 import { useMapGestures } from "./use-map-gestures";
+import { useMapFullscreen } from "./use-map-fullscreen";
 
 type Coordinate = { lat: number; lon: number };
 type SelectedPoint = Coordinate & { code?: string; title: string; detail: string };
@@ -69,6 +70,8 @@ export function TechnicianMap() {
   const [searchingAddress, setSearchingAddress] = useState(false);
   const [message, setMessage] = useState("");
   const [selected, setSelected] = useState<SelectedPoint | null>(null);
+  const [locating, setLocating] = useState(false);
+  const mapFullscreen = useMapFullscreen();
 
   useEffect(() => {
     let active = true;
@@ -171,6 +174,34 @@ export function TechnicianMap() {
     selectSite(row);
   }
 
+  function locateCurrentPosition() {
+    if (!navigator.geolocation) {
+      setMessage("Localizarea nu este disponibilă pe acest dispozitiv.");
+      return;
+    }
+    setLocating(true);
+    setMessage("");
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        const point: SelectedPoint = {
+          lat: coords.latitude,
+          lon: coords.longitude,
+          title: "Locația curentă",
+          detail: `Precizie aproximativă ±${Math.round(coords.accuracy)} m`,
+        };
+        setCenter(point);
+        setZoom(18);
+        setSelected(point);
+        setLocating(false);
+      },
+      () => {
+        setMessage("Locația nu a putut fi detectată. Verifică permisiunea GPS pentru aplicație.");
+        setLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 12_000, maximumAge: 15_000 },
+    );
+  }
+
   async function searchAddress(event: FormEvent) {
     event.preventDefault();
     const query = address.trim();
@@ -211,10 +242,14 @@ export function TechnicianMap() {
       </section>
       {message && <p className="technician-map-message">{message}</p>}
       {addressResults.length > 1 && <div className="technician-address-results">{addressResults.map((result) => <button key={`${result.lat}-${result.lon}`} onClick={() => { setSelected(result); setCenter(result); setZoom(17); }}><strong>{result.title}</strong><small>Arată pe hartă</small></button>)}</div>}
-      <section className="fo-map-card technician-map-card">
+      <section className={`fo-map-card technician-map-card ${mapFullscreen.fullscreen ? "map-fullscreen" : ""}`}>
         <div className="fo-map-head">
           <div><small>HARTĂ SITE-URI</small><strong>{status === "loading" ? "Se încarcă registrul…" : status === "error" ? "Registrul nu este disponibil" : `${sites.length.toLocaleString("ro-RO")} puncte disponibile`}</strong></div>
-          <div className="technician-map-zoom"><button onClick={() => setZoom((value) => Math.min(20, value + 1))} aria-label="Mărește harta">＋</button><button onClick={() => setZoom((value) => Math.max(7, value - 1))} aria-label="Micșorează harta">−</button></div>
+          <div className="technician-map-controls">
+            <button className="technician-location-button" onClick={locateCurrentPosition} disabled={locating}><span>⌖</span>{locating ? "Se localizează…" : "Locația curentă"}</button>
+            <div className="technician-map-zoom"><button onClick={() => setZoom((value) => Math.min(20, value + 1))} aria-label="Mărește harta">＋</button><button onClick={() => setZoom((value) => Math.max(7, value - 1))} aria-label="Micșorează harta">−</button></div>
+            <button className="fo-fullscreen-toggle" onClick={mapFullscreen.toggleFullscreen} aria-pressed={mapFullscreen.fullscreen}><span>{mapFullscreen.fullscreen ? "×" : "⛶"}</span>{mapFullscreen.fullscreen ? "Închide" : "Ecran complet"}</button>
+          </div>
         </div>
         <div className="fo-map mode-pan" role="application" aria-label="Hartă site-uri" onPointerDown={gestures.onPointerDown} onPointerMove={gestures.onPointerMove} onPointerUp={gestures.onPointerUp} onPointerCancel={gestures.onPointerCancel} onWheel={gestures.onWheel}>
           <div className="fo-map-tiles" aria-hidden="true">{tiles.map((tile) => <img key={tile.key} src={`https://tile.openstreetmap.org/${tile.sourceZoom}/${tile.urlX}/${tile.urlY}.png`} alt="" draggable={false} style={{ left: `${(tile.x / MAP_WIDTH) * 100}%`, top: `${(tile.y / MAP_HEIGHT) * 100}%`, width: `${(tile.size / MAP_WIDTH) * 100}%`, height: `${(tile.size / MAP_HEIGHT) * 100}%` }} />)}</div>
