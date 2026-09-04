@@ -443,6 +443,8 @@ async function refreshGeneratedReport(projectId: string, documentation: ProjectF
       : [
           `S-a cablat portul ${site.etnPort} din switch ${site.etn}.`,
           `Conexiunea a fost realizată în ODF ${site.odf}, portul ${site.odfPort}.`,
+          ...(site.mediaConverterInstalled && site.mediaConverterType ? [`S-a instalat Media Converter ${site.mediaConverterType} în site.`] : []),
+          ...(site.sfpInstalled && site.sfpType ? [`S-a instalat ${site.sfpType} în site.`] : []),
         ]);
   }
 
@@ -512,7 +514,17 @@ export async function saveFieldDocumentation(projectId: string, section: string,
   let finalizedProject: ProjectRecord | undefined;
 
   if (section !== "intervention") {
-    const fieldContent = content as { noIntervention?: unknown; noInterventionReason?: unknown; clientHasNoGroundingSystem?: unknown; service?: unknown };
+    const fieldContent = content as {
+      noIntervention?: unknown;
+      noInterventionReason?: unknown;
+      clientHasNoGroundingSystem?: unknown;
+      service?: unknown;
+      sfpQuantity?: unknown;
+      sfpType?: unknown;
+      mediaConverterInstalled?: unknown;
+      mediaConverterType?: unknown;
+      sfpInstalled?: unknown;
+    };
     if (fieldContent.noIntervention === true) {
       const reason = typeof fieldContent.noInterventionReason === "string" ? fieldContent.noInterventionReason.trim() : "";
       if (!reason || reason.length > 2_000) {
@@ -524,6 +536,13 @@ export async function saveFieldDocumentation(projectId: string, section: string,
       const service = typeof fieldContent.service === "string" ? fieldContent.service : "";
       if (!["Internet", "VPN", "Internet+OL", "OL"].includes(service)) {
         return { error: "Selectează serviciul documentat la client.", status: 400 as const };
+      }
+      if (project.sfp && fieldContent.noIntervention !== true) {
+        const quantity = Number(fieldContent.sfpQuantity);
+        const validTypes = new Set(["SFP 1Gb A SC", "SFP 1Gb A LC", "SFP 10Gb A LC"]);
+        if (!Number.isInteger(quantity) || quantity < 1 || quantity > 100 || typeof fieldContent.sfpType !== "string" || !validTypes.has(fieldContent.sfpType)) {
+          return { error: "Selectează tipul SFP de la client și o cantitate între 1 și 100.", status: 400 as const };
+        }
       }
       const noGroundingSystem = fieldContent.clientHasNoGroundingSystem === true;
       if (noGroundingSystem && (!project.cpe_requires_grounding || fieldContent.noIntervention === true)) {
@@ -544,6 +563,15 @@ export async function saveFieldDocumentation(projectId: string, section: string,
       const missingCategories = requiredCategories.filter((category) => !availableCategories.has(category));
       if (missingCategories.length) {
         return { error: `Lipsesc ${missingCategories.length} fotografii obligatorii: procesul-verbal, testele aplicabile, împământarea sau documentarea execuției.`, status: 400 as const };
+      }
+    }
+
+    if (section === "site" && fieldContent.noIntervention !== true) {
+      if (fieldContent.mediaConverterInstalled === true && !["100 Mbps", "1 Gbps", "JumboFrame"].includes(String(fieldContent.mediaConverterType))) {
+        return { error: "Selectează tipul Media Converter instalat în site.", status: 400 as const };
+      }
+      if (fieldContent.sfpInstalled === true && !["SFP 1Gb B SC", "SFP 1Gb B LC", "SFP 10Gb B LC"].includes(String(fieldContent.sfpType))) {
+        return { error: "Selectează tipul SFP instalat în site.", status: 400 as const };
       }
     }
   }
