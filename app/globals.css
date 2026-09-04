@@ -11274,7 +11274,11 @@ td > small {
 }
 
 .technician-map-card .fo-map {
-  min-height: min(68vh, 760px);
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  aspect-ratio: 5 / 3;
   cursor: grab;
 }
 
@@ -11406,8 +11410,9 @@ td > small {
     padding: 12px;
   }
 
-  .technician-map-card .fo-map {
-    min-height: 62vh;
+  .technician-map-card:not(.map-fullscreen) .fo-map {
+    min-height: 0;
+    aspect-ratio: 4 / 5;
   }
 
   .technician-map-selection {
@@ -11494,5 +11499,73 @@ td > small {
 
   .site-equipment-section {
     margin: 0 12px 14px;
+  }
+}
+
+
+.technician-map-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.technician-location-button {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 12px;
+  border: 1px solid #435491;
+  border-radius: 8px;
+  color: #fff;
+  background: #435491;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.technician-location-button:disabled {
+  cursor: wait;
+  opacity: .65;
+}
+
+.technician-location-button span {
+  font-size: 17px;
+}
+
+.technician-map-controls .fo-fullscreen-toggle {
+  min-height: 38px;
+  padding: 0 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.technician-map-controls .fo-fullscreen-toggle span {
+  margin-right: 6px;
+}
+
+.technician-map-card.map-fullscreen .fo-map-footer {
+  overflow: hidden;
+}
+
+@media (max-width: 700px) {
+  .technician-map-card .fo-map-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .technician-map-controls {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    width: 100%;
+  }
+
+  .technician-location-button,
+  .technician-map-controls .fo-fullscreen-toggle {
+    justify-content: center;
+    padding: 0 9px;
+    font-size: 11px;
   }
 }
