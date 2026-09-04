@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { fetchProjectFiles, uploadProjectFile } from "./client-storage";
-import type { SiteFieldSummary } from "./field-documentation";
+import type { FieldMediaConverterType, SiteFieldSummary, SiteSfpType } from "./field-documentation";
 import { NoInterventionControl } from "./no-intervention-control";
 
 type SiteProject = {
@@ -17,6 +17,10 @@ type SiteOperation = {
   odfPort: string;
   etn: string;
   etnPort: string;
+  mediaConverterInstalled: boolean;
+  mediaConverterType: FieldMediaConverterType | "";
+  sfpInstalled: boolean;
+  sfpType: SiteSfpType | "";
   photos: Record<SitePhotoKey, string>;
 };
 
@@ -35,6 +39,10 @@ const emptyOperation: SiteOperation = {
   odfPort: "",
   etn: "",
   etnPort: "",
+  mediaConverterInstalled: false,
+  mediaConverterType: "",
+  sfpInstalled: false,
+  sfpType: "",
   photos: { odfPort: "", etn: "", overview: "" },
 };
 
@@ -49,7 +57,15 @@ export function SiteOperationsSection({ project: projectItem, initialSummary, on
   const [savedOperations, setSavedOperations] = useState<Record<string, SiteOperation>>({});
   const [noIntervention, setNoIntervention] = useState(false);
   const [noInterventionReason, setNoInterventionReason] = useState("");
-  const requiredItems = noIntervention ? [noInterventionReason] : [operation.odf, operation.odfPort, operation.etn, operation.etnPort, ...Object.values(operation.photos)];
+  const requiredItems = noIntervention ? [noInterventionReason] : [
+    operation.odf,
+    operation.odfPort,
+    operation.etn,
+    operation.etnPort,
+    ...(operation.mediaConverterInstalled ? [operation.mediaConverterType] : []),
+    ...(operation.sfpInstalled ? [operation.sfpType] : []),
+    ...Object.values(operation.photos),
+  ];
   const completedItems = requiredItems.filter((value) => value.trim()).length;
   const progress = Math.round((completedItems / requiredItems.length) * 100);
   const ready = completedItems === requiredItems.length;
@@ -61,6 +77,10 @@ export function SiteOperationsSection({ project: projectItem, initialSummary, on
       odfPort: initialSummary.odfPort,
       etn: initialSummary.etn,
       etnPort: initialSummary.etnPort,
+      mediaConverterInstalled: Boolean(initialSummary.mediaConverterInstalled),
+      mediaConverterType: initialSummary.mediaConverterType ?? "",
+      sfpInstalled: Boolean(initialSummary.sfpInstalled),
+      sfpType: initialSummary.sfpType ?? "",
       photos: initialSummary.photos ?? { odfPort: "", etn: "", overview: "" },
     } : emptyOperation);
     let active = true;
@@ -123,6 +143,10 @@ export function SiteOperationsSection({ project: projectItem, initialSummary, on
           odfPort: "",
           etn: "",
           etnPort: "",
+          mediaConverterInstalled: false,
+          mediaConverterType: "",
+          sfpInstalled: false,
+          sfpType: "",
           photos: { odfPort: "", etn: "", overview: "" },
         });
         setSavedOperations((current) => ({ ...current, [projectItem.id]: emptyOperation }));
@@ -148,6 +172,14 @@ export function SiteOperationsSection({ project: projectItem, initialSummary, on
       onNotify("Completează portul eTN.");
       return;
     }
+    if (operation.mediaConverterInstalled && !operation.mediaConverterType) {
+      onNotify("Selectează tipul Media Converter instalat în site.");
+      return;
+    }
+    if (operation.sfpInstalled && !operation.sfpType) {
+      onNotify("Selectează tipul SFP instalat în site.");
+      return;
+    }
     const missingPhoto = sitePhotoCatalog.find((item) => !operation.photos[item.key].trim());
     if (missingPhoto) {
       onNotify(`Încarcă fotografia obligatorie: ${missingPhoto.title}.`);
@@ -158,10 +190,26 @@ export function SiteOperationsSection({ project: projectItem, initialSummary, on
       odfPort: operation.odfPort.trim(),
       etn: operation.etn.trim(),
       etnPort: operation.etnPort.trim(),
+      mediaConverterInstalled: operation.mediaConverterInstalled,
+      mediaConverterType: operation.mediaConverterInstalled ? operation.mediaConverterType : "",
+      sfpInstalled: operation.sfpInstalled,
+      sfpType: operation.sfpInstalled ? operation.sfpType : "",
       photos: { ...operation.photos },
     };
     try {
-      await onSaved?.({ noIntervention: false, noInterventionReason: "", odf: normalized.odf, odfPort: normalized.odfPort, etn: normalized.etn, etnPort: normalized.etnPort, photos: normalized.photos });
+      await onSaved?.({
+        noIntervention: false,
+        noInterventionReason: "",
+        odf: normalized.odf,
+        odfPort: normalized.odfPort,
+        etn: normalized.etn,
+        etnPort: normalized.etnPort,
+        mediaConverterInstalled: normalized.mediaConverterInstalled,
+        mediaConverterType: normalized.mediaConverterType,
+        sfpInstalled: normalized.sfpInstalled,
+        sfpType: normalized.sfpType,
+        photos: normalized.photos,
+      });
       setOperation(normalized);
       setSavedOperations((current) => ({ ...current, [projectItem.id]: normalized }));
       onNotify(`Operațiunile de la site pentru ${projectItem.id} au fost salvate permanent.`);
@@ -175,6 +223,8 @@ export function SiteOperationsSection({ project: projectItem, initialSummary, on
     { label: "Port ODF", value: operation.odfPort },
     { label: "Identificator eTN", value: operation.etn },
     { label: "Port eTN", value: operation.etnPort },
+    ...(operation.mediaConverterInstalled ? [{ label: "Media Converter", value: operation.mediaConverterType }] : []),
+    ...(operation.sfpInstalled ? [{ label: "SFP site", value: operation.sfpType }] : []),
     ...sitePhotoCatalog.map((item) => ({ label: item.title, value: operation.photos[item.key] })),
   ];
 
@@ -256,6 +306,22 @@ export function SiteOperationsSection({ project: projectItem, initialSummary, on
               </div>
             </article>
           </div>
+
+          <section className="site-equipment-section">
+            <div className="site-photo-heading">
+              <div><span>EQ</span><p><small>ECHIPAMENTE INSTALATE ÎN SITE</small><strong>Media Converter și SFP</strong></p></div>
+            </div>
+            <div className="site-equipment-grid">
+              <div className="site-equipment-choice">
+                <label className="switch-card"><span><b>MC</b><small>Media Converter instalat</small></span><input type="checkbox" checked={operation.mediaConverterInstalled} onChange={(event) => setOperation((current) => ({ ...current, mediaConverterInstalled: event.target.checked, mediaConverterType: event.target.checked ? current.mediaConverterType : "" }))} /><i /></label>
+                {operation.mediaConverterInstalled && <label className="site-equipment-select"><span>Tip Media Converter *</span><select value={operation.mediaConverterType} onChange={(event) => setOperation((current) => ({ ...current, mediaConverterType: event.target.value as FieldMediaConverterType | "" }))}><option value="">Selectează tipul</option><option value="100 Mbps">100 Mbps</option><option value="1 Gbps">1 Gbps</option><option value="JumboFrame">JumboFrame</option></select></label>}
+              </div>
+              <div className="site-equipment-choice">
+                <label className="switch-card"><span><b>SFP</b><small>SFP instalat</small></span><input type="checkbox" checked={operation.sfpInstalled} onChange={(event) => setOperation((current) => ({ ...current, sfpInstalled: event.target.checked, sfpType: event.target.checked ? current.sfpType : "" }))} /><i /></label>
+                {operation.sfpInstalled && <label className="site-equipment-select"><span>Tip SFP *</span><select value={operation.sfpType} onChange={(event) => setOperation((current) => ({ ...current, sfpType: event.target.value as SiteSfpType | "" }))}><option value="">Selectează tipul</option><option>SFP 1Gb B SC</option><option>SFP 1Gb B LC</option><option>SFP 10Gb B LC</option></select></label>}
+              </div>
+            </div>
+          </section>
 
           <section className="site-photo-section">
             <div className="site-photo-heading">
