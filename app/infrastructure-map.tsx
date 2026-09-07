@@ -45,7 +45,7 @@ function forEachCoordinate(value: unknown, visit: (coordinate: number[]) => void
   }
   for (const child of value) forEachCoordinate(child, visit);
 }
-function geometryParts(geometry: Geometry) {
+function geometryParts(geometry: Geometry): number[][][] {
   const coordinates = geometry.coordinates as unknown;
   if (geometry.type === "Point") return [[coordinates as number[]]];
   if (geometry.type === "MultiPoint" || geometry.type === "LineString") return [coordinates as number[][]];
@@ -226,6 +226,7 @@ export function InfrastructureMap({ role, onNotify }: { role: string; onNotify: 
         <div className="fo-map-tiles">{tiles.map((tile) => <img key={tile.key} src={`https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${tile.z}/${tile.ty}/${tile.tx}`} alt="" draggable={false} style={{ left: `${tile.x / MAP_WIDTH * 100}%`, top: `${tile.y / MAP_HEIGHT * 100}%`, width: `${tile.size / MAP_WIDTH * 100}%`, height: `${tile.size / MAP_HEIGHT * 100}%` }} />)}</div>
         <canvas ref={canvasRef} className="map-layer-canvas" />
         <div className="fo-map-instruction"><span>GIS</span>Glisează · pinch zoom · straturile sunt reproiectate în WGS84</div>
+        <small className="satellite-attribution">Imagery © Esri și furnizorii săi</small>
       </div>
       <div className="fo-map-footer infrastructure-layer-list">
         <div className="layer-opacity"><span>Opacitate</span><input type="range" min="20" max="100" value={Math.round(opacity * 100)} onChange={(event) => setOpacity(Number(event.target.value) / 100)} /></div>
