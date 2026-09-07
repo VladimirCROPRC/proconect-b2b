@@ -11761,3 +11761,17 @@ td > small {
     width: 65%;
   }
 }
+
+
+.satellite-attribution {
+  position: absolute;
+  right: 6px;
+  bottom: 4px;
+  z-index: 4;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.78);
+  color: #26324c;
+  font-size: 10px;
+  pointer-events: none;
+}
