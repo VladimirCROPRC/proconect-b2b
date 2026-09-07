@@ -2,9 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import initGdalJs from "gdal3.js";
-import workerUrl from "gdal3.js/dist/package/gdal3.js?url";
-import dataUrl from "gdal3.js/dist/package/gdal3WebAssembly.data?url";
-import wasmUrl from "gdal3.js/dist/package/gdal3WebAssembly.wasm?url";
 import { useMapGestures } from "./use-map-gestures";
 import { useMapFullscreen } from "./use-map-fullscreen";
 
@@ -181,7 +178,7 @@ export function InfrastructureMap({ role, onNotify }: { role: string; onNotify: 
     if (!selectedFiles.length || !layerName.trim()) return;
     setConverting(true);
     try {
-      const Gdal = await initGdalJs({ paths: { wasm: wasmUrl, data: dataUrl, js: workerUrl } });
+      const Gdal = await initGdalJs({ path: "https://cdn.jsdelivr.net/npm/gdal3.js@2.8.1/dist/package", useWorker: false });
       const opened = await Gdal.open(selectedFiles);
       const dataset = opened.datasets[0];
       if (!dataset) throw new Error("Setul MapInfo nu a putut fi deschis.");
