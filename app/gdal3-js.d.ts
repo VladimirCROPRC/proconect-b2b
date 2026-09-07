@@ -7,7 +7,7 @@ declare module "gdal3.js" {
     getFileBytes(result: GdalResult): Promise<Uint8Array>;
     close(dataset: GdalDataset): void;
   };
-  export default function initGdalJs(options?: { paths?: { wasm?: string; data?: string; js?: string } }): Promise<GdalApi>;
+  export default function initGdalJs(options?: { path?: string; paths?: { wasm?: string; data?: string; js?: string }; useWorker?: boolean }): Promise<GdalApi>;
 }
 
 declare module "gdal3.js/dist/package/gdal3.js?url" {
