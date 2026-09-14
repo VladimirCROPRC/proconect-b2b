@@ -11,6 +11,7 @@ export type CpeCatalogItem = {
 export type ProjectRecord = {
   id: string;
   activityType: ProjectActivityType;
+  orderNumber?: string;
   client: string;
   address: string;
   contact: string;
