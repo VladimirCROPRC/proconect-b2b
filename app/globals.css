@@ -11569,3 +11569,22 @@ td > small {
     font-size: 11px;
   }
 }
+
+
+.page-heading-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+@media (max-width: 720px) {
+  .page-heading-actions {
+    width: 100%;
+  }
+
+  .page-heading-actions > button {
+    flex: 1 1 220px;
+  }
+}
