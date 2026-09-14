@@ -33,12 +33,32 @@ const interventionActivityLabels: Record<InterventionExecutionActivity["type"], 
   "splice-repair": "Refacere sudură",
 };
 
+function interventionJunctionReportLabel(
+  junction: InterventionExecutionActivity["junction"],
+  fallback: string,
+) {
+  if (!junction) return fallback;
+  const label = junction.documented
+    ? junction.code
+    : junction.kind === "new"
+      ? "joncțiune nouă"
+      : junction.kind === "existing"
+        ? "joncțiune existentă nedocumentată"
+        : "joncțiune nedocumentată";
+  const coordinates = !junction.documented && (junction.kind === "new" || junction.kind === "existing")
+    ? ` · Coordonate: ${junction.lat.toFixed(6)}, ${junction.lon.toFixed(6)}`
+    : "";
+  return `${label}${coordinates}`;
+}
+
 function interventionActivityDescription(activity: InterventionExecutionActivity) {
   const label = interventionActivityLabels[activity.type];
   if (activity.type === "fo-installation") {
-    return `${label}: ${activity.cableType ?? "cablu FO"}, ${activity.cableLengthMeters ?? 0} m, între ${activity.endpointA?.code ?? "joncțiunea A"} și ${activity.endpointB?.code ?? "joncțiunea B"}.`;
+    const endpointA = interventionJunctionReportLabel(activity.endpointA, "joncțiunea A");
+    const endpointB = interventionJunctionReportLabel(activity.endpointB, "joncțiunea B");
+    return `${label}: ${activity.cableType ?? "cablu FO"}, ${activity.cableLengthMeters ?? 0} m, între ${endpointA} și ${endpointB}.`;
   }
-  const junction = activity.junction?.documented ? activity.junction.code : "joncțiune nedocumentată";
+  const junction = interventionJunctionReportLabel(activity.junction, "joncțiune nedocumentată");
   const network = activity.junction?.network === "mobile"
     ? " · Vodafone Mobil"
     : activity.junction?.network === "fixed"
