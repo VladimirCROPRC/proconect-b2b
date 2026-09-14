@@ -560,7 +560,9 @@ export default function Home() {
       return;
     }
     const workbook = buildTicketsWithoutOrderXlsx(tickets);
-    const blob = new Blob([workbook], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const workbookBuffer = new ArrayBuffer(workbook.byteLength);
+    new Uint8Array(workbookBuffer).set(workbook);
+    const blob = new Blob([workbookBuffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
