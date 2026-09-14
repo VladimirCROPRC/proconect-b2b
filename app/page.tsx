@@ -15,6 +15,7 @@ import { initialCpeCatalog, type CpeCatalogItem, type ProjectActivityType, type 
 import type { ClientFieldSummary, ClientSfpType, InterventionFieldSummary, ProjectFieldDocumentation, RouteFieldSummary, SiteFieldSummary, SpliceFieldSummary } from "./field-documentation";
 import { TechnicianProjectSafety, type ProjectSafetyStatus } from "./technician-project-safety";
 import { NoInterventionControl } from "./no-intervention-control";
+import { buildTicketsWithoutOrderXlsx } from "./ticket-report-xlsx";
 
 type View = "projects" | "interventions" | "surveys" | "map" | "intervention-workspace" | "intervention-execution" | "intervention-documentation" | "survey-workspace" | "team" | "cpe" | "drive" | "documents" | "client" | "route" | "splices" | "site";
 type ActivityListView = "projects" | "interventions" | "surveys";
@@ -91,6 +92,7 @@ const initialAccounts: Account[] = [
 const emptyProject: Project = {
   id: "",
   activityType: "Instalare",
+  orderNumber: "",
   client: "",
   address: "",
   contact: "",
@@ -551,6 +553,23 @@ export default function Home() {
     window.setTimeout(() => setToast(""), 3600);
   }
 
+  function exportTicketsWithoutOrder() {
+    const tickets = projects.filter((project) => project.activityType === "Intervenție" && !project.orderNumber?.trim());
+    if (!tickets.length) {
+      showToast("Toate tichetele au număr de comandă.");
+      return;
+    }
+    const workbook = buildTicketsWithoutOrderXlsx(tickets);
+    const blob = new Blob([workbook], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `tichete-fara-numar-comanda-${new Date().toISOString().slice(0, 10)}.xlsx`;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+    showToast(`Raportul Excel conține ${tickets.length} ${tickets.length === 1 ? "tichet" : "tichete"} fără număr de comandă.`);
+  }
+
   function closeModal() {
     setModal(null);
     setEditingProject(null);
@@ -602,6 +621,7 @@ export default function Home() {
     const project: Project = {
       id,
       activityType,
+      orderNumber: activityType === "Intervenție" ? String(form.get("orderNumber") || "").trim() : "",
       client: String(form.get("client")),
       address: String(form.get("address")),
       contact: String(form.get("contact")),
@@ -666,6 +686,7 @@ export default function Home() {
     const project: Project = {
       ...editingProject,
       activityType: String(form.get("activityType") || editingProject.activityType) as ProjectActivityType,
+      orderNumber: String(form.get("activityType") || editingProject.activityType) === "Intervenție" ? String(form.get("orderNumber") || "").trim() : "",
       client: String(form.get("client") || ""),
       address: String(form.get("address") || ""),
       contact: String(form.get("contact") || ""),
@@ -1298,7 +1319,10 @@ export default function Home() {
                 <h1>{currentActivitySection.title}</h1>
                 <p>{currentActivityProjects.length ? <>Ai <strong>{projectMetrics.active} {projectMetrics.active === 1 ? "lucrare activă" : "lucrări active"}</strong>{projectMetrics.awaitingReview ? ` și ${projectMetrics.awaitingReview === 1 ? "o documentație care necesită verificare" : `${projectMetrics.awaitingReview} documentații care necesită verificare`}.` : "."}</> : `Nu există lucrări de ${currentActivitySection.singular} înregistrate momentan.`}</p>
               </div>
-              {canCreateCurrentActivity && <button className="primary-button" onClick={() => { setEditingProject(null); setMcSelected(false); setOptixFile(null); setMapXtremeFile(null); setModal("project"); }}><span>＋</span> {currentActivitySection.createLabel}</button>}
+              <div className="page-heading-actions">
+                {view === "interventions" && canManageDocuments && <button className="secondary-button" onClick={exportTicketsWithoutOrder}>Export Excel fără comandă</button>}
+                {canCreateCurrentActivity && <button className="primary-button" onClick={() => { setEditingProject(null); setMcSelected(false); setOptixFile(null); setMapXtremeFile(null); setModal("project"); }}><span>＋</span> {currentActivitySection.createLabel}</button>}
+              </div>
             </section>
 
             <section className="metrics" aria-label="Rezumat proiecte">
@@ -1329,7 +1353,7 @@ export default function Home() {
                   <tbody>
                     {filteredProjects.map((project) => (
                       <tr className={project.id === activeProject.id ? "active-project-row" : ""} key={project.id} onClick={() => setSelected(project)} tabIndex={0} onKeyDown={(event) => event.key === "Enter" && setSelected(project)}>
-                        <td><strong className="rid">{project.id}</strong><small>{currentAccount.role === "Tehnician" ? safetyChecks[project.id]?.completed ? "Pretask și EIP completate" : "🔒 Pretask și EIP necesare" : project.id === activeProject.id ? project.activityType === "Intervenție" ? "Tichet activ" : "Proiect activ" : "Salvat permanent"}</small></td>
+                        <td><strong className="rid">{project.id}</strong>{project.activityType === "Intervenție" && <small>{project.orderNumber ? `Comandă: ${project.orderNumber}` : "Fără număr de comandă"}</small>}<small>{currentAccount.role === "Tehnician" ? safetyChecks[project.id]?.completed ? "Pretask și EIP completate" : "🔒 Pretask și EIP necesare" : project.id === activeProject.id ? project.activityType === "Intervenție" ? "Tichet activ" : "Proiect activ" : "Salvat permanent"}</small></td>
                         <td><strong>{project.client}</strong><small>{project.address}</small></td>
                         <td><div className="technician"><span className="avatar">{initials(project.technician)}</span><strong>{project.technician}</strong></div></td>
                         <td><span className={statusClass[project.status]}><i />{project.status}</span></td>
@@ -1590,7 +1614,7 @@ export default function Home() {
               <div className="form-section"><h3><span>1</span> {formActivityType === "Intervenție" ? "Date tichet și client" : "Date proiect și client"}</h3><div className="form-grid">
                 <input type="hidden" name="activityType" value={formActivityType} />
                 {formActivityType === "Intervenție" ? (
-                  <label><span>Număr tichet *</span><input name="requestId" required readOnly={Boolean(editingProject)} defaultValue={editingProject?.id} maxLength={40} pattern="[A-Za-z0-9][A-Za-z0-9._-]{0,39}" title="Folosește litere, cifre, punct, cratimă sau underscore." placeholder="ex. INC-10483" /></label>
+                  <><label><span>Număr tichet *</span><input name="requestId" required readOnly={Boolean(editingProject)} defaultValue={editingProject?.id} maxLength={40} pattern="[A-Za-z0-9][A-Za-z0-9._-]{0,39}" title="Folosește litere, cifre, punct, cratimă sau underscore." placeholder="ex. INC-10483" /></label><label><span>Număr comandă (opțional)</span><input name="orderNumber" defaultValue={editingProject?.orderNumber ?? ""} maxLength={100} placeholder="Introdu numărul comenzii" /></label></>
                 ) : (
                   <label><span>Request ID *</span><div className="prefix-input"><b>RID</b><input name="requestId" required readOnly={Boolean(editingProject)} defaultValue={editingProject?.id.replace(/^RID/i, "")} inputMode="numeric" placeholder="ex. 10483" /></div></label>
                 )}
