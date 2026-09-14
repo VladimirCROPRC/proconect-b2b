@@ -7,6 +7,7 @@ import type { AuthenticatedAccount } from "./server-auth";
 type ProjectRow = {
   id: string;
   activity_type: ProjectActivityType;
+  order_number: string;
   client: string;
   address: string;
   contact: string;
@@ -89,6 +90,7 @@ function projectRowToRecord(row: ProjectRow): ProjectRecord {
   return {
     id: row.id,
     activityType: row.activity_type,
+    orderNumber: row.order_number,
     client: row.client,
     address: row.address,
     contact: row.contact,
@@ -112,11 +114,12 @@ function projectRowToRecord(row: ProjectRow): ProjectRecord {
 function insertProjectStatement(project: ProjectRecord, technicianUsername: string, createdBy: string, createdAt = Date.now()) {
   return getRawDb()
     .prepare(
-      "INSERT INTO projects (id, activity_type, client, address, contact, phone, email, requirements, technician, technician_username, cpe, cpe_requires_grounding, sfp, mc, mc_type, terminal_box, status, scheduled_label, ipwo, splice, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO projects (id, activity_type, order_number, client, address, contact, phone, email, requirements, technician, technician_username, cpe, cpe_requires_grounding, sfp, mc, mc_type, terminal_box, status, scheduled_label, ipwo, splice, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(
       project.id,
       project.activityType,
+      project.orderNumber ?? "",
       project.client,
       project.address,
       project.contact,
@@ -273,6 +276,7 @@ export async function createProject(input: ProjectRecord, createdBy: Authenticat
     ...input,
     id: workId,
     activityType,
+    orderNumber: activityType === "Intervenție" && typeof input.orderNumber === "string" ? input.orderNumber.trim().slice(0, 100) : "",
     client: input.client.trim(),
     address: input.address.trim(),
     contact: input.contact.trim(),
@@ -332,6 +336,7 @@ export async function updateProject(input: ProjectRecord) {
     ...input,
     id: existing.id,
     activityType: ["Instalare", "Intervenție", "Survey"].includes(input.activityType) ? input.activityType : existing.activity_type,
+    orderNumber: activityType === "Intervenție" && typeof input.orderNumber === "string" ? input.orderNumber.trim().slice(0, 100) : "",
     client: input.client.trim(),
     address: input.address.trim(),
     contact: input.contact.trim(),
@@ -352,9 +357,10 @@ export async function updateProject(input: ProjectRecord) {
   const now = Date.now();
   const statements = [
     getRawDb().prepare(
-      "UPDATE projects SET activity_type = ?, client = ?, address = ?, contact = ?, phone = ?, email = ?, requirements = ?, technician = ?, technician_username = ?, cpe = ?, cpe_requires_grounding = ?, sfp = ?, mc = ?, mc_type = ?, terminal_box = ?, status = ?, scheduled_label = ?, ipwo = ?, splice = ?, updated_at = ? WHERE id = ?",
+      "UPDATE projects SET activity_type = ?, order_number = ?, client = ?, address = ?, contact = ?, phone = ?, email = ?, requirements = ?, technician = ?, technician_username = ?, cpe = ?, cpe_requires_grounding = ?, sfp = ?, mc = ?, mc_type = ?, terminal_box = ?, status = ?, scheduled_label = ?, ipwo = ?, splice = ?, updated_at = ? WHERE id = ?",
     ).bind(
       project.activityType,
+      project.orderNumber ?? "",
       project.client,
       project.address,
       project.contact,
