@@ -8,7 +8,9 @@ import {
   type InterventionExecutionActivity,
   type InterventionFieldSummary,
   type InterventionJunction,
+  type InterventionMaterialSelection,
 } from "./field-documentation";
+import { orangeMaterials, proconectMaterials } from "./orange-materials";
 import type { ProjectRecord } from "./project-data";
 import { useMapGestures } from "./use-map-gestures";
 import { useMapFullscreen } from "./use-map-fullscreen";
@@ -188,6 +190,11 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
   const [draft, setDraft] = useState<ActivityDraft | null>(null);
   const [previewJunction, setPreviewJunction] = useState<DraftJunction | null>(null);
   const [activities, setActivities] = useState<InterventionExecutionActivity[]>(initialSummary?.execution?.activities ?? []);
+  const [materials, setMaterials] = useState<InterventionMaterialSelection[]>(initialSummary?.execution?.materials ?? []);
+  const [materialSource, setMaterialSource] = useState<"orange" | "proconect">("orange");
+  const [materialCode, setMaterialCode] = useState("");
+  const [materialQuantity, setMaterialQuantity] = useState("");
+  const [savingMaterials, setSavingMaterials] = useState(false);
   const [photos, setPhotos] = useState<StoredProjectFile[]>([]);
   const [search, setSearch] = useState("");
   const [gpsLoading, setGpsLoading] = useState(false);
@@ -238,6 +245,7 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
     queueMicrotask(() => {
       if (!mounted) return;
       setActivities(initialSummary?.execution?.activities ?? []);
+      setMaterials(initialSummary?.execution?.materials ?? []);
       setDraft(null);
       setPreviewJunction(null);
       setPhotos([]);
@@ -330,9 +338,11 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
   const cableLengthValid = Number.isFinite(cableLength) && cableLength > 0 && cableLength <= 1_000_000;
   const requiredPhotos = draft?.type === "fo-installation" ? requiredInterventionCablePhotos(cableLengthValid ? cableLength : 0) : draft?.type === "chamber-installation" ? 2 : draft?.type ? 1 : 0;
   const activityPhotos = draft ? photos.filter((photo) => photo.category === `${draft.id}:photo` && validGeo(photo.geo)) : [];
-  const selectedReady = draft?.type === "fo-installation"
-    ? readyJunction(draft.endpointA) && readyJunction(draft.endpointB)
-    : readyJunction(draft?.junction ?? null);
+  const selectedReady = blankMap
+    ? Boolean(draft?.junction && (draft.junction.documented || draft.junction.kind))
+    : draft?.type === "fo-installation"
+      ? readyJunction(draft.endpointA) && readyJunction(draft.endpointB)
+      : readyJunction(draft?.junction ?? null);
   const routeReady = draft?.type !== "fo-installation" || (routeCoordinates.length >= 2 && Boolean(draft.cableType.trim()) && cableLengthValid);
   const activityReady = Boolean(initialSummary?.assessment && draft?.type && selectedReady && routeReady && requiredPhotos && activityPhotos.length >= requiredPhotos);
 
@@ -352,12 +362,14 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
   }
 
   function chooseActivityType(type: InterventionActivityType) {
+    const damageLocation = initialSummary?.assessment?.damageLocation;
+    const orangeDamagePoint: DraftJunction | null = blankMap && damageLocation && type !== "junction-installation" && type !== "chamber-installation" ? { ...damageLocation, id: `damage-${project.id}`, code: "Locația avariei", name: "Locația avariei", region: "Punct stabilit la constatare", documented: false, kind: "existing", network: "" } : null;
     const canUsePreview = Boolean(previewJunction && type !== "junction-installation" && type !== "chamber-installation");
     setDraft((current) => current ? {
       ...current, type,
       endpointA: type === "fo-installation" && canUsePreview ? previewJunction : null,
       endpointB: null,
-      junction: type !== "fo-installation" && canUsePreview ? previewJunction : null,
+      junction: type !== "fo-installation" ? orangeDamagePoint ?? (canUsePreview ? previewJunction : null) : null,
       routePoints: [], cableType: "", cableLength: "",
     } : current);
     setActiveSlot(type === "fo-installation" ? (canUsePreview ? "b" : "a") : "junction");
@@ -533,7 +545,7 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
     setError("");
     try {
       const nextActivities = [...activities, record];
-      await onSaved({ ...initialSummary, execution: { activities: nextActivities, documentedAt } });
+      await onSaved({ ...initialSummary, execution: { activities: nextActivities, materials, documentedAt } });
       setActivities(nextActivities);
       setDraft(null);
       setMode("pan");
@@ -552,7 +564,7 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
     try {
       const nextActivities = activities.filter((item) => item.id !== activity.id);
       const nextSummary: InterventionFieldSummary = nextActivities.length
-        ? { ...initialSummary, execution: { activities: nextActivities, documentedAt: Math.max(...nextActivities.map((item) => item.documentedAt)) } }
+        ? { ...initialSummary, execution: { activities: nextActivities, materials, documentedAt: Math.max(...nextActivities.map((item) => item.documentedAt)) } }
         : { ...initialSummary, execution: undefined };
       const attachedPhotos = photos.filter((photo) => photo.category === `${activity.id}:photo`);
       const removals = await Promise.allSettled(attachedPhotos.map((photo) => deleteProjectFile(photo.id)));
@@ -583,9 +595,9 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
         {draft?.type === "fo-installation" && <fieldset><legend>TIP JONCȚIUNE *</legend><div>{(["existing", "new"] as const).map((kind) =>
           <button type="button" key={kind} className={junction.kind === kind ? "active" : ""} onClick={() => updateJunction(slot, { ...junction, kind })}>{kind === "existing" ? "Existentă" : "Nouă"}</button>
         )}</div></fieldset>}
-        <fieldset><legend>REȚEA VODAFONE *</legend><div>{(["mobile", "fixed"] as const).map((network) =>
+        {!blankMap && <fieldset><legend>REȚEA VODAFONE *</legend><div>{(["mobile", "fixed"] as const).map((network) =>
           <button type="button" key={network} className={junction.network === network ? "active" : ""} onClick={() => updateJunction(slot, { ...junction, network })}>{network === "mobile" ? "Vodafone Mobil" : "Vodafone Fixed"}</button>
-        )}</div></fieldset>
+        )}</div></fieldset>}
       </div>}
     </article>;
   }
@@ -605,7 +617,7 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
 
     {draft && <section className="project-card intervention-activity-types">
       <div className="card-heading"><div><h2>1. Alege activitatea</h2><p>Selectează operațiunea, apoi folosește aceleași controale ale hărții ca în Instalări.</p></div></div>
-      <div className="intervention-type-grid">{(Object.keys(activityCatalog) as InterventionActivityType[]).map((type) => <button
+      <div className="intervention-type-grid">{(Object.keys(activityCatalog) as InterventionActivityType[]).filter((type) => !blankMap || type !== "fo-installation").map((type) => <button
         type="button"
         key={type}
         className={draft.type === type ? "active" : ""}
@@ -615,7 +627,7 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
     </section>}
 
     <div className="intervention-map-layout">
-      <section className={`splice-map-card intervention-map-card ${mapFullscreen.fullscreen ? "map-fullscreen" : ""}`}>
+      <section className={`splice-map-card intervention-map-card ${mapFullscreen.fullscreen ? "map-fullscreen" : ""}`} style={{ display: blankMap && draft?.type !== "junction-installation" && draft?.type !== "chamber-installation" ? "none" : undefined }}>
         <div className="splice-map-head intervention-map-head"><div><small>MOD ACTIV</small><strong>{draft?.type ? activityCatalog[draft.type].title : "Puncte și activități ale intervenției"}</strong></div>
           <div className="intervention-map-actions">
             {!blankMap && draft?.type !== "junction-installation" && draft?.type !== "chamber-installation" && <button type="button" className={mode === "documented" ? "active" : ""} onClick={() => setMode("documented")} disabled={!draft?.type}>J documentată</button>}
