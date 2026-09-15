@@ -631,7 +631,7 @@ export async function saveFieldDocumentation(projectId: string, section: string,
           return { error: "Activitățile intervenției nu sunt identificate corect.", status: 400 as const };
         }
         identifiers.add(item.id);
-        if (!["fo-installation", "junction-installation", "diagnostics", "splice-repair"].includes(item.type)) {
+        if (!["fo-installation", "junction-installation", "chamber-installation", "diagnostics", "splice-repair"].includes(item.type)) {
           return { error: "Tipul activității intervenției nu este valid.", status: 400 as const };
         }
 
@@ -656,16 +656,20 @@ export async function saveFieldDocumentation(projectId: string, section: string,
           if (!validInterventionJunction(item.junction)) {
             return { error: "Selectează sau plasează joncțiunea și completează rețeaua Vodafone.", status: 400 as const };
           }
-          if (item.type === "junction-installation" && (item.junction?.documented || item.junction?.kind !== "new")) {
-            return { error: "Joncțiunea nouă trebuie plasată pe hartă și asociată unei rețele Vodafone.", status: 400 as const };
+          if ((item.type === "junction-installation" || item.type === "chamber-installation") && (item.junction?.documented || item.junction?.kind !== "new")) {
+            return { error: item.type === "chamber-installation" ? "Cămereta nouă trebuie plasată pe hartă și asociată unei rețele Vodafone." : "Joncțiunea nouă trebuie plasată pe hartă și asociată unei rețele Vodafone.", status: 400 as const };
           }
         }
+
+        if (item.type === "chamber-installation") requiredPhotos = 2;
 
         const activityPhotos = geotaggedExecutionPhotos.filter((photo) => photo.category === `${item.id}:photo`).length;
         if (activityPhotos < requiredPhotos) {
           return { error: item.type === "fo-installation"
             ? `Pentru ${item.cableLengthMeters} m sunt obligatorii ${requiredPhotos} fotografii GPS ale instalării FO.`
-            : "Încarcă cel puțin o fotografie cu GPS din care să reiasă remedierea.", status: 400 as const };
+            : item.type === "chamber-installation"
+              ? "Pentru instalarea cămeretei sunt obligatorii două fotografii cu GPS."
+              : "Încarcă cel puțin o fotografie cu GPS din care să reiasă remedierea.", status: 400 as const };
         }
       }
     }
