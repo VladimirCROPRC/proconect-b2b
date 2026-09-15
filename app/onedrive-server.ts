@@ -316,7 +316,7 @@ async function uploadJob(c: Connection, job: Job) {
     const activityFolder = await folder(token, c.root_id, oneDriveActivityFolders[activity]);
     const projectFolder = await folder(token, activityFolder.id, readableFolderName(job.item_id));
     if (activity === "Intervenție Orange") {
-      const qaf = await buildOrangeQafXlsx();
+      const qaf = await buildOrangeQafXlsx(job.item_id);
       const filename = `${readableFolderName(job.item_id)}.xlsx`;
       await checked(await graph(token, `/me/drive/items/${encodeURIComponent(projectFolder.id)}:/${encodeURIComponent(filename)}:/content`, {
         method: "PUT",

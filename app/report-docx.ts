@@ -42,13 +42,13 @@ function join(parts: Uint8Array[]) {
   return result;
 }
 
-export function zipPackage(files: Array<{ name: string; content: string }>) {
+export function zipPackage(files: Array<{ name: string; content: string | Uint8Array }>) {
   const local: Uint8Array[] = [];
   const central: Uint8Array[] = [];
   let offset = 0;
   for (const file of files) {
     const name = encoder.encode(file.name);
-    const data = encoder.encode(file.content);
+    const data = typeof file.content === "string" ? encoder.encode(file.content) : file.content;
     const crc = crc32(data);
     const localHeader = new Uint8Array(30 + name.length);
     const lv = new DataView(localHeader.buffer);

@@ -376,7 +376,7 @@ async function uploadOrangeQaf(projectId: string, folderId: string) {
   await uploadDriveFile(
     filename,
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    await buildOrangeQafXlsx(),
+    await buildOrangeQafXlsx(projectId),
     folderId,
     "QAF Orange generat automat din șablonul aprobat",
     await findDriveFileByName(folderId, filename),
