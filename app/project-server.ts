@@ -63,7 +63,7 @@ function normalizeMediaConverterType(mc: boolean, value: unknown) {
 }
 
 function validWorkIdentifier(value: string, activityType: ProjectActivityType) {
-  return activityType === "Intervenție"
+  return activityType === "Intervenție" || activityType === "Intervenție Orange"
     ? /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,39}$/.test(value)
     : /^RID\d{1,24}$/i.test(value);
 }
@@ -243,7 +243,7 @@ export async function createProject(input: ProjectRecord, createdBy: Authenticat
   const workId = typeof input.id === "string" ? input.id.trim().toUpperCase() : "";
   if (!validWorkIdentifier(workId, activityType)) {
     return {
-      error: activityType === "Intervenție"
+      error: activityType === "Intervenție" || activityType === "Intervenție Orange"
         ? "Numărul tichetului trebuie să conțină litere, cifre, punct, cratimă sau underscore."
         : "Request ID trebuie să conțină doar prefixul RID și cifre.",
       status: 400 as const,
