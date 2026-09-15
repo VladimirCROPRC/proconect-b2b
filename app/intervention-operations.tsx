@@ -29,6 +29,7 @@ const sectionTitles: Record<InterventionSection, string> = {
 const interventionActivityLabels: Record<InterventionExecutionActivity["type"], string> = {
   "fo-installation": "Instalare cablu FO",
   "junction-installation": "Instalare joncțiune nouă",
+  "chamber-installation": "Instalare cămeretă",
   diagnostics: "Diagnosticare OTDR",
   "splice-repair": "Refacere sudură",
 };
@@ -58,7 +59,9 @@ function interventionActivityDescription(activity: InterventionExecutionActivity
     const endpointB = interventionJunctionReportLabel(activity.endpointB, "joncțiunea B");
     return `${label}: ${activity.cableType ?? "cablu FO"}, ${activity.cableLengthMeters ?? 0} m, între ${endpointA} și ${endpointB}.`;
   }
-  const junction = interventionJunctionReportLabel(activity.junction, "joncțiune nedocumentată");
+  const junction = activity.type === "chamber-installation"
+    ? interventionJunctionReportLabel(activity.junction, "cămeretă nouă").replace(/^joncțiune nouă/, "cămeretă nouă")
+    : interventionJunctionReportLabel(activity.junction, "joncțiune nedocumentată");
   const network = activity.junction?.network === "mobile"
     ? " · Vodafone Mobil"
     : activity.junction?.network === "fixed"
