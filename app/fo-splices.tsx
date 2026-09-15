@@ -471,7 +471,7 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
     const summary: SpliceFieldSummary = {
       noIntervention: false,
       noInterventionReason: "",
-      count: nextProjectRecords.reduce((total, record) => total + (record.spliceCount ?? 1), 0);
+      count: nextProjectRecords.reduce((total, record) => total + (record.spliceCount ?? 1), 0),
       junctions: nextProjectRecords.map((record) => ({
         label: record.junction.documented ? `${record.junction.code} · ${record.junction.name}` : "Joncțiune nedocumentată",
         documented: record.junction.documented,
@@ -497,7 +497,7 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
       const summary: SpliceFieldSummary = {
         noIntervention: false,
         noInterventionReason: "",
-        count: nextProjectRecords.reduce((total, item) => total + (item.spliceCount ?? 1), 0);
+        count: nextProjectRecords.reduce((total, item) => total + (item.spliceCount ?? 1), 0),
         junctions: nextProjectRecords.map((item) => ({
           label: item.junction.documented ? `${item.junction.code} · ${item.junction.name}` : "Joncțiune nedocumentată",
           documented: item.junction.documented,
