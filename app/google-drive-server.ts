@@ -384,7 +384,7 @@ async function uploadOrangeQaf(projectId: string, folderId: string) {
 }
 
 function readableOrangeName(value: string) {
-  return value.normalize("NFC").replace(/[\\u0000-\\u001f"*:<>?\\/\\\\|#%]/g, "_").replace(/^[. ]+|[. ]+$/g, "").slice(0, 140) || "Tichet Orange";
+  return value.normalize("NFC").replace(/[\u0000-\u001f"*:<>?\/\\|#%]/g, "_").replace(/^[. ]+|[. ]+$/g, "").slice(0, 140) || "Tichet Orange";
 }
 
 export async function syncProjectIfConnected(projectId: string) {
