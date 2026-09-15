@@ -1066,6 +1066,12 @@ export default function Home() {
   }
 
   function openProject(project: Project) {
+    if (project.activityType === "Intervenție Orange") {
+      setActiveProjectId(project.id);
+      setSelected(null);
+      setView("orange-interventions");
+      return;
+    }
     const destination: View = project.activityType === "Intervenție" ? "intervention-workspace" : project.activityType === "Survey" ? "survey-workspace" : "client";
     if (currentAccount.role === "Tehnician" && !safetyChecks[project.id]?.completed) {
       setSelected(null);
@@ -1122,7 +1128,7 @@ export default function Home() {
       }
       destinationProject = installation;
     }
-    if (next === "projects" || next === "interventions" || next === "surveys") {
+    if (next === "projects" || next === "interventions" || next === "orange-interventions" || next === "surveys") {
       setSearch("");
       setFilter("Toate statusurile");
     }
@@ -1370,7 +1376,7 @@ export default function Home() {
                     {filteredProjects.map((project) => (
                       <tr className={project.id === activeProject.id ? "active-project-row" : ""} key={project.id} onClick={() => setSelected(project)} tabIndex={0} onKeyDown={(event) => event.key === "Enter" && setSelected(project)}>
                         <td><strong className="rid">{project.id}</strong>{project.activityType === "Intervenție" && <small>{project.orderNumber ? `Comandă: ${project.orderNumber}` : "Fără număr de comandă"}</small>}<small>{currentAccount.role === "Tehnician" ? safetyChecks[project.id]?.completed ? "Pretask și EIP completate" : "🔒 Pretask și EIP necesare" : project.id === activeProject.id ? project.activityType === "Intervenție" ? "Tichet activ" : "Proiect activ" : "Salvat permanent"}</small></td>
-                        <td><strong>{project.client}</strong><small>{project.address}</small></td>
+                        <td><strong>{project.client}</strong><small>{project.address || (project.activityType === "Intervenție Orange" ? "Fără site B" : "")}</small></td>
                         <td><div className="technician"><span className="avatar">{initials(project.technician)}</span><strong>{project.technician}</strong></div></td>
                         <td><span className={statusClass[project.status]}><i />{project.status}</span></td>
                         <td><strong>{project.date}</strong></td>
@@ -1625,25 +1631,25 @@ export default function Home() {
       {modal && <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && closeModal()}>
         {(modal === "project" || modal === "edit-project") && (
           <form className="modal project-modal" onSubmit={modal === "edit-project" ? saveProjectChanges : createProject}>
-            <div className="modal-head"><div><span className="modal-kicker">{editingProject ? "EDITARE LUCRARE" : currentActivitySection.title.toUpperCase()}</span><h2>{editingProject ? `Actualizează ${editingProject.id}` : currentActivitySection.createLabel}</h2><p>{editingProject ? "Modificările se salvează permanent pentru lucrarea selectată." : isInstallationForm ? "Datele inițiale pentru instalarea B2B." : formActivityType === "Intervenție" ? "Datele și cerințele specifice intervenției." : "Datele și obiectivele vizitei de survey."}</p></div><button type="button" onClick={closeModal} aria-label="Închide">×</button></div>
+            <div className="modal-head"><div><span className="modal-kicker">{editingProject ? "EDITARE LUCRARE" : currentActivitySection.title.toUpperCase()}</span><h2>{editingProject ? `Actualizează ${editingProject.id}` : currentActivitySection.createLabel}</h2><p>{editingProject ? "Modificările se salvează permanent pentru lucrarea selectată." : isInstallationForm ? "Datele inițiale pentru instalarea B2B." : formActivityType === "Intervenție" ? "Datele și cerințele specifice intervenției." : isOrangeForm ? "Numărul tichetului, site-urile și descrierea intervenției Orange." : "Datele și obiectivele vizitei de survey."}</p></div><button type="button" onClick={closeModal} aria-label="Închide">×</button></div>
             <div className="modal-body">
-              <div className="form-section"><h3><span>1</span> {formActivityType === "Intervenție" ? "Date tichet și client" : "Date proiect și client"}</h3><div className="form-grid">
+              <div className="form-section"><h3><span>1</span> {formActivityType === "Intervenție" ? "Date tichet și client" : isOrangeForm ? "Date tichet Orange" : "Date proiect și client"}</h3><div className="form-grid">
                 <input type="hidden" name="activityType" value={formActivityType} />
-                {formActivityType === "Intervenție" ? (
-                  <><label><span>Număr tichet *</span><input name="requestId" required readOnly={Boolean(editingProject)} defaultValue={editingProject?.id} maxLength={40} pattern="[A-Za-z0-9][A-Za-z0-9._-]{0,39}" title="Folosește litere, cifre, punct, cratimă sau underscore." placeholder="ex. INC-10483" /></label><label><span>Număr comandă (opțional)</span><input name="orderNumber" defaultValue={editingProject?.orderNumber ?? ""} maxLength={100} placeholder="Introdu numărul comenzii" /></label></>
+                {formActivityType === "Intervenție" || isOrangeForm ? (
+                  <><label><span>Număr tichet *</span><input name="requestId" required readOnly={Boolean(editingProject)} defaultValue={editingProject?.id} maxLength={40} pattern="[A-Za-z0-9][A-Za-z0-9._-]{0,39}" title="Folosește litere, cifre, punct, cratimă sau underscore." placeholder={isOrangeForm ? "ex. OR-10483" : "ex. INC-10483"} /></label>{!isOrangeForm && <label><span>Număr comandă (opțional)</span><input name="orderNumber" defaultValue={editingProject?.orderNumber ?? ""} maxLength={100} placeholder="Introdu numărul comenzii" /></label>}</>
                 ) : (
                   <label><span>Request ID *</span><div className="prefix-input"><b>RID</b><input name="requestId" required readOnly={Boolean(editingProject)} defaultValue={editingProject?.id.replace(/^RID/i, "")} inputMode="numeric" placeholder="ex. 10483" /></div></label>
                 )}
-                <label><span>Nume client *</span><input name="client" required defaultValue={editingProject?.client} placeholder="Denumirea companiei" /></label>
-                {!editingProject && <>
+                <label><span>{isOrangeForm ? "Cod site A *" : "Nume client *"}</span><input name="client" required defaultValue={editingProject?.client} placeholder={isOrangeForm ? "Codul site-ului A" : "Denumirea companiei"} /></label>
+                {!editingProject && !isOrangeForm && <>
                   <label><span>Cod site (opțional)</span><input name="siteCode" maxLength={100} placeholder="Codul site-ului clientului" /></label>
                   <label><span>Client LEC (opțional)</span><input name="lec" maxLength={100} placeholder="Location Engineering Code client" /></label>
                 </>}
-                <label className="wide"><span>{isInstallationForm ? "Adresă instalare" : "Adresă lucrare"} *</span><input name="address" required defaultValue={editingProject?.address} placeholder="Stradă, număr, localitate" /></label>
-                <label><span>Persoană de contact *</span><input name="contact" required defaultValue={editingProject?.contact} placeholder="Nume și prenume" /></label>
+                <label className="wide"><span>{isOrangeForm ? "Cod site B (opțional)" : isInstallationForm ? "Adresă instalare *" : "Adresă lucrare *"}</span><input name="address" required={!isOrangeForm} defaultValue={editingProject?.address} placeholder={isOrangeForm ? "Codul site-ului B" : "Stradă, număr, localitate"} /></label>
+                {!isOrangeForm && <><label><span>Persoană de contact *</span><input name="contact" required defaultValue={editingProject?.contact} placeholder="Nume și prenume" /></label>
                 <label><span>Telefon *</span><input name="phone" required defaultValue={editingProject?.phone} placeholder="+40 7xx xxx xxx" /></label>
-                <label className="wide"><span>E-mail</span><input name="email" type="email" defaultValue={editingProject?.email} placeholder="contact@companie.ro" /></label>
-                <label className="wide work-requirements"><span>{formActivityType === "Intervenție" ? "Cerințele intervenției" : formActivityType === "Survey" ? "Obiectivele survey-ului" : "Cerințele lucrării"} *</span><textarea name="requirements" required defaultValue={editingProject?.requirements} rows={5} placeholder={formActivityType === "Intervenție" ? "Descrie problema semnalată, simptomele, verificările cerute și informațiile utile tehnicianului..." : formActivityType === "Survey" ? "Descrie locația, obiectivele vizitei și informațiile care trebuie verificate în teren..." : "Descrie lucrările solicitate, condițiile de instalare, echipamentele sau configurațiile speciale și orice alte informații utile tehnicianului..."} /></label>
+                <label className="wide"><span>E-mail</span><input name="email" type="email" defaultValue={editingProject?.email} placeholder="contact@companie.ro" /></label></>}
+                <label className="wide work-requirements"><span>{isOrangeForm ? "Descriere" : formActivityType === "Intervenție" ? "Cerințele intervenției" : formActivityType === "Survey" ? "Obiectivele survey-ului" : "Cerințele lucrării"} *</span><textarea name="requirements" required defaultValue={editingProject?.requirements} rows={5} placeholder={isOrangeForm ? "Descrierea intervenției Orange..." : formActivityType === "Intervenție" ? "Descrie problema semnalată, simptomele, verificările cerute și informațiile utile tehnicianului..." : formActivityType === "Survey" ? "Descrie locația, obiectivele vizitei și informațiile care trebuie verificate în teren..." : "Descrie lucrările solicitate, condițiile de instalare, echipamentele sau configurațiile speciale și orice alte informații utile tehnicianului..."} /></label>
               </div></div>
               <div className="form-section"><h3><span>2</span> {isInstallationForm ? "Alocare și echipamente" : "Alocare tehnician"}</h3><div className="form-grid">
                 {currentAccount.role === "Tehnician" && formActivityType === "Intervenție" && !editingProject
