@@ -1,6 +1,6 @@
 import type { ProjectFieldDocumentation } from "./field-documentation";
 
-export type ProjectActivityType = "Instalare" | "Intervenție" | "Survey";
+export type ProjectActivityType = "Instalare" | "Intervenție" | "Intervenție Orange" | "Survey";
 export type MediaConverterType = "" | "100 Mbps" | "1 Gbps" | "JumboFrame";
 
 export type CpeCatalogItem = {
