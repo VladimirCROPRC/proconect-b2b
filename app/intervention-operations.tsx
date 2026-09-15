@@ -84,6 +84,7 @@ function buildInterventionReport(project: ProjectRecord, summary?: InterventionF
     `Locație: ${project.address}`,
     `Tehnician: ${project.technician}`,
     `Avarie constatată: ${summary?.assessment?.damageType ?? "Necompletată"}.`,
+    ...(summary?.assessment?.damageLocation ? [`Locația avariei: ${summary.assessment.damageLocation.lat.toFixed(6)}, ${summary.assessment.damageLocation.lon.toFixed(6)}.`] : []),
     "Operațiuni efectuate:",
     ...activityLines,
     `Documentare foto: ${summary?.assessment?.geotaggedPhotoCount ?? 0} fotografii constatare și ${executionPhotos} fotografii execuție.`,
@@ -301,7 +302,7 @@ export function InterventionOperationsSection({
           <span>1</span><div><strong>Constatare</strong><small>Avarie și fotografii inițiale</small></div>
         </button>
         <button type="button" className={section === "execution" ? "active" : ""} onClick={() => onSectionChange("execution")}>
-          <span>2</span><div><strong>Execuție</strong><small>Activități și hartă Optix</small></div>
+          <span>2</span><div><strong>Execuție</strong><small>{orangeIntervention ? "Activități și hartă fără puncte preîncărcate" : "Activități și hartă Optix"}</small></div>
         </button>
         {canEdit && <button type="button" className={section === "documentation" ? "active" : ""} onClick={() => onSectionChange("documentation")}>
           <span>3</span><div><strong>Documentare</strong><small>Validare administrativă</small></div>
