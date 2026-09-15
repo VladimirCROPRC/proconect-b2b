@@ -607,7 +607,7 @@ export async function saveFieldDocumentation(projectId: string, section: string,
     if (!assessment || !["FO cut", "Atenuare", "Echipament"].includes(String(assessment.damageType))) {
       return { error: "Selectează tipul avariei înainte de salvarea constatării.", status: 400 as const };
     }
-    if (project.activity_type === "Intervenție Orange" && (!assessment.damageLocation || !Number.isFinite(assessment.damageLocation.lat) || !Number.isFinite(assessment.damageLocation.lon))) {
+    if (project.activity_type === "Intervenție Orange" && (!assessment.damageLocation || typeof assessment.damageLocation.lat !== "number" || typeof assessment.damageLocation.lon !== "number" || !Number.isFinite(assessment.damageLocation.lat) || !Number.isFinite(assessment.damageLocation.lon))) {
       return { error: "Amplasează locația avariei Orange pe hartă.", status: 400 as const };
     }
 
