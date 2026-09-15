@@ -419,7 +419,7 @@ export default function Home() {
   const displayedAccountName = currentAccount.name;
   const displayedAccountRole = currentAccount.role;
   const activeFieldDocumentation = fieldDocumentation[activeProject.id] ?? {};
-  const selectedSafetyComplete = canManageDocuments || Boolean(selected && safetyChecks[selected.id]?.completed);
+  const selectedSafetyComplete = canManageDocuments || selected?.activityType === "Intervenție Orange" || Boolean(selected && safetyChecks[selected.id]?.completed);
   const requiredClientPhotoKeys: ClientPhotoKey[] = [
     "report",
     ...(clientService === "Internet" || clientService === "Internet+OL" ? (["speed"] as ClientPhotoKey[]) : []),
@@ -1375,7 +1375,7 @@ export default function Home() {
                   <tbody>
                     {filteredProjects.map((project) => (
                       <tr className={project.id === activeProject.id ? "active-project-row" : ""} key={project.id} onClick={() => setSelected(project)} tabIndex={0} onKeyDown={(event) => event.key === "Enter" && setSelected(project)}>
-                        <td><strong className="rid">{project.id}</strong>{project.activityType === "Intervenție" && <small>{project.orderNumber ? `Comandă: ${project.orderNumber}` : "Fără număr de comandă"}</small>}<small>{currentAccount.role === "Tehnician" ? safetyChecks[project.id]?.completed ? "Pretask și EIP completate" : "🔒 Pretask și EIP necesare" : project.id === activeProject.id ? project.activityType === "Intervenție" ? "Tichet activ" : "Proiect activ" : "Salvat permanent"}</small></td>
+                        <td><strong className="rid">{project.id}</strong>{project.activityType === "Intervenție" && <small>{project.orderNumber ? `Comandă: ${project.orderNumber}` : "Fără număr de comandă"}</small>}<small>{currentAccount.role === "Tehnician" ? project.activityType === "Intervenție Orange" ? "Tichet Orange alocat" : safetyChecks[project.id]?.completed ? "Pretask și EIP completate" : "🔒 Pretask și EIP necesare" : project.id === activeProject.id ? project.activityType === "Intervenție" ? "Tichet activ" : "Proiect activ" : "Salvat permanent"}</small></td>
                         <td><strong>{project.client}</strong><small>{project.address || (project.activityType === "Intervenție Orange" ? "Fără site B" : "")}</small></td>
                         <td><div className="technician"><span className="avatar">{initials(project.technician)}</span><strong>{project.technician}</strong></div></td>
                         <td><span className={statusClass[project.status]}><i />{project.status}</span></td>
@@ -1708,19 +1708,19 @@ export default function Home() {
 
       {selected && <div className="drawer-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setSelected(null)}><aside className="detail-drawer">
         <div className="drawer-head"><div><span className={statusClass[selected.status]}><i />{selected.status}</span><h2>{selected.id}</h2><p>{selected.activityType} · {selected.client}</p></div><button onClick={() => setSelected(null)} aria-label="Închide">×</button></div>
-        <div className="drawer-section"><small>LOCAȚIE ȘI CONTACT</small><strong>{selected.address}</strong><p>{selected.contact} · {selected.phone}</p><p>{selected.email}</p></div>
+        <div className="drawer-section"><small>{selected.activityType === "Intervenție Orange" ? "SITE-URI ORANGE" : "LOCAȚIE ȘI CONTACT"}</small><strong>{selected.activityType === "Intervenție Orange" ? `Site A: ${selected.client}` : selected.address}</strong>{selected.activityType === "Intervenție Orange" ? <p>Site B: {selected.address || "Nu este specificat"}</p> : <><p>{selected.contact} · {selected.phone}</p><p>{selected.email}</p></>}</div>
         {!selectedSafetyComplete && <div className="drawer-safety-lock"><span>🔒</span><div><strong>Lucrare blocată</strong><p>Încarcă fotografia Pretask și fotografia cu echipamentul individual de protecție pentru a vedea cerințele și operațiunile.</p></div></div>}
-        {selectedSafetyComplete && <><div className="drawer-section"><small>CERINȚELE LUCRĂRII</small><p className="requirements-text">{selected.requirements}</p></div>
+        {selectedSafetyComplete && <><div className="drawer-section"><small>{selected.activityType === "Intervenție Orange" ? "DESCRIERE" : "CERINȚELE LUCRĂRII"}</small><p className="requirements-text">{selected.requirements}</p></div>
         <div className="drawer-section"><small>TEHNICIAN ALOCAT</small><div className="technician large"><span className="avatar">{initials(selected.technician)}</span><div><strong>{selected.technician}</strong><p>Programare: {selected.date}</p></div></div></div>
         {selected.activityType === "Instalare" && <div className="drawer-section"><small>ECHIPAMENTE</small><strong>{selected.cpe}</strong><div className="tag-row">{selected.cpeRequiresGrounding && <span>Împământare obligatorie</span>}{selected.sfp && <span>SFP</span>}{selected.mc && <span>MC</span>}{selected.terminalBox && <span>Terminal Box</span>}</div></div>}
         {selected.activityType === "Instalare" && <div className="drawer-section"><small>DOCUMENTE</small><button className="file-row" onClick={() => void openProjectFile(selected.id, "ipwo")}><span>PDF</span><div><strong>{selected.ipwo}</strong><small>IPWO</small></div><b>↗</b></button><button className="file-row" onClick={() => void openProjectFile(selected.id, "splice-diagram")}><span>FO</span><div><strong>{selected.splice}</strong><small>Diagramă suduri</small></div><b>↗</b></button></div>}
         <div className="drive-folder"><span className="folder-icon">▰</span><div><small>{driveStatus?.folders[selected.id] ? "GOOGLE DRIVE" : "STOCARE SECURIZATĂ"}</small><strong>Dosar {selected.id}</strong></div>{driveStatus?.folders[selected.id] ? <a className="drive-folder-open" href={driveStatus.folders[selected.id]} target="_blank" rel="noreferrer" aria-label={`Deschide dosarul Google Drive ${selected.id}`}>↗</a> : <span>✓</span>}</div></>}
         <div className="drawer-project-actions">
-          <button className="primary-button" onClick={() => openProject(selected)}>{selectedSafetyComplete ? selected.activityType === "Intervenție" ? "Deschide intervenția" : "Deschide proiectul" : "Completează Pretask și EIP"} <span>→</span></button>
-          {canManageDocuments && <button className="secondary-button" onClick={() => openProjectEditor(selected)}>{selected.activityType === "Intervenție" ? "Editează intervenția" : "Editează proiectul"}</button>}
+          <button className="primary-button" onClick={() => openProject(selected)}>{selectedSafetyComplete ? selected.activityType === "Intervenție" ? "Deschide intervenția" : selected.activityType === "Intervenție Orange" ? "Închide detaliile" : "Deschide proiectul" : "Completează Pretask și EIP"} <span>→</span></button>
+          {canManageDocuments && <button className="secondary-button" onClick={() => openProjectEditor(selected)}>{selected.activityType === "Intervenție" || selected.activityType === "Intervenție Orange" ? "Editează intervenția" : "Editează proiectul"}</button>}
           {canManageDocuments && selected.activityType === "Instalare" && <button className="secondary-button" onClick={() => openProjectDocuments(selected)}>Documente administrative</button>}
-          {canManageDocuments && <button className="secondary-button" style={{ color: "#b42336", borderColor: "#ecc8cc" }} onClick={() => openProjectDeletion(selected)}>{selected.activityType === "Intervenție" ? "Șterge intervenția" : "Șterge proiectul"}</button>}
-          <small>{selected.activityType === "Instalare" ? "Client, traseu, suduri, operațiuni site și închiderea proiectului" : selected.activityType === "Intervenție" ? "Constatare, execuție și documentarea intervenției" : "Fișă și obiective dedicate survey-ului"}</small>
+          {canManageDocuments && <button className="secondary-button" style={{ color: "#b42336", borderColor: "#ecc8cc" }} onClick={() => openProjectDeletion(selected)}>{selected.activityType === "Intervenție" || selected.activityType === "Intervenție Orange" ? "Șterge intervenția" : "Șterge proiectul"}</button>}
+          <small>{selected.activityType === "Instalare" ? "Client, traseu, suduri, operațiuni site și închiderea proiectului" : selected.activityType === "Intervenție" ? "Constatare, execuție și documentarea intervenției" : selected.activityType === "Intervenție Orange" ? "Tichet, site-uri și descrierea intervenției Orange" : "Fișă și obiective dedicate survey-ului"}</small>
         </div>
       </aside></div>}
 
