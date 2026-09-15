@@ -31,6 +31,13 @@ export type RouteFieldSummary = {
   routePoints?: Array<{ lat: number; lon: number }>;
 };
 
+export type SpliceConnection = {
+  siteBuffer: string;
+  siteFiber: string;
+  clientBuffer: string;
+  clientFiber: string;
+};
+
 export type SpliceFieldSummary = {
   noIntervention?: boolean;
   noInterventionReason?: string;
@@ -48,6 +55,9 @@ export type SpliceFieldSummary = {
     network: "" | "mobile" | "fixed";
     siteCableType?: string;
     clientCableType?: string;
+    spliceMode?: "fiber" | "end-to-end";
+    spliceCount?: number;
+    connections?: SpliceConnection[];
     siteBuffer: string;
     siteFiber: string;
     clientBuffer: string;
@@ -93,7 +103,7 @@ export type InterventionAssessmentSummary = {
   documentedAt: number;
 };
 
-export type InterventionActivityType = "fo-installation" | "junction-installation" | "diagnostics" | "splice-repair";
+export type InterventionActivityType = "fo-installation" | "junction-installation" | "chamber-installation" | "diagnostics" | "splice-repair";
 
 export type InterventionJunction = {
   id: string;
