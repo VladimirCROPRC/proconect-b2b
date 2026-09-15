@@ -6,6 +6,9 @@ type SpliceRecord = {
   network?: string;
   siteCableType?: string;
   clientCableType?: string;
+  spliceMode?: "fiber" | "end-to-end";
+  spliceCount?: number;
+  connections?: Array<{ siteBuffer: string; siteFiber: string; clientBuffer: string; clientFiber: string }>;
   siteBuffer?: string;
   siteFiber?: string;
   clientBuffer?: string;
@@ -62,17 +65,23 @@ export function buildSpliceSheetXlsx(data: SpliceSheetData) {
       const coordinates = !documented && Number.isFinite(record.junction?.lat) && Number.isFinite(record.junction?.lon)
         ? `${record.junction!.lat!.toFixed(6)}, ${record.junction!.lon!.toFixed(6)}`
         : "";
-      rows.push({ values: [
-        index + 1,
+      const connections = record.connections?.length ? record.connections : [{
+        siteBuffer: record.siteBuffer ?? "",
+        siteFiber: record.siteFiber ?? "",
+        clientBuffer: record.clientBuffer ?? "",
+        clientFiber: record.clientFiber ?? "",
+      }];
+      connections.forEach((connection, connectionIndex) => rows.push({ values: [
+        `${index + 1}.${connectionIndex + 1}`,
         documented ? record.junction?.code ?? "" : "Fără cod",
         record.junction?.name ?? "",
-        [kind, network].filter(Boolean).join(" / "),
+        [kind, network, record.spliceMode === "end-to-end" ? "Cap–cap" : "Fibră–fibră"].filter(Boolean).join(" / "),
         coordinates,
         record.siteCableType || "Nespecificat",
-        [record.siteBuffer, record.siteFiber].filter(Boolean).join(" / "),
+        [connection.siteBuffer, connection.siteFiber].filter(Boolean).join(" / "),
         record.clientCableType || "Nespecificat",
-        [record.clientBuffer, record.clientFiber].filter(Boolean).join(" / "),
-      ] });
+        [connection.clientBuffer, connection.clientFiber].filter(Boolean).join(" / "),
+      ] }));
     }
   }
 
