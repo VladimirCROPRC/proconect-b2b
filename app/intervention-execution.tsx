@@ -557,6 +557,40 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
     }
   }
 
+  async function saveMaterialSelections() {
+    if (!initialSummary?.assessment) {
+      onNotify("Salvează mai întâi constatarea.");
+      return;
+    }
+    setSavingMaterials(true);
+    try {
+      await onSaved({ ...initialSummary, execution: { activities, materials, documentedAt: Date.now() } });
+      onNotify("Materialele utilizate au fost salvate.");
+    } catch (failure) {
+      onNotify(failure instanceof Error ? failure.message : "Materialele nu au putut fi salvate.");
+    } finally {
+      setSavingMaterials(false);
+    }
+  }
+
+  function addMaterial() {
+    const catalog = materialSource === "orange" ? orangeMaterials : proconectMaterials;
+    const item = catalog.find((entry) => entry.code === materialCode);
+    const quantity = Number(materialQuantity.replace(",", "."));
+    if (!item || !Number.isFinite(quantity) || quantity <= 0 || quantity > 1_000_000) {
+      onNotify("Selectează materialul și introdu o cantitate validă.");
+      return;
+    }
+    setMaterials((current) => {
+      const existing = current.find((entry) => entry.source === materialSource && entry.code === item.code);
+      return existing
+        ? current.map((entry) => entry === existing ? { ...entry, quantity: entry.quantity + quantity } : entry)
+        : [...current, { source: materialSource, code: item.code, description: item.description, unit: item.unit, quantity }];
+    });
+    setMaterialCode("");
+    setMaterialQuantity("");
+  }
+
   async function deleteSavedActivity(activity: InterventionExecutionActivity) {
     if (!window.confirm(`Ștergi activitatea „${activityCatalog[activity.type].title}” și toate fotografiile aferente?`)) return;
     setDeletingActivity(activity.id);
@@ -703,6 +737,18 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
               </div></section></>}
       </aside>
     </div>
+
+    {blankMap && <section className="project-card intervention-records-card">
+      <div className="card-heading"><div><h2>Materiale utilizate</h2><p>Alege materialele Orange și materialele Proconect consumate la intervenție.</p></div></div>
+      <div className="intervention-activity-form-body">
+        <div className="intervention-route-toolbar"><button type="button" className={materialSource === "orange" ? "active" : ""} onClick={() => { setMaterialSource("orange"); setMaterialCode(""); }}>Materiale Orange</button><button type="button" className={materialSource === "proconect" ? "active" : ""} onClick={() => { setMaterialSource("proconect"); setMaterialCode(""); }}>Materiale Proconect</button></div>
+        <label className="intervention-damage-field"><span>Material</span><select value={materialCode} onChange={(event) => setMaterialCode(event.target.value)}><option value="">Selectează materialul</option>{(materialSource === "orange" ? orangeMaterials : proconectMaterials).map((item) => <option key={item.code} value={item.code}>{item.code} · {item.description} · {item.unit}</option>)}</select></label>
+        <label className="intervention-damage-field"><span>Cantitate</span><input type="number" min="0.01" max="1000000" step="0.01" inputMode="decimal" value={materialQuantity} onChange={(event) => setMaterialQuantity(event.target.value)} placeholder="Introdu cantitatea" /></label>
+        <button type="button" className="secondary-button" onClick={addMaterial}>Adaugă materialul</button>
+        {materials.length > 0 && <div className="intervention-records-list">{materials.map((item) => <article key={`${item.source}-${item.code}`}><span>{item.source === "orange" ? "OR" : "PC"}</span><div><strong>{item.code} · {item.description}</strong><small>{item.source === "orange" ? "Material Orange" : "Material Proconect"}</small></div><b>{item.quantity} {item.unit}</b><button type="button" className="record-delete-button" onClick={() => setMaterials((current) => current.filter((entry) => entry !== item))}>Șterge</button></article>)}</div>}
+        <button type="button" className="primary-button" onClick={() => void saveMaterialSelections()} disabled={savingMaterials}>{savingMaterials ? "Se salvează…" : "Salvează materialele"}</button>
+      </div>
+    </section>}
 
     <section className="project-card intervention-records-card"><div className="card-heading"><div><h2>Activități salvate</h2><p>{activities.length ? `${activities.length} ${activities.length === 1 ? "activitate documentată" : "activități documentate"} pentru tichetul ${project.id}.` : "Nicio activitate salvată pentru această intervenție."}</p></div></div>
       {activities.length > 0 && <div className="intervention-records-list">{activities.map((activity) => <article key={activity.id}><span>{activityCatalog[activity.type].badge}</span><div><strong>{activityCatalog[activity.type].title}</strong><small>{activity.type === "fo-installation" ? `${activity.endpointA?.code ?? "Joncțiunea A"} → ${activity.endpointB?.code ?? "Joncțiunea B"} · ${activity.cableType} · ${activity.cableLengthMeters} m` : `${activity.type === "chamber-installation" ? "Cămeretă nouă" : activity.junction?.documented ? activity.junction.code : "Joncțiune nedocumentată"}${activity.junction?.network ? ` · ${activity.junction.network === "mobile" ? "Vodafone Mobil" : "Vodafone Fixed"}` : ""}`}</small></div><b>{activity.photoCount}/{activity.requiredPhotoCount} foto GPS</b><button type="button" className="record-delete-button" onClick={() => void deleteSavedActivity(activity)} disabled={Boolean(deletingActivity)}>{deletingActivity === activity.id ? "Se șterge…" : "Șterge"}</button></article>)}</div>}
