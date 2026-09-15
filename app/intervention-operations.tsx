@@ -77,6 +77,8 @@ function buildInterventionReport(project: ProjectRecord, summary?: InterventionF
     ? activities.map((activity, index) => `${index + 1}. ${interventionActivityDescription(activity)}`)
     : ["Activitățile de execuție nu au fost documentate încă."];
   const executionPhotos = activities.reduce((total, activity) => total + activity.photoCount, 0);
+  const materials = summary?.execution?.materials ?? [];
+  const materialLines = materials.map((material) => `${material.source === "orange" ? "Orange" : "Proconect"}: ${material.code} · ${material.description} · ${material.quantity} ${material.unit}`);
 
   return [
     `Tichet: ${project.id}`,
@@ -87,6 +89,7 @@ function buildInterventionReport(project: ProjectRecord, summary?: InterventionF
     ...(summary?.assessment?.damageLocation ? [`Locația avariei: ${summary.assessment.damageLocation.lat.toFixed(6)}, ${summary.assessment.damageLocation.lon.toFixed(6)}.`] : []),
     "Operațiuni efectuate:",
     ...activityLines,
+    ...(materialLines.length ? ["Materiale utilizate:", ...materialLines] : []),
     `Documentare foto: ${summary?.assessment?.geotaggedPhotoCount ?? 0} fotografii constatare și ${executionPhotos} fotografii execuție.`,
   ].join("\n");
 }
