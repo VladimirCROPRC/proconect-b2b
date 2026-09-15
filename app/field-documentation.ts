@@ -132,8 +132,17 @@ export type InterventionExecutionActivity = {
   documentedAt: number;
 };
 
+export type InterventionMaterialSelection = {
+  source: "orange" | "proconect";
+  code: string;
+  description: string;
+  unit: string;
+  quantity: number;
+};
+
 export type InterventionExecutionSummary = {
   activities: InterventionExecutionActivity[];
+  materials?: InterventionMaterialSelection[];
   documentedAt: number;
 };
 
