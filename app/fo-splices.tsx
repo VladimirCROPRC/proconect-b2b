@@ -176,10 +176,8 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
   const [siteCableType, setSiteCableType] = useState("");
   const [clientCableType, setClientCableType] = useState("");
   const [spliceMode, setSpliceMode] = useState<"fiber" | "end-to-end">("fiber");
-  const [spliceCount, setSpliceCount] = useState(1);
-  const [connections, setConnections] = useState<SpliceConnection[]>([
-    { siteBuffer: "", siteFiber: "", clientBuffer: "", clientFiber: "" },
-  ]);
+  const [spliceCount, setSpliceCount] = useState<number | "">("");
+  const [connections, setConnections] = useState<SpliceConnection[]>([]);
   const [splicePhotos, setSplicePhotos] = useState<Partial<Record<SplicePhotoKey, string>>>({});
   const [draftId, setDraftId] = useState(() => crypto.randomUUID());
   const [search, setSearch] = useState("");
@@ -290,7 +288,7 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
 
   const projectRecords = records.filter((record) => record.projectId === projectItem.id);
   const cableTypesReady = Boolean(siteCableType.trim() && clientCableType.trim());
-  const spliceCountReady = Number.isInteger(spliceCount) && spliceCount >= 1 && spliceCount <= 96;
+  const spliceCountReady = typeof spliceCount === "number" && Number.isInteger(spliceCount) && spliceCount >= 1 && spliceCount <= 96;
   const colorsReady = spliceCountReady && connections.length === spliceCount && connections.every((connection) =>
     Boolean(connection.siteBuffer && connection.clientBuffer && (spliceMode === "end-to-end" || (connection.siteFiber && connection.clientFiber))),
   );
@@ -305,8 +303,8 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
     setSiteCableType("");
     setClientCableType("");
     setSpliceMode("fiber");
-    setSpliceCount(1);
-    setConnections([{ siteBuffer: "", siteFiber: "", clientBuffer: "", clientFiber: "" }]);
+    setSpliceCount("");
+    setConnections([]);
     setSplicePhotos({});
     setDraftId(crypto.randomUUID());
     setSearch("");
@@ -455,7 +453,7 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
       siteCableType: siteCableType.trim(),
       clientCableType: clientCableType.trim(),
       spliceMode,
-      spliceCount,
+      spliceCount: typeof spliceCount === "number" ? spliceCount : 1,
       connections,
       siteBuffer: connections[0]?.siteBuffer ?? "",
       siteFiber: spliceMode === "fiber" ? connections[0]?.siteFiber ?? "" : "",
@@ -664,7 +662,7 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
                 <div className="splice-card-title"><span>2</span><div><h2>Suduri executate</h2><p>Introdu numărul, apoi completează selectorul generat pentru fiecare sudură.</p></div></div>
                 {junction && <div className="splice-undocumented-fields">
                   <fieldset><legend>TIP SUDURĂ *</legend><div>{(["fiber", "end-to-end"] as const).map((item) => <label className={spliceMode === item ? "selected" : ""} key={item}><input type="radio" name="splice-mode" checked={spliceMode === item} onChange={() => { setSpliceMode(item); setConnections((current) => current.map((connection) => item === "end-to-end" ? { ...connection, siteFiber: "", clientFiber: "" } : connection)); }} /><span>{item === "fiber" ? "FIB" : "C-C"}</span><p><strong>{item === "fiber" ? "Fibră–fibră" : "Cap–cap"}</strong><small>{item === "fiber" ? "Se aleg bufferul și fibra" : "Se aleg doar bufferele"}</small></p><i /></label>)}</div></fieldset>
-                  <label className="fo-cable-input"><span>{spliceMode === "end-to-end" ? "NUMĂR DE BUFFERE *" : "NUMĂR DE SUDURI *"}</span><input type="number" min="1" max="96" step="1" inputMode="numeric" value={spliceCount} onChange={(event) => { const value = Math.max(1, Math.min(96, Math.trunc(Number(event.target.value) || 1))); setSpliceCount(value); setConnections((current) => Array.from({ length: value }, (_, index) => current[index] ?? { siteBuffer: "", siteFiber: "", clientBuffer: "", clientFiber: "" })); }} /></label>
+                  <label className="fo-cable-input"><span>{spliceMode === "end-to-end" ? "NUMĂR DE BUFFERE *" : "NUMĂR DE SUDURI *"}</span><input type="number" min="1" max="96" step="1" inputMode="numeric" value={spliceCount} placeholder="Introdu numărul" onChange={(event) => { const rawValue = event.target.value; if (rawValue === "") { setSpliceCount(""); setConnections([]); return; } const value = Math.max(1, Math.min(96, Math.trunc(Number(rawValue)))); setSpliceCount(value); setConnections((current) => Array.from({ length: value }, (_, index) => current[index] ?? { siteBuffer: "", siteFiber: "", clientBuffer: "", clientFiber: "" })); }} /></label>
                 </div>}
                 <div className="splice-directions">
                   <article><div className="splice-direction-title"><span>→</span><div><small>SENS 1</small><strong>Spre site</strong></div></div><label className="fo-cable-input"><span>TIP CABLU SPRE SITE *</span><select value={siteCableType} onChange={(event) => setSiteCableType(event.target.value)}><option value="">Selectează tipul</option>{[4, 12, 24, 48, 96].map((fibers) => <option key={fibers} value={`Cablu FO ${fibers}F`}>{fibers} fibre</option>)}</select></label></article>
