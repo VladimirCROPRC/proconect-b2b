@@ -239,7 +239,7 @@ export async function hasCompletedProjectSafety(projectId: string, account: Auth
 }
 
 export async function createProject(input: ProjectRecord, createdBy: AuthenticatedAccount) {
-  const activityType: ProjectActivityType = ["Instalare", "Intervenție", "Survey"].includes(input.activityType) ? input.activityType : "Instalare";
+  const activityType: ProjectActivityType = ["Instalare", "Intervenție", "Intervenție Orange", "Survey"].includes(input.activityType) ? input.activityType : "Instalare";
   const workId = typeof input.id === "string" ? input.id.trim().toUpperCase() : "";
   if (!validWorkIdentifier(workId, activityType)) {
     return {
@@ -249,12 +249,14 @@ export async function createProject(input: ProjectRecord, createdBy: Authenticat
       status: 400 as const,
     };
   }
-  const required = [input.client, input.address, input.contact, input.phone, input.requirements, input.technician, ...(activityType === "Instalare" ? [input.cpe] : [])];
+  const required = activityType === "Intervenție Orange"
+    ? [input.client, input.requirements, input.technician]
+    : [input.client, input.address, input.contact, input.phone, input.requirements, input.technician, ...(activityType === "Instalare" ? [input.cpe] : [])];
   if (required.some((value) => typeof value !== "string" || !value.trim())) {
     return { error: "Completează toate informațiile obligatorii ale proiectului.", status: 400 as const };
   }
   const existing = await getRawDb().prepare("SELECT id FROM projects WHERE id = ? LIMIT 1").bind(workId).first();
-  if (existing) return { error: activityType === "Intervenție" ? "Numărul tichetului există deja. Verifică valoarea introdusă." : "Request ID există deja. Verifică numărul introdus.", status: 409 as const };
+  if (existing) return { error: activityType === "Intervenție" || activityType === "Intervenție Orange" ? "Numărul tichetului există deja. Verifică valoarea introdusă." : "Request ID există deja. Verifică numărul introdus.", status: 409 as const };
 
   const technician = await getRawDb()
     .prepare("SELECT username, name FROM app_users WHERE name = ? AND role = 'Tehnician' AND active = 1 LIMIT 1")
@@ -301,11 +303,13 @@ export async function createProject(input: ProjectRecord, createdBy: Authenticat
 }
 
 export async function updateProject(input: ProjectRecord) {
-  const activityType: ProjectActivityType = ["Instalare", "Intervenție", "Survey"].includes(input.activityType) ? input.activityType : "Instalare";
+  const activityType: ProjectActivityType = ["Instalare", "Intervenție", "Intervenție Orange", "Survey"].includes(input.activityType) ? input.activityType : "Instalare";
   if (!validWorkIdentifier(input.id, activityType)) {
-    return { error: activityType === "Intervenție" ? "Numărul tichetului nu este valid." : "Request ID-ul proiectului nu este valid.", status: 400 as const };
+    return { error: activityType === "Intervenție" || activityType === "Intervenție Orange" ? "Numărul tichetului nu este valid." : "Request ID-ul proiectului nu este valid.", status: 400 as const };
   }
-  const required = [input.client, input.address, input.contact, input.phone, input.requirements, input.technician, ...(activityType === "Instalare" ? [input.cpe] : [])];
+  const required = activityType === "Intervenție Orange"
+    ? [input.client, input.requirements, input.technician]
+    : [input.client, input.address, input.contact, input.phone, input.requirements, input.technician, ...(activityType === "Instalare" ? [input.cpe] : [])];
   if (required.some((value) => typeof value !== "string" || !value.trim())) {
     return { error: "Completează toate informațiile obligatorii ale proiectului.", status: 400 as const };
   }
@@ -335,7 +339,7 @@ export async function updateProject(input: ProjectRecord) {
   const project: ProjectRecord = {
     ...input,
     id: existing.id,
-    activityType: ["Instalare", "Intervenție", "Survey"].includes(input.activityType) ? input.activityType : existing.activity_type,
+    activityType: ["Instalare", "Intervenție", "Intervenție Orange", "Survey"].includes(input.activityType) ? input.activityType : existing.activity_type,
     orderNumber: activityType === "Intervenție" && typeof input.orderNumber === "string" ? input.orderNumber.trim().slice(0, 100) : "",
     client: input.client.trim(),
     address: input.address.trim(),
