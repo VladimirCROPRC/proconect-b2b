@@ -59,7 +59,7 @@ export async function POST(request: Request) {
       return Response.json({ error: "Încarcă fotografiile Pretask și EIP înainte de accesarea lucrării." }, { status: 403 });
     }
     if (section === "intervention-assessment" || section === "intervention-execution") {
-      if (project.activity_type !== "Intervenție") {
+      if (project.activity_type !== "Intervenție" && project.activity_type !== "Intervenție Orange") {
         return Response.json({ error: "Aceste fotografii sunt disponibile numai pentru intervenții." }, { status: 400 });
       }
       if (typeof geo !== "string" || !hasValidPhotoCoordinates(geo)) {
