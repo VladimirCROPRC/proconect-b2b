@@ -17,8 +17,8 @@ import { TechnicianProjectSafety, type ProjectSafetyStatus } from "./technician-
 import { NoInterventionControl } from "./no-intervention-control";
 import { buildTicketsWithoutOrderXlsx } from "./ticket-report-xlsx";
 
-type View = "projects" | "interventions" | "surveys" | "map" | "intervention-workspace" | "intervention-execution" | "intervention-documentation" | "survey-workspace" | "team" | "cpe" | "drive" | "documents" | "client" | "route" | "splices" | "site";
-type ActivityListView = "projects" | "interventions" | "surveys";
+type View = "projects" | "interventions" | "orange-interventions" | "surveys" | "map" | "intervention-workspace" | "intervention-execution" | "intervention-documentation" | "survey-workspace" | "team" | "cpe" | "drive" | "documents" | "client" | "route" | "splices" | "site";
+type ActivityListView = "projects" | "interventions" | "orange-interventions" | "surveys";
 type Modal = "project" | "edit-project" | "delete-project" | "account" | "cpe" | "edit-cpe" | null;
 type ServiceType = "Internet" | "VPN" | "Internet+OL" | "OL";
 type ClientPhotoKey = "report" | "speed" | "olTest" | "overview" | "detail" | "labels" | "grounding";
@@ -134,6 +134,13 @@ const activitySections: Record<ActivityListView, { type: ProjectActivityType; ti
     description: "Intervenții tehnice și cerințe dedicate remedierii.",
     createLabel: "Intervenție nouă",
   },
+  "orange-interventions": {
+    type: "Intervenție Orange",
+    title: "Intervenții Orange",
+    singular: "intervenție Orange",
+    description: "Tichete Orange cu site-urile implicate și tehnicianul alocat.",
+    createLabel: "Tichet Orange nou",
+  },
   surveys: {
     type: "Survey",
     title: "Survey",
@@ -144,7 +151,7 @@ const activitySections: Record<ActivityListView, { type: ProjectActivityType; ti
 };
 
 function listViewForActivity(type: ProjectActivityType): ActivityListView {
-  return type === "Intervenție" ? "interventions" : type === "Survey" ? "surveys" : "projects";
+  return type === "Intervenție" ? "interventions" : type === "Intervenție Orange" ? "orange-interventions" : type === "Survey" ? "surveys" : "projects";
 }
 
 function initials(name: string) {
@@ -394,9 +401,11 @@ export default function Home() {
   const isInterventionWorkspace = view === "intervention-workspace" || view === "intervention-execution" || view === "intervention-documentation";
   const isActivityWorkspace = isInterventionWorkspace || view === "survey-workspace";
   const isProjectView = isDocumentationView || view === "documents" || isActivityWorkspace;
-  const isActivityListView = view === "projects" || view === "interventions" || view === "surveys";
+  const isActivityListView = view === "projects" || view === "interventions" || view === "orange-interventions" || view === "surveys";
   const currentListView: ActivityListView = view === "interventions" || isInterventionWorkspace
     ? "interventions"
+    : view === "orange-interventions"
+      ? "orange-interventions"
     : view === "surveys" || view === "survey-workspace"
       ? "surveys"
       : "projects";
@@ -405,6 +414,7 @@ export default function Home() {
   const currentActivityProjects = useMemo(() => projects.filter((project) => project.activityType === currentActivitySection.type), [currentActivitySection.type, projects]);
   const formActivityType = editingProject?.activityType ?? currentActivitySection.type;
   const isInstallationForm = formActivityType === "Instalare";
+  const isOrangeForm = formActivityType === "Intervenție Orange";
   const showInstallationNavigation = view === "projects" || isDocumentationView || (view === "documents" && activeProject.activityType === "Instalare");
   const displayedAccountName = currentAccount.name;
   const displayedAccountRole = currentAccount.role;
@@ -613,11 +623,11 @@ export default function Home() {
     const form = new FormData(event.currentTarget);
     const activityType = String(form.get("activityType") || "Instalare") as ProjectActivityType;
     const rawId = String(form.get("requestId") || "").trim();
-    const id = activityType === "Intervenție" ? rawId.toUpperCase() : `RID${rawId.replace(/^RID/i, "")}`.toUpperCase();
+    const id = activityType === "Intervenție" || activityType === "Intervenție Orange" ? rawId.toUpperCase() : `RID${rawId.replace(/^RID/i, "")}`.toUpperCase();
     const cpeName = String(form.get("cpe") || "");
     const selectedCpe = cpeList.find((item) => item.name === cpeName);
     if (projects.some((project) => project.id === id)) {
-      showToast(activityType === "Intervenție" ? "Numărul tichetului există deja. Verifică valoarea introdusă." : "Request ID există deja. Verifică numărul introdus.");
+      showToast(activityType === "Intervenție" || activityType === "Intervenție Orange" ? "Numărul tichetului există deja. Verifică valoarea introdusă." : "Request ID există deja. Verifică numărul introdus.");
       return;
     }
     const project: Project = {
@@ -625,10 +635,10 @@ export default function Home() {
       activityType,
       orderNumber: activityType === "Intervenție" ? String(form.get("orderNumber") || "").trim() : "",
       client: String(form.get("client")),
-      address: String(form.get("address")),
-      contact: String(form.get("contact")),
-      phone: String(form.get("phone")),
-      email: String(form.get("email")),
+      address: isOrangeForm ? String(form.get("address") || "").trim() : String(form.get("address")),
+      contact: isOrangeForm ? "Orange" : String(form.get("contact")),
+      phone: isOrangeForm ? "-" : String(form.get("phone")),
+      email: isOrangeForm ? "" : String(form.get("email")),
       requirements: String(form.get("requirements")),
       technician: String(form.get("technician")),
       cpe: cpeName,
@@ -690,10 +700,10 @@ export default function Home() {
       activityType: String(form.get("activityType") || editingProject.activityType) as ProjectActivityType,
       orderNumber: String(form.get("activityType") || editingProject.activityType) === "Intervenție" ? String(form.get("orderNumber") || "").trim() : "",
       client: String(form.get("client") || ""),
-      address: String(form.get("address") || ""),
-      contact: String(form.get("contact") || ""),
-      phone: String(form.get("phone") || ""),
-      email: String(form.get("email") || ""),
+      address: isOrangeForm ? String(form.get("address") || "").trim() : String(form.get("address") || ""),
+      contact: isOrangeForm ? "Orange" : String(form.get("contact") || ""),
+      phone: isOrangeForm ? "-" : String(form.get("phone") || ""),
+      email: isOrangeForm ? "" : String(form.get("email") || ""),
       requirements: String(form.get("requirements") || ""),
       technician: String(form.get("technician") || ""),
       cpe: cpeName,
@@ -1209,6 +1219,9 @@ export default function Home() {
           <button className={view === "interventions" || isInterventionWorkspace ? "active" : ""} onClick={() => goTo("interventions")}>
             <span className="nav-symbol">IT</span> Intervenții
           </button>
+          <button className={view === "orange-interventions" ? "active" : ""} onClick={() => goTo("orange-interventions")}>
+            <span className="nav-symbol">OR</span> Intervenții Orange
+          </button>
           <button className={view === "surveys" || view === "survey-workspace" ? "active" : ""} onClick={() => goTo("surveys")}>
             <span className="nav-symbol">SV</span> Survey
           </button>
@@ -1263,7 +1276,7 @@ export default function Home() {
             <img className="proconect-logo mobile-proconect-logo" src={proconectLogoUrl} alt="PRO CONECT" />
             <strong>B2B</strong>
           </button>
-          <div className="breadcrumb"><span>{isProjectView ? `${activitySections[listViewForActivity(activeProject.activityType)].title} · ${activeProject.id}` : "Management"}</span><b>/</b><strong>{view === "projects" ? "Instalări" : view === "interventions" ? "Intervenții" : view === "surveys" ? "Survey" : view === "intervention-workspace" ? "Constatare" : view === "intervention-execution" ? "Execuție" : view === "intervention-documentation" ? "Documentare" : view === "survey-workspace" ? "Fișa survey" : view === "team" ? "Echipă" : view === "cpe" ? "Echipamente CPE" : view === "drive" ? "Administrare" : view === "map" ? "Hartă" : view === "client" ? "Client" : view === "route" ? "Traseu FO" : view === "splices" ? "Suduri FO" : view === "documents" ? "Documente" : "Operațiuni site"}</strong></div>
+          <div className="breadcrumb"><span>{isProjectView ? `${activitySections[listViewForActivity(activeProject.activityType)].title} · ${activeProject.id}` : "Management"}</span><b>/</b><strong>{view === "projects" ? "Instalări" : view === "interventions" ? "Intervenții" : view === "orange-interventions" ? "Intervenții Orange" : view === "surveys" ? "Survey" : view === "intervention-workspace" ? "Constatare" : view === "intervention-execution" ? "Execuție" : view === "intervention-documentation" ? "Documentare" : view === "survey-workspace" ? "Fișa survey" : view === "team" ? "Echipă" : view === "cpe" ? "Echipamente CPE" : view === "drive" ? "Administrare" : view === "map" ? "Hartă" : view === "client" ? "Client" : view === "route" ? "Traseu FO" : view === "splices" ? "Suduri FO" : view === "documents" ? "Documente" : "Operațiuni site"}</strong></div>
           <div className="top-actions">
             <button className="help-button" aria-label="Ajutor">?</button>
             <button className="bell" aria-label="Notificări">●<span>3</span></button>
@@ -1276,6 +1289,7 @@ export default function Home() {
           <nav className={`mobile-section-tabs${canManageDocuments ? " manager-tabs" : ""}`} aria-label="Secțiunile aplicației">
             <button className={view === "projects" ? "active" : ""} onClick={() => goTo("projects")}>Instalări</button>
             <button className={view === "interventions" ? "active" : ""} onClick={() => goTo("interventions")}>Intervenții</button>
+            <button className={view === "orange-interventions" ? "active" : ""} onClick={() => goTo("orange-interventions")}>Orange</button>
             <button className={view === "surveys" ? "active" : ""} onClick={() => goTo("surveys")}>Survey</button>
             {currentAccount.role === "Tehnician" && <button className={view === "map" ? "active" : ""} onClick={() => goTo("map")}>Hartă</button>}
             {canManageDocuments && <button className={view === "team" ? "active" : ""} onClick={() => goTo("team")}>Echipă</button>}
@@ -1351,7 +1365,7 @@ export default function Home() {
 
               <div className="table-wrap">
                 <table>
-                  <thead><tr><th>{currentListView === "interventions" ? "NUMĂR TICHET" : "REQUEST ID"}</th><th>CLIENT / ADRESĂ</th><th>TEHNICIAN</th><th>STATUS</th><th>PROGRAMARE</th><th /></tr></thead>
+                  <thead><tr><th>{currentListView === "interventions" || currentListView === "orange-interventions" ? "NUMĂR TICHET" : "REQUEST ID"}</th><th>{currentListView === "orange-interventions" ? "SITE A / SITE B" : "CLIENT / ADRESĂ"}</th><th>TEHNICIAN</th><th>STATUS</th><th>PROGRAMARE</th><th /></tr></thead>
                   <tbody>
                     {filteredProjects.map((project) => (
                       <tr className={project.id === activeProject.id ? "active-project-row" : ""} key={project.id} onClick={() => setSelected(project)} tabIndex={0} onKeyDown={(event) => event.key === "Enter" && setSelected(project)}>
