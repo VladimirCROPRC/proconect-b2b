@@ -622,7 +622,7 @@ export async function saveFieldDocumentation(projectId: string, section: string,
 
     if (intervention.execution) {
       const execution = intervention.execution;
-      if (!Array.isArray(execution.activities) || execution.activities.length < 1 || execution.activities.length > 100) {
+      if (!Array.isArray(execution.activities) || (project.activity_type !== "Intervenție Orange" && execution.activities.length < 1) || execution.activities.length > 100) {
         return { error: "Adaugă cel puțin o activitate validă pentru execuția intervenției.", status: 400 as const };
       }
 
@@ -660,11 +660,11 @@ export async function saveFieldDocumentation(projectId: string, section: string,
           }
           requiredPhotos = requiredInterventionCablePhotos(cableLength);
         } else {
-          if (!validInterventionJunction(item.junction)) {
-            return { error: "Selectează sau plasează joncțiunea și completează rețeaua Vodafone.", status: 400 as const };
+          if (project.activity_type === "Intervenție Orange" ? !item.junction || !Number.isFinite(item.junction.lat) || !Number.isFinite(item.junction.lon) || !item.junction.kind : !validInterventionJunction(item.junction)) {
+            return { error: project.activity_type === "Intervenție Orange" ? "Selectează sau plasează punctul activității pe hartă." : "Selectează sau plasează joncțiunea și completează rețeaua Vodafone.", status: 400 as const };
           }
           if ((item.type === "junction-installation" || item.type === "chamber-installation") && (item.junction?.documented || item.junction?.kind !== "new")) {
-            return { error: item.type === "chamber-installation" ? "Cămereta nouă trebuie plasată pe hartă și asociată unei rețele Vodafone." : "Joncțiunea nouă trebuie plasată pe hartă și asociată unei rețele Vodafone.", status: 400 as const };
+            return { error: project.activity_type === "Intervenție Orange" ? (item.type === "chamber-installation" ? "Cămereta nouă trebuie plasată pe hartă." : "Joncțiunea nouă trebuie plasată pe hartă.") : item.type === "chamber-installation" ? "Cămereta nouă trebuie plasată pe hartă și asociată unei rețele Vodafone." : "Joncțiunea nouă trebuie plasată pe hartă și asociată unei rețele Vodafone.", status: 400 as const };
           }
         }
 
@@ -677,6 +677,17 @@ export async function saveFieldDocumentation(projectId: string, section: string,
             : item.type === "chamber-installation"
               ? "Pentru instalarea cămeretei sunt obligatorii două fotografii cu GPS."
               : "Încarcă cel puțin o fotografie cu GPS din care să reiasă remedierea.", status: 400 as const };
+        }
+      }
+      if (execution.materials !== undefined) {
+        if (!Array.isArray(execution.materials) || execution.materials.length > 300 || execution.materials.some((material) =>
+          !material || !["orange", "proconect"].includes(String(material.source)) ||
+          typeof material.code !== "string" || !material.code.trim() ||
+          typeof material.description !== "string" || !material.description.trim() ||
+          typeof material.unit !== "string" || !material.unit.trim() ||
+          typeof material.quantity !== "number" || !Number.isFinite(material.quantity) || material.quantity <= 0 || material.quantity > 1_000_000
+        )) {
+          return { error: "Lista materialelor utilizate nu este validă.", status: 400 as const };
         }
       }
     }
