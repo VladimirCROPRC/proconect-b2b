@@ -59,6 +59,12 @@ const activityCatalog: Record<InterventionActivityType, { title: string; short: 
     description: "Plasează joncțiunea nouă pe hartă și alege rețeaua.",
     badge: "JN",
   },
+  "chamber-installation": {
+    title: "Instalare cămeretă",
+    short: "Cămeretă nouă",
+    description: "Plasează cămereta pe hartă și încarcă două fotografii GPS obligatorii.",
+    badge: "CM",
+  },
   diagnostics: {
     title: "Diagnosticare",
     short: "Diagnosticare OTDR",
@@ -313,7 +319,7 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
   const mappedDistance = routeCoordinates.slice(1).reduce((sum, point, index) => sum + distanceBetween(routeCoordinates[index], point), 0);
   const cableLength = Number(draft?.cableLength.replace(",", ".") ?? "");
   const cableLengthValid = Number.isFinite(cableLength) && cableLength > 0 && cableLength <= 1_000_000;
-  const requiredPhotos = draft?.type === "fo-installation" ? requiredInterventionCablePhotos(cableLengthValid ? cableLength : 0) : draft?.type ? 1 : 0;
+  const requiredPhotos = draft?.type === "fo-installation" ? requiredInterventionCablePhotos(cableLengthValid ? cableLength : 0) : draft?.type === "chamber-installation" ? 2 : draft?.type ? 1 : 0;
   const activityPhotos = draft ? photos.filter((photo) => photo.category === `${draft.id}:photo` && validGeo(photo.geo)) : [];
   const selectedReady = draft?.type === "fo-installation"
     ? readyJunction(draft.endpointA) && readyJunction(draft.endpointB)
@@ -337,7 +343,7 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
   }
 
   function chooseActivityType(type: InterventionActivityType) {
-    const canUsePreview = Boolean(previewJunction && type !== "junction-installation");
+    const canUsePreview = Boolean(previewJunction && type !== "junction-installation" && type !== "chamber-installation");
     setDraft((current) => current ? {
       ...current, type,
       endpointA: type === "fo-installation" && canUsePreview ? previewJunction : null,
@@ -346,7 +352,7 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
       routePoints: [], cableType: "", cableLength: "",
     } : current);
     setActiveSlot(type === "fo-installation" ? (canUsePreview ? "b" : "a") : "junction");
-    setMode(type === "junction-installation" ? "undocumented" : "documented");
+    setMode(type === "junction-installation" || type === "chamber-installation" ? "undocumented" : "documented");
     setSearch("");
     setError("");
   }
@@ -366,8 +372,8 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
       onNotify(`${junction.code} a fost găsită. Poți porni activitatea nouă.`);
       return;
     }
-    if (draft.type === "junction-installation") {
-      onNotify("Joncțiunea nouă trebuie plasată pe cablul existent direct pe hartă.");
+    if (draft.type === "junction-installation" || draft.type === "chamber-installation") {
+      onNotify(draft.type === "chamber-installation" ? "Cămereta nouă trebuie plasată direct pe hartă." : "Joncțiunea nouă trebuie plasată pe cablul existent direct pe hartă.");
       return;
     }
     setPreviewJunction(junction);
@@ -402,11 +408,11 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
     const junction: DraftJunction = {
       ...coordinate,
       id: `field-${crypto.randomUUID()}`,
-      code: draft.type === "junction-installation" ? "Joncțiune nouă" : "Fără cod",
-      name: draft.type === "junction-installation" ? "Joncțiune nouă pe cablu existent" : "Joncțiune nedocumentată",
+      code: draft.type === "chamber-installation" ? "Cămeretă nouă" : draft.type === "junction-installation" ? "Joncțiune nouă" : "Fără cod",
+      name: draft.type === "chamber-installation" ? "Cămeretă nou instalată" : draft.type === "junction-installation" ? "Joncțiune nouă pe cablu existent" : "Joncțiune nedocumentată",
       region: "Punct introdus pe hartă",
       documented: false,
-      kind: draft.type === "junction-installation" ? "new" : draft.type === "fo-installation" ? "" : "existing",
+      kind: draft.type === "junction-installation" || draft.type === "chamber-installation" ? "new" : draft.type === "fo-installation" ? "" : "existing",
       network: "",
     };
     updateJunction(draft.type === "fo-installation" ? activeSlot === "junction" ? "a" : activeSlot : "junction", junction);
@@ -603,7 +609,7 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
       <section className={`splice-map-card intervention-map-card ${mapFullscreen.fullscreen ? "map-fullscreen" : ""}`}>
         <div className="splice-map-head intervention-map-head"><div><small>MOD ACTIV</small><strong>{draft?.type ? activityCatalog[draft.type].title : "Puncte și activități ale intervenției"}</strong></div>
           <div className="intervention-map-actions">
-            {draft?.type !== "junction-installation" && <button type="button" className={mode === "documented" ? "active" : ""} onClick={() => setMode("documented")} disabled={!draft?.type}>J documentată</button>}
+            {draft?.type !== "junction-installation" && draft?.type !== "chamber-installation" && <button type="button" className={mode === "documented" ? "active" : ""} onClick={() => setMode("documented")} disabled={!draft?.type}>J documentată</button>}
             <button type="button" className={mode === "undocumented" ? "active" : ""} onClick={() => setMode("undocumented")} disabled={!draft?.type}>J fără cod</button>
             {draft?.type === "fo-installation" && <button type="button" className={mode === "draw" ? "active" : ""} onClick={() => setMode("draw")}>Trasează</button>}
             <button type="button" className="fo-fullscreen-toggle" onClick={mapFullscreen.toggleFullscreen} aria-pressed={mapFullscreen.fullscreen}>{mapFullscreen.fullscreen ? "× Închide" : "⛶ Ecran complet"}</button>
@@ -622,7 +628,7 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
 
           {visibleSites.map(({ site, point }) => <button type="button" className={`fo-site-marker ${mapSiteMarkerClass(site.code)}${draft?.endpointA?.id === site.id || draft?.endpointB?.id === site.id || draft?.junction?.id === site.id || previewJunction?.id === site.id ? " selected" : ""}`} key={site.id} title={`${site.code} · ${site.name}`} aria-label={`Alege ${site.code} ${site.name}`} style={{ left: `${point.x / MAP_WIDTH * 100}%`, top: `${point.y / MAP_HEIGHT * 100}%` }} onClick={(event) => { event.stopPropagation(); pickDocumented(site); }}><i /></button>)}
 
-          {savedJunctions.map((junction) => { const point = screenPoint(junction, center, zoom); return <button type="button" key={junction.id} className="fo-site-marker intervention-field-marker" title={`${junction.kind === "new" ? "Joncțiune nouă" : "Joncțiune existentă"} · ${junction.network === "mobile" ? "Vodafone Mobil" : "Vodafone Fixed"}`} style={{ left: `${point.x / MAP_WIDTH * 100}%`, top: `${point.y / MAP_HEIGHT * 100}%` }} onClick={(event) => { event.stopPropagation(); if (draft?.type === "junction-installation") return; updateJunction(draft?.type === "fo-installation" ? activeSlot : "junction", { ...junction, network: junction.network ?? "" }); }}><i /></button>; })}
+          {savedJunctions.map((junction) => { const point = screenPoint(junction, center, zoom); return <button type="button" key={junction.id} className="fo-site-marker intervention-field-marker" title={`${junction.kind === "new" ? "Joncțiune nouă" : "Joncțiune existentă"} · ${junction.network === "mobile" ? "Vodafone Mobil" : "Vodafone Fixed"}`} style={{ left: `${point.x / MAP_WIDTH * 100}%`, top: `${point.y / MAP_HEIGHT * 100}%` }} onClick={(event) => { event.stopPropagation(); if (draft?.type === "junction-installation" || draft?.type === "chamber-installation") return; updateJunction(draft?.type === "fo-installation" ? activeSlot : "junction", { ...junction, network: junction.network ?? "" }); }}><i /></button>; })}
 
           {previewJunction && !draft?.endpointA && !draft?.endpointB && !draft?.junction && (() => { const point = screenPoint(previewJunction, center, zoom); return <span className="fo-placed-dot junction-dot" aria-label="Joncțiune găsită" style={{ left: `${point.x / MAP_WIDTH * 100}%`, top: `${point.y / MAP_HEIGHT * 100}%` }} />; })()}
           {draft?.routePoints.map((point, index) => { const position = screenPoint(point, center, zoom); return <span className="fo-route-point" key={`${point.lat}-${point.lon}-${index}`} style={{ left: `${position.x / MAP_WIDTH * 100}%`, top: `${position.y / MAP_HEIGHT * 100}%` }}>{index + 1}</span>; })}
@@ -647,14 +653,14 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
           <button type="button" onClick={() => void cancelActivity()} disabled={!draft || saving}><span>↻</span>Reset activitate</button>
         </div>
 
-        <div className="splice-map-search"><label><span>⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Introdu codul exact, ex. J2…" disabled={draft?.type === "junction-installation"} /></label><div className={`splice-data-state ${sitesStatus}`}><i>{sitesStatus === "ready" ? "✓" : sitesStatus === "error" ? "!" : "↻"}</i>{sitesStatus === "ready" ? `${sites.length.toLocaleString("ro-RO")} puncte` : sitesStatus === "error" ? "Date indisponibile" : "Se încarcă"}</div>
+        <div className="splice-map-search"><label><span>⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Introdu codul exact, ex. J2…" disabled={draft?.type === "junction-installation" || draft?.type === "chamber-installation"} /></label><div className={`splice-data-state ${sitesStatus}`}><i>{sitesStatus === "ready" ? "✓" : sitesStatus === "error" ? "!" : "↻"}</i>{sitesStatus === "ready" ? `${sites.length.toLocaleString("ro-RO")} puncte` : sitesStatus === "error" ? "Date indisponibile" : "Se încarcă"}</div>
           {search.trim().length >= 2 && <div className="splice-search-results">{searchResults.filter((site) => site.code.trim().toLocaleLowerCase("ro") === search.trim().toLocaleLowerCase("ro")).map((site) => <article className={previewJunction?.id === site.id ? "selected" : ""} key={site.id}><button type="button" className="splice-exact-junction-name" onClick={() => pickDocumented(site)}><strong>{site.code}</strong><b>Arată pe hartă</b></button><a href={googleMapsUrl(site)} target="_blank" rel="noreferrer">Google Maps ↗</a></article>)}{!searchResults.some((site) => site.code.trim().toLocaleLowerCase("ro") === search.trim().toLocaleLowerCase("ro")) && <p>Nicio joncțiune cu acest cod.</p>}</div>}
         </div>
       </section>
 
       <aside className="intervention-activity-panel">
         {!draft ? <section className="splice-empty-card intervention-empty-card"><span>{previewJunction ? "✓" : "＋"}</span><h2>{previewJunction ? previewJunction.code : "Nicio activitate în editare"}</h2><p>{previewJunction ? `Joncțiune găsită la ${formatCoordinate(previewJunction)}. Va fi preselectată pentru activitatea compatibilă.` : "Caută mai întâi joncțiunea sau adaugă direct o activitate de execuție."}</p>{previewJunction && <a className="splice-preselected-maps" href={googleMapsUrl(previewJunction)} target="_blank" rel="noreferrer">Google Maps ↗</a>}<button type="button" onClick={beginActivity}>＋ Activitate nouă</button></section>
-          : !draft.type ? <section className="splice-empty-card intervention-empty-card"><span>1</span><h2>Alege tipul activității</h2><p>Selectează una dintre cele patru operațiuni pentru a activa harta și formularul dedicat.</p><button type="button" onClick={() => void cancelActivity()}>Anulează activitatea</button></section>
+          : !draft.type ? <section className="splice-empty-card intervention-empty-card"><span>1</span><h2>Alege tipul activității</h2><p>Selectează una dintre operațiunile disponibile pentru a activa harta și formularul dedicat.</p><button type="button" onClick={() => void cancelActivity()}>Anulează activitatea</button></section>
             : <><section className="project-card intervention-activity-form"><div className="card-heading"><div><h2>2. {activityCatalog[draft.type].title}</h2><p>{activityCatalog[draft.type].description}</p></div></div>
               <div className="intervention-activity-form-body">
                 {draft.type === "fo-installation" ? <>
@@ -665,9 +671,9 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
                   <label className="intervention-damage-field"><span>Tip cablu FO <b>OBLIGATORIU</b></span><select value={draft.cableType} onChange={(event) => setDraft((current) => current ? { ...current, cableType: event.target.value } : current)}><option value="">Selectează tipul cablului</option>{[4, 12, 24, 48, 96].map((fibers) => <option key={fibers} value={`Cablu FO ${fibers}F`}>{fibers} fibre</option>)}</select></label>
                   <label className="intervention-damage-field"><span>Lungime instalată <b>METRI</b></span><input type="number" min="0.1" max="1000000" step="0.1" inputMode="decimal" value={draft.cableLength} onChange={(event) => setDraft((current) => current ? { ...current, cableLength: event.target.value } : current)} placeholder="ex. 125" /></label>
                   <div className="fo-photo-rules intervention-photo-thresholds"><span className={cableLengthValid && cableLength <= 100 ? "active" : ""}><b>≤100 m</b><small>3 poze</small></span><span className={cableLength > 100 && cableLength <= 200 ? "active" : ""}><b>101–200 m</b><small>5 poze</small></span><span className={cableLength > 200 && cableLength <= 300 ? "active" : ""}><b>201–300 m</b><small>10 poze</small></span><span className={cableLength > 300 ? "active" : ""}><b>&gt;300 m</b><small>15 poze</small></span></div>
-                </> : junctionPanel("junction", draft.type === "diagnostics" ? "JONCȚIUNEA MĂSURĂRII OTDR" : draft.type === "splice-repair" ? "JONCȚIUNEA REFACERII SUDURII" : "JONCȚIUNEA NOU INSTALATĂ", draft.junction)}
+                </> : junctionPanel("junction", draft.type === "diagnostics" ? "JONCȚIUNEA MĂSURĂRII OTDR" : draft.type === "splice-repair" ? "JONCȚIUNEA REFACERII SUDURII" : draft.type === "chamber-installation" ? "CĂMERETA NOU INSTALATĂ" : "JONCȚIUNEA NOU INSTALATĂ", draft.junction)}
 
-                <div className="intervention-activity-photo-title"><strong>3. {draft.type === "diagnostics" ? "Fotografii diagnostic OTDR" : draft.type === "fo-installation" ? "Fotografii instalare FO" : "Fotografii remediere"}</strong><span>{activityPhotos.length}/{requiredPhotos || "—"}</span></div>
+                <div className="intervention-activity-photo-title"><strong>3. {draft.type === "diagnostics" ? "Fotografii diagnostic OTDR" : draft.type === "fo-installation" ? "Fotografii instalare FO" : draft.type === "chamber-installation" ? "Fotografii cămeretă (2 obligatorii)" : "Fotografii remediere"}</strong><span>{activityPhotos.length}/{requiredPhotos || "—"}</span></div>
                 <label className={`intervention-photo-upload intervention-activity-upload${uploading ? " is-uploading" : ""}${!requiredPhotos ? " is-disabled" : ""}`}><input type="file" accept="image/*" capture="environment" multiple disabled={uploading || !requiredPhotos} onChange={(event) => { const selected = Array.from(event.target.files ?? []); event.currentTarget.value = ""; void addActivityPhotos(selected); }} /><span className="intervention-upload-icon">⌖</span><strong>{uploading ? "Se încarcă fotografiile..." : "Adaugă fotografii GPS"}</strong><small>Data, ora și poziția sunt marcate pe imagine.</small></label>
 
                 {activityPhotos.length > 0 && <div className="intervention-activity-photo-list">{activityPhotos.map((photo) => <article key={photo.id}><span>✓</span><div><strong>{photo.name}</strong><small>⌖ {photo.geo} · {formatCapturedAt(photo.capturedAt)}</small></div><button type="button" onClick={() => void removeActivityPhoto(photo)} disabled={removingPhoto === photo.id}>{removingPhoto === photo.id ? "..." : "×"}</button></article>)}</div>}
@@ -678,7 +684,7 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
     </div>
 
     <section className="project-card intervention-records-card"><div className="card-heading"><div><h2>Activități salvate</h2><p>{activities.length ? `${activities.length} ${activities.length === 1 ? "activitate documentată" : "activități documentate"} pentru tichetul ${project.id}.` : "Nicio activitate salvată pentru această intervenție."}</p></div></div>
-      {activities.length > 0 && <div className="intervention-records-list">{activities.map((activity) => <article key={activity.id}><span>{activityCatalog[activity.type].badge}</span><div><strong>{activityCatalog[activity.type].title}</strong><small>{activity.type === "fo-installation" ? `${activity.endpointA?.code ?? "Joncțiunea A"} → ${activity.endpointB?.code ?? "Joncțiunea B"} · ${activity.cableType} · ${activity.cableLengthMeters} m` : `${activity.junction?.documented ? activity.junction.code : "Joncțiune nedocumentată"}${activity.junction?.network ? ` · ${activity.junction.network === "mobile" ? "Vodafone Mobil" : "Vodafone Fixed"}` : ""}`}</small></div><b>{activity.photoCount}/{activity.requiredPhotoCount} foto GPS</b><button type="button" className="record-delete-button" onClick={() => void deleteSavedActivity(activity)} disabled={Boolean(deletingActivity)}>{deletingActivity === activity.id ? "Se șterge…" : "Șterge"}</button></article>)}</div>}
+      {activities.length > 0 && <div className="intervention-records-list">{activities.map((activity) => <article key={activity.id}><span>{activityCatalog[activity.type].badge}</span><div><strong>{activityCatalog[activity.type].title}</strong><small>{activity.type === "fo-installation" ? `${activity.endpointA?.code ?? "Joncțiunea A"} → ${activity.endpointB?.code ?? "Joncțiunea B"} · ${activity.cableType} · ${activity.cableLengthMeters} m` : `${activity.type === "chamber-installation" ? "Cămeretă nouă" : activity.junction?.documented ? activity.junction.code : "Joncțiune nedocumentată"}${activity.junction?.network ? ` · ${activity.junction.network === "mobile" ? "Vodafone Mobil" : "Vodafone Fixed"}` : ""}`}</small></div><b>{activity.photoCount}/{activity.requiredPhotoCount} foto GPS</b><button type="button" className="record-delete-button" onClick={() => void deleteSavedActivity(activity)} disabled={Boolean(deletingActivity)}>{deletingActivity === activity.id ? "Se șterge…" : "Șterge"}</button></article>)}</div>}
     </section>
   </div>;
 }
