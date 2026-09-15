@@ -403,7 +403,7 @@ export default function Home() {
   const isProjectView = isDocumentationView || view === "documents" || isActivityWorkspace;
   const isActivityListView = view === "projects" || view === "interventions" || view === "orange-interventions" || view === "surveys";
   const currentListView: ActivityListView = view === "interventions" || isInterventionWorkspace
-    ? "interventions"
+    ? activeProject.activityType === "Intervenție Orange" ? "orange-interventions" : "interventions"
     : view === "orange-interventions"
       ? "orange-interventions"
     : view === "surveys" || view === "survey-workspace"
@@ -419,7 +419,7 @@ export default function Home() {
   const displayedAccountName = currentAccount.name;
   const displayedAccountRole = currentAccount.role;
   const activeFieldDocumentation = fieldDocumentation[activeProject.id] ?? {};
-  const selectedSafetyComplete = canManageDocuments || selected?.activityType === "Intervenție Orange" || Boolean(selected && safetyChecks[selected.id]?.completed);
+  const selectedSafetyComplete = canManageDocuments || Boolean(selected && safetyChecks[selected.id]?.completed);
   const requiredClientPhotoKeys: ClientPhotoKey[] = [
     "report",
     ...(clientService === "Internet" || clientService === "Internet+OL" ? (["speed"] as ClientPhotoKey[]) : []),
@@ -1066,13 +1066,7 @@ export default function Home() {
   }
 
   function openProject(project: Project) {
-    if (project.activityType === "Intervenție Orange") {
-      setActiveProjectId(project.id);
-      setSelected(null);
-      setView("orange-interventions");
-      return;
-    }
-    const destination: View = project.activityType === "Intervenție" ? "intervention-workspace" : project.activityType === "Survey" ? "survey-workspace" : "client";
+    const destination: View = project.activityType === "Intervenție" || project.activityType === "Intervenție Orange" ? "intervention-workspace" : project.activityType === "Survey" ? "survey-workspace" : "client";
     if (currentAccount.role === "Tehnician" && !safetyChecks[project.id]?.completed) {
       setSelected(null);
       setSafetyProject(project);
@@ -1086,7 +1080,7 @@ export default function Home() {
   function completeProjectSafety(project: Project, status: ProjectSafetyStatus) {
     setSafetyChecks((current) => ({ ...current, [project.id]: status }));
     setProjectReloadKey((current) => current + 1);
-    const destination = safetyDestination ?? (project.activityType === "Intervenție" ? "intervention-workspace" : project.activityType === "Survey" ? "survey-workspace" : "client");
+    const destination = safetyDestination ?? (project.activityType === "Intervenție" || project.activityType === "Intervenție Orange" ? "intervention-workspace" : project.activityType === "Survey" ? "survey-workspace" : "client");
     setSafetyProject(null);
     setSafetyDestination(null);
     activateProject(project, destination);
@@ -1222,10 +1216,10 @@ export default function Home() {
           <button className={view === "projects" ? "active" : ""} onClick={() => goTo("projects")}>
             <span className="nav-symbol">IN</span> Instalări
           </button>
-          <button className={view === "interventions" || isInterventionWorkspace ? "active" : ""} onClick={() => goTo("interventions")}>
+          <button className={view === "interventions" || (isInterventionWorkspace && activeProject.activityType === "Intervenție") ? "active" : ""} onClick={() => goTo("interventions")}>
             <span className="nav-symbol">IT</span> Intervenții
           </button>
-          <button className={view === "orange-interventions" ? "active" : ""} onClick={() => goTo("orange-interventions")}>
+          <button className={view === "orange-interventions" || (isInterventionWorkspace && activeProject.activityType === "Intervenție Orange") ? "active" : ""} onClick={() => goTo("orange-interventions")}>
             <span className="nav-symbol">OR</span> Intervenții Orange
           </button>
           <button className={view === "surveys" || view === "survey-workspace" ? "active" : ""} onClick={() => goTo("surveys")}>
@@ -1307,7 +1301,7 @@ export default function Home() {
         {isProjectView && (
           <section className="active-project-context mobile-project-context" aria-label="Proiect activ și operațiuni">
             <label className="active-project-picker">
-              <span>{activeProject.activityType === "Intervenție" ? "TICHET ACTIV" : "PROIECT ACTIV"}</span>
+              <span>{activeProject.activityType === "Intervenție" || activeProject.activityType === "Intervenție Orange" ? "TICHET ACTIV" : "PROIECT ACTIV"}</span>
               <select value={activeProjectId} onChange={(event) => changeActiveProject(event.target.value)}>
                 {projects.filter((project) => project.activityType === activeProject.activityType).map((project) => <option key={project.id} value={project.id}>{project.id} · {project.client}</option>)}
               </select>
@@ -1324,7 +1318,7 @@ export default function Home() {
                 <button className={view === "splices" ? "active" : ""} onClick={() => goTo("splices")} title="Suduri FO"><span>3</span>Suduri</button>
                 <button className={view === "site" ? "active" : ""} onClick={() => goTo("site")}><span>4</span>Site</button>
                 {canManageDocuments && <button className={view === "documents" ? "active" : ""} onClick={() => goTo("documents")} title="Documente"><span>5</span>Docs</button>}
-              </> : activeProject.activityType === "Intervenție" ? <>
+              </> : activeProject.activityType === "Intervenție" || activeProject.activityType === "Intervenție Orange" ? <>
                 <button className={view === "intervention-workspace" ? "active" : ""} onClick={() => goTo("intervention-workspace")}><span>1</span>Constatare</button>
                 <button className={view === "intervention-execution" ? "active" : ""} onClick={() => goTo("intervention-execution")}><span>2</span>Execuție</button>
                 {canManageDocuments && <button className={view === "intervention-documentation" ? "active" : ""} onClick={() => goTo("intervention-documentation")}><span>3</span>Documentare</button>}
@@ -1375,7 +1369,7 @@ export default function Home() {
                   <tbody>
                     {filteredProjects.map((project) => (
                       <tr className={project.id === activeProject.id ? "active-project-row" : ""} key={project.id} onClick={() => setSelected(project)} tabIndex={0} onKeyDown={(event) => event.key === "Enter" && setSelected(project)}>
-                        <td><strong className="rid">{project.id}</strong>{project.activityType === "Intervenție" && <small>{project.orderNumber ? `Comandă: ${project.orderNumber}` : "Fără număr de comandă"}</small>}<small>{currentAccount.role === "Tehnician" ? project.activityType === "Intervenție Orange" ? "Tichet Orange alocat" : safetyChecks[project.id]?.completed ? "Pretask și EIP completate" : "🔒 Pretask și EIP necesare" : project.id === activeProject.id ? project.activityType === "Intervenție" ? "Tichet activ" : "Proiect activ" : "Salvat permanent"}</small></td>
+                        <td><strong className="rid">{project.id}</strong>{project.activityType === "Intervenție" && <small>{project.orderNumber ? `Comandă: ${project.orderNumber}` : "Fără număr de comandă"}</small>}<small>{currentAccount.role === "Tehnician" ? safetyChecks[project.id]?.completed ? "Pretask și EIP completate" : "🔒 Pretask și EIP necesare" : project.id === activeProject.id ? project.activityType === "Intervenție" ? "Tichet activ" : "Proiect activ" : "Salvat permanent"}</small></td>
                         <td><strong>{project.client}</strong><small>{project.address || (project.activityType === "Intervenție Orange" ? "Fără site B" : "")}</small></td>
                         <td><div className="technician"><span className="avatar">{initials(project.technician)}</span><strong>{project.technician}</strong></div></td>
                         <td><span className={statusClass[project.status]}><i />{project.status}</span></td>
