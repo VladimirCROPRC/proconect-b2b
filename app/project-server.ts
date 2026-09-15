@@ -587,7 +587,7 @@ export async function saveFieldDocumentation(projectId: string, section: string,
   }
 
   if (section === "intervention") {
-    if (project.activity_type !== "Intervenție") {
+    if (project.activity_type !== "Intervenție" && project.activity_type !== "Intervenție Orange") {
       return { error: "Constatarea este disponibilă numai pentru intervenții.", status: 400 as const };
     }
 
@@ -596,7 +596,7 @@ export async function saveFieldDocumentation(projectId: string, section: string,
     }
 
     const intervention = content as {
-      assessment?: { damageType?: unknown };
+      assessment?: { damageType?: unknown; damageLocation?: { lat?: unknown; lon?: unknown } };
       execution?: Partial<InterventionExecutionSummary>;
       documentation?: Partial<InterventionDocumentationSummary>;
     };
@@ -606,6 +606,9 @@ export async function saveFieldDocumentation(projectId: string, section: string,
     const assessment = intervention?.assessment;
     if (!assessment || !["FO cut", "Atenuare", "Echipament"].includes(String(assessment.damageType))) {
       return { error: "Selectează tipul avariei înainte de salvarea constatării.", status: 400 as const };
+    }
+    if (project.activity_type === "Intervenție Orange" && (!assessment.damageLocation || !Number.isFinite(assessment.damageLocation.lat) || !Number.isFinite(assessment.damageLocation.lon))) {
+      return { error: "Amplasează locația avariei Orange pe hartă.", status: 400 as const };
     }
 
     const photos = await getRawDb()
