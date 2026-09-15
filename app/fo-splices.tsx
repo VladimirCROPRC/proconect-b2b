@@ -2,7 +2,7 @@
 
 import { useDeferredValue, useEffect, useMemo, useState, type MouseEvent } from "react";
 import { deleteProjectFile, fetchProjectFiles, uploadProjectFile } from "./client-storage";
-import type { SpliceFieldSummary } from "./field-documentation";
+import type { SpliceConnection, SpliceFieldSummary } from "./field-documentation";
 import { NoInterventionControl } from "./no-intervention-control";
 import { useMapGestures } from "./use-map-gestures";
 import { useMapFullscreen } from "./use-map-fullscreen";
@@ -42,6 +42,9 @@ type SpliceRecord = {
   folderName?: string;
   siteCableType?: string;
   clientCableType?: string;
+  spliceMode?: "fiber" | "end-to-end";
+  spliceCount?: number;
+  connections?: SpliceConnection[];
   siteBuffer: string;
   siteFiber: string;
   clientBuffer: string;
@@ -172,10 +175,11 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
   const [network, setNetwork] = useState<JunctionNetwork>("");
   const [siteCableType, setSiteCableType] = useState("");
   const [clientCableType, setClientCableType] = useState("");
-  const [siteBuffer, setSiteBuffer] = useState("");
-  const [siteFiber, setSiteFiber] = useState("");
-  const [clientBuffer, setClientBuffer] = useState("");
-  const [clientFiber, setClientFiber] = useState("");
+  const [spliceMode, setSpliceMode] = useState<"fiber" | "end-to-end">("fiber");
+  const [spliceCount, setSpliceCount] = useState(1);
+  const [connections, setConnections] = useState<SpliceConnection[]>([
+    { siteBuffer: "", siteFiber: "", clientBuffer: "", clientFiber: "" },
+  ]);
   const [splicePhotos, setSplicePhotos] = useState<Partial<Record<SplicePhotoKey, string>>>({});
   const [draftId, setDraftId] = useState(() => crypto.randomUUID());
   const [search, setSearch] = useState("");
@@ -286,7 +290,10 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
 
   const projectRecords = records.filter((record) => record.projectId === projectItem.id);
   const cableTypesReady = Boolean(siteCableType.trim() && clientCableType.trim());
-  const colorsReady = Boolean(siteBuffer && siteFiber && clientBuffer && clientFiber);
+  const spliceCountReady = Number.isInteger(spliceCount) && spliceCount >= 1 && spliceCount <= 96;
+  const colorsReady = spliceCountReady && connections.length === spliceCount && connections.every((connection) =>
+    Boolean(connection.siteBuffer && connection.clientBuffer && (spliceMode === "end-to-end" || (connection.siteFiber && connection.clientFiber))),
+  );
   const completedSplicePhotos = splicePhotoKeys.filter((key) => Boolean(splicePhotos[key])).length;
   const photosReady = completedSplicePhotos === splicePhotoKeys.length;
   const junctionReady = Boolean(junction && (junction.documented || (junctionKind && network)));
@@ -297,10 +304,9 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
     setNetwork("");
     setSiteCableType("");
     setClientCableType("");
-    setSiteBuffer("");
-    setSiteFiber("");
-    setClientBuffer("");
-    setClientFiber("");
+    setSpliceMode("fiber");
+    setSpliceCount(1);
+    setConnections([{ siteBuffer: "", siteFiber: "", clientBuffer: "", clientFiber: "" }]);
     setSplicePhotos({});
     setDraftId(crypto.randomUUID());
     setSearch("");
@@ -427,8 +433,12 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
       onNotify("Completează tipul de cablu spre site și spre client.");
       return;
     }
+    if (!spliceCountReady) {
+      onNotify("Introdu un număr de suduri între 1 și 96.");
+      return;
+    }
     if (!colorsReady) {
-      onNotify("Completează culorile bufferului și firului pe ambele sensuri.");
+      onNotify(spliceMode === "end-to-end" ? "Completează bufferele pentru toate sudurile cap–cap." : "Completează bufferul și fibra pentru fiecare sudură.");
       return;
     }
     if (!photosReady) {
@@ -444,10 +454,13 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
       folderName: junction.documented ? junction.code : `J nedocumentată ${Math.max(0, ...projectRecords.filter((record) => !record.junction.documented).map((record, index) => Number(record.folderName?.match(/(\d+)$/)?.[1] ?? index + 1))) + 1}`,
       siteCableType: siteCableType.trim(),
       clientCableType: clientCableType.trim(),
-      siteBuffer,
-      siteFiber,
-      clientBuffer,
-      clientFiber,
+      spliceMode,
+      spliceCount,
+      connections,
+      siteBuffer: connections[0]?.siteBuffer ?? "",
+      siteFiber: spliceMode === "fiber" ? connections[0]?.siteFiber ?? "" : "",
+      clientBuffer: connections[0]?.clientBuffer ?? "",
+      clientFiber: spliceMode === "fiber" ? connections[0]?.clientFiber ?? "" : "",
       photos: {
         open: splicePhotos.open!,
         closed: splicePhotos.closed!,
@@ -458,7 +471,7 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
     const summary: SpliceFieldSummary = {
       noIntervention: false,
       noInterventionReason: "",
-      count: nextProjectRecords.length,
+      count: nextProjectRecords.reduce((total, record) => total + (record.spliceCount ?? 1), 0);
       junctions: nextProjectRecords.map((record) => ({
         label: record.junction.documented ? `${record.junction.code} · ${record.junction.name}` : "Joncțiune nedocumentată",
         documented: record.junction.documented,
@@ -484,7 +497,7 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
       const summary: SpliceFieldSummary = {
         noIntervention: false,
         noInterventionReason: "",
-        count: nextProjectRecords.length,
+        count: nextProjectRecords.reduce((total, item) => total + (item.spliceCount ?? 1), 0);
         junctions: nextProjectRecords.map((item) => ({
           label: item.junction.documented ? `${item.junction.code} · ${item.junction.name}` : "Joncțiune nedocumentată",
           documented: item.junction.documented,
@@ -648,12 +661,17 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
               </section>
 
               <section className="splice-form-card">
-                <div className="splice-card-title"><span>2</span><div><h2>Fibre sudate</h2><p>Completează perechea pe fiecare sens.</p></div></div>
+                <div className="splice-card-title"><span>2</span><div><h2>Suduri executate</h2><p>Introdu numărul, apoi completează selectorul generat pentru fiecare sudură.</p></div></div>
+                {junction && <div className="splice-undocumented-fields">
+                  <fieldset><legend>TIP SUDURĂ *</legend><div>{(["fiber", "end-to-end"] as const).map((item) => <label className={spliceMode === item ? "selected" : ""} key={item}><input type="radio" name="splice-mode" checked={spliceMode === item} onChange={() => { setSpliceMode(item); setConnections((current) => current.map((connection) => item === "end-to-end" ? { ...connection, siteFiber: "", clientFiber: "" } : connection)); }} /><span>{item === "fiber" ? "FIB" : "C-C"}</span><p><strong>{item === "fiber" ? "Fibră–fibră" : "Cap–cap"}</strong><small>{item === "fiber" ? "Se aleg bufferul și fibra" : "Se aleg doar bufferele"}</small></p><i /></label>)}</div></fieldset>
+                  <label className="fo-cable-input"><span>NUMĂR DE SUDURI *</span><input type="number" min="1" max="96" step="1" inputMode="numeric" value={spliceCount} onChange={(event) => { const value = Math.max(1, Math.min(96, Math.trunc(Number(event.target.value) || 1))); setSpliceCount(value); setConnections((current) => Array.from({ length: value }, (_, index) => current[index] ?? { siteBuffer: "", siteFiber: "", clientBuffer: "", clientFiber: "" })); }} /></label>
+                </div>}
                 <div className="splice-directions">
-                  <article><div className="splice-direction-title"><span>→</span><div><small>SENS 1</small><strong>Spre site</strong></div></div><label className="fo-cable-input"><span>TIP CABLU SPRE SITE *</span><select value={siteCableType} onChange={(event) => setSiteCableType(event.target.value)}><option value="">Selectează tipul</option>{[4, 12, 24, 48, 96].map((fibers) => <option key={fibers} value={`Cablu FO ${fibers}F`}>{fibers} fibre</option>)}</select></label><div className="splice-color-grid"><FiberSelect label="Culoare buffer" value={siteBuffer} onChange={setSiteBuffer} /><FiberSelect label="Culoare fir" value={siteFiber} onChange={setSiteFiber} /></div></article>
-                  <div className="splice-fusion"><i /><span>SUDURĂ</span><i /></div>
-                  <article><div className="splice-direction-title client"><span>→</span><div><small>SENS 2</small><strong>Spre client</strong></div></div><label className="fo-cable-input"><span>TIP CABLU SPRE CLIENT *</span><select value={clientCableType} onChange={(event) => setClientCableType(event.target.value)}><option value="">Selectează tipul</option>{[4, 12, 24, 48, 96].map((fibers) => <option key={fibers} value={`Cablu FO ${fibers}F`}>{fibers} fibre</option>)}</select></label><div className="splice-color-grid"><FiberSelect label="Culoare buffer" value={clientBuffer} onChange={setClientBuffer} /><FiberSelect label="Culoare fir" value={clientFiber} onChange={setClientFiber} /></div></article>
+                  <article><div className="splice-direction-title"><span>→</span><div><small>SENS 1</small><strong>Spre site</strong></div></div><label className="fo-cable-input"><span>TIP CABLU SPRE SITE *</span><select value={siteCableType} onChange={(event) => setSiteCableType(event.target.value)}><option value="">Selectează tipul</option>{[4, 12, 24, 48, 96].map((fibers) => <option key={fibers} value={`Cablu FO ${fibers}F`}>{fibers} fibre</option>)}</select></label></article>
+                  <div className="splice-fusion"><i /><span>{spliceMode === "end-to-end" ? "CAP–CAP" : "SUDURĂ"}</span><i /></div>
+                  <article><div className="splice-direction-title client"><span>→</span><div><small>SENS 2</small><strong>Spre client</strong></div></div><label className="fo-cable-input"><span>TIP CABLU SPRE CLIENT *</span><select value={clientCableType} onChange={(event) => setClientCableType(event.target.value)}><option value="">Selectează tipul</option>{[4, 12, 24, 48, 96].map((fibers) => <option key={fibers} value={`Cablu FO ${fibers}F`}>{fibers} fibre</option>)}</select></label></article>
                 </div>
+                {junction && <div className="splice-record-list">{connections.map((connection, index) => <article key={index}><span>{index + 1}</span><div><strong>Sudura {index + 1}</strong><div className="splice-color-grid"><FiberSelect label="Buffer site" value={connection.siteBuffer} onChange={(value) => setConnections((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, siteBuffer: value } : item))} />{spliceMode === "fiber" && <FiberSelect label="Fibră site" value={connection.siteFiber} onChange={(value) => setConnections((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, siteFiber: value } : item))} />}<FiberSelect label="Buffer client" value={connection.clientBuffer} onChange={(value) => setConnections((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, clientBuffer: value } : item))} />{spliceMode === "fiber" && <FiberSelect label="Fibră client" value={connection.clientFiber} onChange={(value) => setConnections((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, clientFiber: value } : item))} />}</div></div></article>)}</div>}
               </section>
 
               <section className="splice-form-card splice-photo-section">
@@ -684,8 +702,8 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
           )}
 
           <section className="splice-records-card">
-            <div className="splice-card-title"><span>✓</span><div><h2>Suduri documentate</h2><p>{projectItem.id} · {projectRecords.length} înregistrări</p></div></div>
-            {projectRecords.length ? <div className="splice-record-list">{projectRecords.map((record, index) => <article key={record.id}><span>{index + 1}</span><div><strong>{record.junction.documented ? `${record.junction.code} · ${record.junction.name}` : `Fără cod · ${record.junctionKind === "existing" ? "existentă" : "nou instalată"}`}</strong><small>{record.junction.documented ? "Joncțiune documentată" : record.network === "mobile" ? "Vodafone Mobil" : "Vodafone Fixed"} · 3 fotografii</small><p><b style={{ background: colorHex[record.siteBuffer] }} />{record.siteCableType || "Cablu nespecificat"} · {record.siteBuffer}/{record.siteFiber} <i>→</i> <b style={{ background: colorHex[record.clientBuffer] }} />{record.clientCableType || "Cablu nespecificat"} · {record.clientBuffer}/{record.clientFiber}</p></div><em>Salvată</em><button type="button" className="record-delete-button" onClick={() => void deleteSpliceRecord(record)} disabled={Boolean(deletingRecord)}>{deletingRecord === record.id ? "Se șterge…" : "Șterge"}</button></article>)}</div> : <div className="splice-no-records"><span>○</span><p>Nicio sudură salvată pentru această lucrare.</p></div>}
+            <div className="splice-card-title"><span>✓</span><div><h2>Suduri documentate</h2><p>{projectItem.id} · {projectRecords.reduce((total, record) => total + (record.spliceCount ?? 1), 0)} suduri</p></div></div>
+            {projectRecords.length ? <div className="splice-record-list">{projectRecords.map((record, index) => <article key={record.id}><span>{index + 1}</span><div><strong>{record.junction.documented ? `${record.junction.code} · ${record.junction.name}` : `Fără cod · ${record.junctionKind === "existing" ? "existentă" : "nou instalată"}`}</strong><small>{record.junction.documented ? "Joncțiune documentată" : record.network === "mobile" ? "Vodafone Mobil" : "Vodafone Fixed"} · 3 fotografii</small><p><b style={{ background: colorHex[record.siteBuffer] }} />{record.siteCableType || "Cablu nespecificat"} · {record.spliceCount ?? 1} {(record.spliceCount ?? 1) === 1 ? "sudură" : "suduri"} · {record.spliceMode === "end-to-end" ? "cap–cap" : "fibră–fibră"} <i>→</i> <b style={{ background: colorHex[record.clientBuffer] }} />{record.clientCableType || "Cablu nespecificat"}</p></div><em>Salvată</em><button type="button" className="record-delete-button" onClick={() => void deleteSpliceRecord(record)} disabled={Boolean(deletingRecord)}>{deletingRecord === record.id ? "Se șterge…" : "Șterge"}</button></article>)}</div> : <div className="splice-no-records"><span>○</span><p>Nicio sudură salvată pentru această lucrare.</p></div>}
           </section>
         </aside>
       </div>}
