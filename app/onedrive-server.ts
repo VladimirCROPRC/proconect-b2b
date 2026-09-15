@@ -4,6 +4,7 @@ import { bucket, getFileRow } from "./project-server";
 import { buildAcceptanceReportDocx } from "./report-docx";
 import { buildSpliceSheetXlsx } from "./splice-xlsx";
 import { buildMaterialSheetPdf } from "./material-pdf";
+import { buildOrangeQafXlsx } from "./orange-qaf";
 import { base64url, decode64, fixedOrigin, retryDelay, safeName, usesOneDrive, validMode, type BackupMode } from "./onedrive-core";
 
 type Environment = { PROCONECT_APP_URL?: string; ONEDRIVE_CLIENT_ID?: string; ONEDRIVE_TENANT_ID?: string; ONEDRIVE_CLIENT_SECRET?: string; ONEDRIVE_ENCRYPTION_KEY?: string };
@@ -185,10 +186,11 @@ async function tokenFor(c: Connection) {
   if (!result.meta.changes) throw new Error("Conexiunea OneDrive s-a schimbat. Reîncearcă.");
   return tokens.access_token!;
 }
-type OneDriveActivity = "Instalare" | "Intervenție" | "Survey";
+type OneDriveActivity = "Instalare" | "Intervenție" | "Intervenție Orange" | "Survey";
 const oneDriveActivityFolders: Record<OneDriveActivity, string> = {
   Instalare: "Instalări",
   "Intervenție": "Intervenții",
+  "Intervenție Orange": "Interventii Orange",
   Survey: "Survey",
 };
 const oneDriveSectionFolders: Record<OneDriveActivity, Record<string, string>> = {
@@ -209,6 +211,7 @@ const oneDriveSectionFolders: Record<OneDriveActivity, Record<string, string>> =
     project: "05_Documente intervenție",
     documents: "06_Documente administrative",
   },
+  "Intervenție Orange": {},
   Survey: {
     safety: "01_Pretask și EIP",
     project: "02_Documente survey",
@@ -221,6 +224,7 @@ function readableFolderName(value: string) {
 async function oneDriveDestination(token: string, rootId: string, projectId: string, activity: OneDriveActivity, section: string) {
   const activityFolder = await folder(token, rootId, oneDriveActivityFolders[activity]);
   const projectFolder = await folder(token, activityFolder.id, readableFolderName(projectId));
+  if (activity === "Intervenție Orange") return projectFolder;
   const sectionName = oneDriveSectionFolders[activity][section] ?? "99_Alte documente";
   return folder(token, projectFolder.id, sectionName);
 }
@@ -311,6 +315,16 @@ async function uploadJob(c: Connection, job: Job) {
     const activity: OneDriveActivity = project.activity_type && project.activity_type in oneDriveActivityFolders ? project.activity_type : "Instalare";
     const activityFolder = await folder(token, c.root_id, oneDriveActivityFolders[activity]);
     const projectFolder = await folder(token, activityFolder.id, readableFolderName(job.item_id));
+    if (activity === "Intervenție Orange") {
+      const qaf = await buildOrangeQafXlsx();
+      const filename = `${readableFolderName(job.item_id)}.xlsx`;
+      await checked(await graph(token, `/me/drive/items/${encodeURIComponent(projectFolder.id)}:/${encodeURIComponent(filename)}:/content`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
+        body: qaf,
+      }));
+      return;
+    }
     const sections = await Promise.all(Object.entries(oneDriveSectionFolders[activity]).map(async ([section, name]) => ({
       section,
       item: await folder(token, projectFolder.id, name),

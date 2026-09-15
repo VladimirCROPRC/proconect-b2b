@@ -6,6 +6,7 @@ import type { ProjectActivityType } from "./project-data";
 import { bucket, getFileRow, readReport } from "./project-server";
 import { buildAcceptanceReportDocx } from "./report-docx";
 import { buildMaterialSheetPdf } from "./material-pdf";
+import { buildOrangeQafXlsx } from "./orange-qaf";
 
 type DriveEnvironment = { PROCONECT_DRIVE_ENCRYPTION_KEY?: string };
 type DriveSettingsRow = {
@@ -39,6 +40,7 @@ const activityFolderMarker = "__activityFolder";
 export const driveActivityFolders: Record<ProjectActivityType, string> = {
   Instalare: "Instalari",
   "Intervenție": "Interventii",
+  "Intervenție Orange": "Interventii Orange",
   Survey: "Survey",
 };
 
@@ -62,6 +64,7 @@ const activitySectionFolders: Record<ProjectActivityType, Record<string, string>
     project: "05_Documente interventie",
     documents: "06_Documente administrative",
   },
+  "Intervenție Orange": {},
   Survey: {
     safety: "01_Pretask_si_EIP",
     project: "02_Documente survey",
@@ -368,10 +371,28 @@ async function uploadDriveFile(name: string, contentType: string, content: Array
   return result.id;
 }
 
+async function uploadOrangeQaf(projectId: string, folderId: string) {
+  const filename = `${readableOrangeName(projectId)}.xlsx`;
+  await uploadDriveFile(
+    filename,
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    await buildOrangeQafXlsx(),
+    folderId,
+    "QAF Orange generat automat din șablonul aprobat",
+    await findDriveFileByName(folderId, filename),
+  );
+}
+
+function readableOrangeName(value: string) {
+  return value.normalize("NFC").replace(/[\\u0000-\\u001f"*:<>?\\/\\\\|#%]/g, "_").replace(/^[. ]+|[. ]+$/g, "").slice(0, 140) || "Tichet Orange";
+}
+
 export async function syncProjectIfConnected(projectId: string) {
   if (!usesGoogle(await backupMode())) return false;
   if (!isConnected(await settings())) return false;
-  await ensureProjectFolder(projectId);
+  const folders = await ensureProjectFolder(projectId);
+  const project = await getRawDb().prepare("SELECT activity_type FROM projects WHERE id = ? LIMIT 1").bind(projectId).first<{ activity_type: ProjectActivityType }>();
+  if (project?.activity_type === "Intervenție Orange") await uploadOrangeQaf(projectId, folders.folder_id);
   return true;
 }
 
@@ -407,11 +428,12 @@ export async function syncFileIfConnected(fileId: string) {
   try {
     const folders = await ensureProjectFolder(file.project_id);
     const sectionFolders = JSON.parse(folders.section_folders_json) as Record<string, string>;
+    const project = await getRawDb().prepare("SELECT activity_type FROM projects WHERE id = ? LIMIT 1").bind(file.project_id).first<{ activity_type: ProjectActivityType }>();
     const stored = await bucket().get(file.storage_key);
     if (!stored) throw new Error("Fișierul nu mai este disponibil în stocarea proiectului.");
     const description = [file.category, file.geolocation ? `GPS: ${file.geolocation}` : "", `Încărcat de: ${file.uploaded_by}`].filter(Boolean).join(" · ");
-    let destinationFolderId = sectionFolders[file.section] ?? folders.folder_id;
-    const spliceFolder = file.section === "splices" ? splicePhotoFolder(file.category) : "";
+    let destinationFolderId = project?.activity_type === "Intervenție Orange" ? folders.folder_id : (sectionFolders[file.section] ?? folders.folder_id);
+    const spliceFolder = project?.activity_type !== "Intervenție Orange" && file.section === "splices" ? splicePhotoFolder(file.category) : "";
     if (spliceFolder) destinationFolderId = (await findOrCreateFolder(spliceFolder, destinationFolderId)).id;
     const driveFileId = await uploadDriveFile(file.original_name, file.content_type, await new Response(stored.body).arrayBuffer(), destinationFolderId, description, synced?.drive_file_id || undefined);
     await getRawDb().prepare("INSERT INTO google_drive_file_sync (file_id, project_id, drive_file_id, status, last_error, updated_at) VALUES (?, ?, ?, 'synced', '', ?) ON CONFLICT(file_id) DO UPDATE SET drive_file_id = excluded.drive_file_id, status = 'synced', last_error = '', updated_at = excluded.updated_at")
@@ -437,8 +459,13 @@ export async function syncReportIfConnected(projectId: string) {
   if (!usesGoogle(await backupMode())) return false;
   if (!isConnected(await settings())) return false;
   const saved = await readReport(projectId);
-  if (!saved) return false;
   const folders = await ensureProjectFolder(projectId);
+  const project = await getRawDb().prepare("SELECT activity_type FROM projects WHERE id = ? LIMIT 1").bind(projectId).first<{ activity_type: ProjectActivityType }>();
+  if (project?.activity_type === "Intervenție Orange") {
+    await uploadOrangeQaf(projectId, folders.folder_id);
+    return true;
+  }
+  if (!saved) return false;
   const sectionFolders = JSON.parse(folders.section_folders_json) as Record<string, string>;
   const document = buildAcceptanceReportDocx(projectId, saved.report);
   const driveFileId = await uploadDriveFile(
