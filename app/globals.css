@@ -5506,7 +5506,7 @@ td > small {
   gap: 5px;
 }
 
-.splice-undocumented-fields label {
+.splice-undocumented-fields fieldset label {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 6px;
@@ -5519,19 +5519,19 @@ td > small {
   cursor: pointer;
 }
 
-.splice-undocumented-fields label.selected {
+.splice-undocumented-fields fieldset label.selected {
   border-color: #c6525f;
   box-shadow: 0 0 0 2px rgba(198, 82, 95, .08);
 }
 
-.splice-undocumented-fields input {
+.splice-undocumented-fields input[type="radio"] {
   position: absolute;
   width: 1px;
   height: 1px;
   opacity: 0;
 }
 
-.splice-undocumented-fields label > span {
+.splice-undocumented-fields fieldset label > span {
   display: grid;
   width: 25px;
   height: 25px;
@@ -5543,38 +5543,38 @@ td > small {
   font-weight: 900;
 }
 
-.splice-undocumented-fields label.selected > span {
+.splice-undocumented-fields fieldset label.selected > span {
   color: #fff;
   background: #c6525f;
 }
 
-.splice-undocumented-fields label p {
+.splice-undocumented-fields fieldset label p {
   display: flex;
   min-width: 0;
   flex-direction: column;
   margin: 0;
 }
 
-.splice-undocumented-fields label strong {
+.splice-undocumented-fields fieldset label strong {
   color: #4d566b;
   font-size: 11px;
   line-height: 1.3;
 }
 
-.splice-undocumented-fields label small {
+.splice-undocumented-fields fieldset label small {
   margin-top: 2px;
   color: #969dac;
   font-size: 5.5px;
 }
 
-.splice-undocumented-fields label > i {
+.splice-undocumented-fields fieldset label > i {
   width: 9px;
   height: 9px;
   border: 2px solid #ccd1db;
   border-radius: 50%;
 }
 
-.splice-undocumented-fields label.selected > i {
+.splice-undocumented-fields fieldset label.selected > i {
   border-color: #c6525f;
   background: #c6525f;
   box-shadow: inset 0 0 0 2px #fff;
@@ -7602,7 +7602,7 @@ td > small {
   .fo-cable-summary strong,
   .splice-project-bar strong,
   .splice-junction-result strong,
-  .splice-undocumented-fields label strong,
+  .splice-undocumented-fields fieldset label strong,
   .splice-direction-title strong,
   .splice-photo-grid strong,
   .splice-record-list strong,
