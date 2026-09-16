@@ -44,6 +44,7 @@ export const projects = sqliteTable("projects", {
   orangeInterventionType: text("orange_intervention_type").notNull().default(""),
   sla: text("sla").notNull().default(""),
   departureLocality: text("departure_locality").notNull().default(""),
+  county: text("county").notNull().default(""),
   client: text("client").notNull(),
   address: text("address").notNull(),
   contact: text("contact").notNull(),

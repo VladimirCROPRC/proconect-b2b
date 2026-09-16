@@ -22,6 +22,7 @@ export type ProjectRecord = {
   orangeInterventionType?: OrangeInterventionType;
   sla?: string;
   departureLocality?: string;
+  county?: string;
   client: string;
   address: string;
   contact: string;

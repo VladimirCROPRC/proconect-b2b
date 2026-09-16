@@ -214,17 +214,19 @@ export async function syncOrangeTicketWorkbook(projectId: string) {
   const c = await connection();
   if (!c?.refresh_token) throw new Error("Conectează contul Microsoft 365 pentru registrul tichetelor Orange.");
   const project = await getRawDb().prepare(
-    "SELECT id, activity_type, fo_section_name, topology, cable_capacity, route_type, orange_intervention_type, sla, departure_locality, requirements, technician, created_at FROM projects WHERE id = ? LIMIT 1",
+    "SELECT id, activity_type, fo_section_name, topology, cable_capacity, route_type, orange_intervention_type, sla, departure_locality, county, requirements, technician, created_at FROM projects WHERE id = ? LIMIT 1",
   ).bind(projectId).first<{
     id: string; activity_type: string; fo_section_name: string; topology: string; cable_capacity: number;
-    route_type: string; orange_intervention_type: string; sla: string; departure_locality: string;
+    route_type: string; orange_intervention_type: string; sla: string; departure_locality: string; county: string;
     requirements: string; technician: string; created_at: number;
   }>();
   if (!project || project.activity_type !== "Intervenție Orange") return { configured: true, written: false };
 
   const token = await tokenFor(c);
   const shareId = `u!${base64url(encoder.encode(workbookUrl))}`;
-  const shared = await graphJson<OrangeWorkbookDriveItem>(await graph(token, `/shares/${encodeURIComponent(shareId)}/driveItem?$select=id,parentReference,remoteItem`, {\n    headers: { Prefer: "redeemSharingLinkIfNecessary" },\n  }));
+  const shared = await graphJson<OrangeWorkbookDriveItem>(await graph(token, `/shares/${encodeURIComponent(shareId)}/driveItem?$select=id,parentReference,remoteItem`, {
+    headers: { Prefer: "redeemSharingLinkIfNecessary" },
+  }));
   const itemId = shared.remoteItem?.id ?? shared.id;
   const driveId = shared.remoteItem?.parentReference?.driveId ?? shared.parentReference?.driveId;
   if (!itemId || !driveId) throw new RemoteFailure("Excel Online: registrul partajat nu a putut fi identificat.");
@@ -243,6 +245,7 @@ export async function syncOrangeTicketWorkbook(projectId: string) {
   values[1] = project.fo_section_name;
   values[3] = project.id;
   values[4] = project.departure_locality;
+  values[5] = project.county;
   values[6] = project.technician;
   values[7] = project.topology;
   values[8] = "Tichet generat";

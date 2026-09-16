@@ -89,3 +89,5 @@ Când este configurată variabila secretă `ORANGE_TICKETS_WORKBOOK_URL`, genera
 `Intervenție Orange` adaugă un rând în tabelul `Table1` din foaia „Tichete corective Orange”.
 Sincronizarea verifică mai întâi coloana „Ticket ID”, astfel încât reîncercările să nu creeze duplicate.
 Contul Microsoft 365 conectat în aplicație trebuie să aibă drept de editare asupra registrului partajat.
+Coloana „Localitate” primește localitatea de plecare, „Judet” primește județul introdus în formular,
+iar coloana „Volumetrie” rămâne necompletată.

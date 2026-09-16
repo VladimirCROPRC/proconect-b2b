@@ -598,7 +598,7 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
     try {
       const nextActivities = activities.filter((item) => item.id !== activity.id);
       const nextSummary: InterventionFieldSummary = nextActivities.length || materials.length
-        ? { ...initialSummary, execution: { activities: nextActivities, materials, documentedAt: nextActivities.length ? Math.max(...nextActivities.map((item) => item.documentedAt)) : Date.now() } }
+        ? { ...initialSummary, execution: { activities: nextActivities, materials, documentedAt: nextActivities.length ? Math.max(...nextActivities.map((item) => item.documentedAt)) : initialSummary?.execution?.documentedAt ?? 0 } }
         : { ...initialSummary, execution: undefined };
       const attachedPhotos = photos.filter((photo) => photo.category === `${activity.id}:photo`);
       const removals = await Promise.allSettled(attachedPhotos.map((photo) => deleteProjectFile(photo.id)));

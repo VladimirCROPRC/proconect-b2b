@@ -79,11 +79,24 @@ test('OneDrive server with isolated SQLite, fake Microsoft responses and fake R2
     async all() { return { results: db.prepare(sql).all(...values) }; },
     async run() { return { meta: { changes: Number(db.prepare(sql).run(...values).changes) } }; },
   }; }, async batch(statements) { db.exec('BEGIN'); try { const r = []; for (const s of statements) r.push(await s.run()); db.exec('COMMIT'); return r; } catch (e) { db.exec('ROLLBACK'); throw e; } } };
-  globalThis.__od = { env, getRawDb: () => raw, getFileRow: async id => db.prepare('SELECT * FROM project_files WHERE id = ?').get(id), bucket: () => ({ get: async () => ({ body: new Blob(['photo']).stream() }) }) };
+  globalThis.__od = {
+    env,
+    getRawDb: () => raw,
+    getFileRow: async id => db.prepare('SELECT * FROM project_files WHERE id = ?').get(id),
+    bucket: () => ({ get: async () => ({ body: new Blob(['photo']).stream() }) }),
+    buildAcceptanceReportDocx: async () => new Uint8Array(),
+    buildSpliceSheetXlsx: async () => new Uint8Array(),
+    buildMaterialSheetPdf: async () => new Uint8Array(),
+    buildOrangeQafXlsx: async () => new Uint8Array(),
+  };
   let text = await source('app/onedrive-server.ts');
   text = text.replace('import { env } from "cloudflare:workers";', 'const { env } = globalThis.__od;')
     .replace('import { getRawDb } from "../db";', 'const { getRawDb } = globalThis.__od;')
     .replace('import { bucket, getFileRow } from "./project-server";', 'const { bucket, getFileRow } = globalThis.__od;')
+    .replace('import { buildAcceptanceReportDocx } from "./report-docx";', 'const { buildAcceptanceReportDocx } = globalThis.__od;')
+    .replace('import { buildSpliceSheetXlsx } from "./splice-xlsx";', 'const { buildSpliceSheetXlsx } = globalThis.__od;')
+    .replace('import { buildMaterialSheetPdf } from "./material-pdf";', 'const { buildMaterialSheetPdf } = globalThis.__od;')
+    .replace('import { buildOrangeQafXlsx } from "./orange-qaf";', 'const { buildOrangeQafXlsx } = globalThis.__od;')
     .replace('"./onedrive-core"', JSON.stringify(coreUrl));
   const server = await import(moduleUrl(text));
   const originalFetch = globalThis.fetch;
