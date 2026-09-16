@@ -410,13 +410,15 @@ export default function Home() {
   const isActivityWorkspace = isInterventionWorkspace || view === "survey-workspace";
   const isProjectView = isDocumentationView || view === "documents" || isActivityWorkspace;
   const isActivityListView = view === "projects" || view === "interventions" || view === "orange-interventions" || view === "surveys";
-  const currentListView: ActivityListView = view === "interventions" || isInterventionWorkspace
-    ? activeProject.activityType === "Intervenție Orange" ? "orange-interventions" : "interventions"
+  const currentListView: ActivityListView = view === "interventions"
+    ? "interventions"
     : view === "orange-interventions"
       ? "orange-interventions"
-    : view === "surveys" || view === "survey-workspace"
-      ? "surveys"
-      : "projects";
+      : isInterventionWorkspace
+        ? activeProject.activityType === "Intervenție Orange" ? "orange-interventions" : "interventions"
+        : view === "surveys" || view === "survey-workspace"
+          ? "surveys"
+          : "projects";
   const currentActivitySection = activitySections[currentListView];
   const canCreateCurrentActivity = canManageDocuments || (currentAccount?.role === "Tehnician" && currentListView === "interventions");
   const currentActivityProjects = useMemo(() => projects.filter((project) => project.activityType === currentActivitySection.type), [currentActivitySection.type, projects]);
