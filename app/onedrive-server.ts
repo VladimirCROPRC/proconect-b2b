@@ -7,7 +7,7 @@ import { buildMaterialSheetPdf } from "./material-pdf";
 import { buildOrangeQafXlsx } from "./orange-qaf";
 import { base64url, decode64, fixedOrigin, retryDelay, safeName, usesOneDrive, validMode, type BackupMode } from "./onedrive-core";
 
-type Environment = { PROCONECT_APP_URL?: string; ONEDRIVE_CLIENT_ID?: string; ONEDRIVE_TENANT_ID?: string; ONEDRIVE_CLIENT_SECRET?: string; ONEDRIVE_ENCRYPTION_KEY?: string };
+type Environment = { PROCONECT_APP_URL?: string; ONEDRIVE_CLIENT_ID?: string; ONEDRIVE_TENANT_ID?: string; ONEDRIVE_CLIENT_SECRET?: string; ONEDRIVE_ENCRYPTION_KEY?: string; ORANGE_TICKETS_WORKBOOK_URL?: string };
 type Connection = { mode: BackupMode; generation: string; access_token: string; refresh_token: string; expires_at: number; drive_id: string; root_id: string; root_url: string; account: string; owner_id: string; lease: string; lease_until: number };
 type Job = { id: string; kind: "file" | "project"; item_id: string; revision: number; attempts: number };
 type Item = { id: string; webUrl?: string; folder?: object; driveType?: string; owner?: { user?: { id?: string; displayName?: string; email?: string } } };
@@ -72,7 +72,8 @@ async function exchange(parameters: URLSearchParams) {
   return tokens;
 }
 async function graph(token: string, path: string, options: RequestInit = {}) {
-  if (!path.startsWith("/me/drive")) throw new Error("Adresă Graph nepermisă.");
+  const workbookPath = /^\/drives\/[^/]+\/items\/[^/]+\/workbook(?:\/|$)/.test(path);
+  if (!path.startsWith("/me/drive") && !path.startsWith("/shares/") && !workbookPath) throw new Error("Adresă Graph nepermisă.");
   const headers = new Headers(options.headers); headers.set("Authorization", `Bearer ${token}`);
   return fetch(`https://graph.microsoft.com/v1.0${path}`, { ...options, headers, signal: AbortSignal.timeout(20_000) });
 }
@@ -178,6 +179,88 @@ export async function oneDriveStatus() {
   const errors = await getRawDb().prepare("SELECT kind, item_id, last_error FROM onedrive_jobs WHERE last_error != '' ORDER BY next_at LIMIT 10").all();
   return { configured, connected: Boolean(c?.refresh_token), mode: c?.mode ?? "google", account: c?.account ?? "", rootUrl: c?.root_url ?? "", synced: counts?.synced ?? 0, pending: counts?.pending ?? 0, errors: errors.results ?? [] };
 }
+type OrangeWorkbookDriveItem = {
+  id?: string;
+  parentReference?: { driveId?: string };
+  remoteItem?: { id?: string; parentReference?: { driveId?: string } };
+};
+type WorkbookRange = { values?: unknown[][] };
+
+function orangeWorkbookUrl() {
+  const value = environment().ORANGE_TICKETS_WORKBOOK_URL?.trim();
+  if (!value) return "";
+  const url = new URL(value);
+  if (url.protocol !== "https:" || !url.hostname.endsWith(".sharepoint.com")) throw new Error("ORANGE_TICKETS_WORKBOOK_URL trebuie să fie un link SharePoint HTTPS.");
+  return url.toString();
+}
+
+function bucharestTimestamp(value: number) {
+  const parts = new Intl.DateTimeFormat("ro-RO", {
+    timeZone: "Europe/Bucharest", day: "2-digit", month: "2-digit", year: "numeric",
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+  }).formatToParts(new Date(value));
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? "";
+  return `${part("day")}.${part("month")}.${part("year")} ${part("hour")}:${part("minute")}:${part("second")}`;
+}
+
+async function graphJson<T>(response: Response) {
+  if (!response.ok) throw new RemoteFailure(`Excel Online: operațiunea a eșuat (HTTP ${response.status}).${response.status === 401 || response.status === 403 ? " Reconectează contul Microsoft sau verifică accesul la registru." : ""}`, retryDelay(0, response.headers.get("Retry-After")));
+  return response.json() as Promise<T>;
+}
+
+export async function syncOrangeTicketWorkbook(projectId: string) {
+  const workbookUrl = orangeWorkbookUrl();
+  if (!workbookUrl) return { configured: false, written: false };
+  const c = await connection();
+  if (!c?.refresh_token) throw new Error("Conectează contul Microsoft 365 pentru registrul tichetelor Orange.");
+  const project = await getRawDb().prepare(
+    "SELECT id, activity_type, fo_section_name, topology, cable_capacity, route_type, orange_intervention_type, sla, departure_locality, requirements, technician, created_at FROM projects WHERE id = ? LIMIT 1",
+  ).bind(projectId).first<{
+    id: string; activity_type: string; fo_section_name: string; topology: string; cable_capacity: number;
+    route_type: string; orange_intervention_type: string; sla: string; departure_locality: string;
+    requirements: string; technician: string; created_at: number;
+  }>();
+  if (!project || project.activity_type !== "Intervenție Orange") return { configured: true, written: false };
+
+  const token = await tokenFor(c);
+  const shareId = `u!${base64url(encoder.encode(workbookUrl))}`;
+  const shared = await graphJson<OrangeWorkbookDriveItem>(await graph(token, `/shares/${encodeURIComponent(shareId)}/driveItem?$select=id,parentReference,remoteItem`));
+  const itemId = shared.remoteItem?.id ?? shared.id;
+  const driveId = shared.remoteItem?.parentReference?.driveId ?? shared.parentReference?.driveId;
+  if (!itemId || !driveId) throw new RemoteFailure("Excel Online: registrul partajat nu a putut fi identificat.");
+
+  const workbook = `/drives/${encodeURIComponent(driveId)}/items/${encodeURIComponent(itemId)}/workbook`;
+  const ticketColumn = await graph(token, `${workbook}/tables/Table1/columns/3/dataBodyRange?$select=values`);
+  if (ticketColumn.ok) {
+    const range = await ticketColumn.json() as WorkbookRange;
+    const alreadyExists = (range.values ?? []).some((row) => String(row[0] ?? "").trim().toUpperCase() === project.id.toUpperCase());
+    if (alreadyExists) return { configured: true, written: false, duplicate: true };
+  } else if (ticketColumn.status !== 404) {
+    await graphJson(ticketColumn);
+  }
+
+  const values = Array.from({ length: 30 }, () => "") as Array<string | number>;
+  values[1] = project.fo_section_name;
+  values[3] = project.id;
+  values[4] = project.departure_locality;
+  values[6] = project.technician;
+  values[7] = project.topology;
+  values[8] = "Tichet generat";
+  values[9] = project.sla;
+  values[11] = bucharestTimestamp(project.created_at);
+  values[12] = project.technician;
+  values[17] = project.cable_capacity;
+  values[20] = project.requirements;
+  values[23] = [project.route_type, project.orange_intervention_type].filter(Boolean).join(" · ");
+
+  await graphJson(await graph(token, `${workbook}/tables/Table1/rows/add`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ index: null, values: [values] }),
+  }));
+  return { configured: true, written: true };
+}
+
 async function tokenFor(c: Connection) {
   if (c.expires_at > Date.now() + 60_000) return unseal(c.access_token);
   const tokens = await exchange(new URLSearchParams({ grant_type: "refresh_token", refresh_token: await unseal(c.refresh_token), scope }));
@@ -316,6 +399,7 @@ async function uploadJob(c: Connection, job: Job) {
     const activityFolder = await folder(token, c.root_id, oneDriveActivityFolders[activity]);
     const projectFolder = await folder(token, activityFolder.id, readableFolderName(job.item_id));
     if (activity === "Intervenție Orange") {
+      await syncOrangeTicketWorkbook(job.item_id);
       const qaf = await buildOrangeQafXlsx(job.item_id);
       const filename = `${readableFolderName(job.item_id)}.xlsx`;
       await checked(await graph(token, `/me/drive/items/${encodeURIComponent(projectFolder.id)}:/${encodeURIComponent(filename)}:/content`, {

@@ -26,6 +26,7 @@ Worker → Settings → Variables and Secrets:
 | `ONEDRIVE_TENANT_ID` | variable | Directory (tenant) ID from Entra |
 | `ONEDRIVE_CLIENT_SECRET` | secret | The new Microsoft secret value |
 | `ONEDRIVE_ENCRYPTION_KEY` | secret | A new random 32-byte key encoded as 64 hexadecimal characters |
+| `ORANGE_TICKETS_WORKBOOK_URL` | secret | Linkul SharePoint al registrului „Centralizator ENO3 Y4.xlsx” |
 
 Generate the encryption key on a trusted machine using `openssl rand -hex 32`, then paste it directly into the secret field. Keep an encrypted recovery copy. Do not replace the existing Google Drive encryption key. Changing the OneDrive encryption key requires disconnecting/reconnecting OneDrive; it is not a token migration.
 
@@ -80,3 +81,11 @@ Storage quota, Microsoft licensing and Cloudflare usage limits still apply; this
 - https://learn.microsoft.com/en-us/graph/permissions-reference
 - https://learn.microsoft.com/en-us/graph/api/driveitem-put-content
 - https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/configure-user-consent
+
+
+## Registrul Excel Online pentru tichetele Orange
+
+Când este configurată variabila secretă `ORANGE_TICKETS_WORKBOOK_URL`, generarea unui proiect de tip
+`Intervenție Orange` adaugă un rând în tabelul `Table1` din foaia „Tichete corective Orange”.
+Sincronizarea verifică mai întâi coloana „Ticket ID”, astfel încât reîncercările să nu creeze duplicate.
+Contul Microsoft 365 conectat în aplicație trebuie să aibă drept de editare asupra registrului partajat.

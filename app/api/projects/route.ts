@@ -1,5 +1,6 @@
 import { createProject, deleteProject, ensureProjectData, isManagementRole, listProjectData, updateProject, writeReport } from "../../project-server";
 import { syncProjectIfConnected } from "../../backup-server";
+import { syncOrangeTicketWorkbook } from "../../onedrive-server";
 import type { ProjectRecord } from "../../project-data";
 import { currentSession, sameOrigin } from "../../server-auth";
 
@@ -37,12 +38,22 @@ export async function POST(request: Request) {
     const siteCode = typeof body.reportMetadata?.siteCode === "string" ? body.reportMetadata.siteCode.trim().slice(0, 100) : "";
     const lec = typeof body.reportMetadata?.lec === "string" ? body.reportMetadata.lec.trim().slice(0, 100) : "";
     if (siteCode || lec) await writeReport(result.project.id, { siteCode, lec }, session.account);
+    const syncWarnings: string[] = [];
     try {
       await syncProjectIfConnected(result.project.id);
     } catch (error) {
       console.error("Proconect Drive project sync error:", error instanceof Error ? error.message : "Unknown Drive project sync failure");
     }
-    return Response.json({ project: result.project }, { status: 201 });
+    if (result.project.activityType === "Intervenție Orange") {
+      try {
+        const excel = await syncOrangeTicketWorkbook(result.project.id);
+        if (!excel.configured) syncWarnings.push("Registrul Excel Online nu este configurat.");
+      } catch (error) {
+        console.error("Proconect Orange workbook sync error:", error instanceof Error ? error.message : "Unknown Excel Online failure");
+        syncWarnings.push("Tichetul a fost salvat, dar rândul din Excel Online necesită reîncercare.");
+      }
+    }
+    return Response.json({ project: result.project, ...(syncWarnings.length ? { warnings: syncWarnings } : {}) }, { status: 201 });
   } catch (error) {
     console.error("Proconect project create error:", error instanceof Error ? error.message : "Unknown project failure");
     return Response.json({ error: "Proiectul nu a putut fi salvat." }, { status: 503 });

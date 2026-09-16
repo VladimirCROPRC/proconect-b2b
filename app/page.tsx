@@ -683,7 +683,7 @@ export default function Home() {
           },
         }),
       });
-      const payload = (await response.json()) as { project?: Project; error?: string };
+      const payload = (await response.json()) as { project?: Project; warnings?: string[]; error?: string };
       if (!response.ok || !payload.project) throw new Error(payload.error || "Proiectul nu a putut fi creat.");
 
       const uploadResults = await Promise.allSettled([
@@ -698,7 +698,8 @@ export default function Home() {
       setAccounts((current) => current.map((account) => account.name === payload.project!.technician ? { ...account, jobs: account.jobs + 1 } : account));
       closeModal();
       const failedUploads = uploadResults.filter((result) => result.status === "rejected").length;
-      showToast(failedUploads ? `${id} a fost salvat, dar ${failedUploads} fișier nu a putut fi încărcat.` : `${id} a fost salvat permanent și alocat tehnicianului.`);
+      const warning = payload.warnings?.[0];
+      showToast(warning ?? (failedUploads ? `${id} a fost salvat, dar ${failedUploads} fișier nu a putut fi încărcat.` : `${id} a fost salvat permanent și alocat tehnicianului.`));
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Proiectul nu a putut fi creat.");
     } finally {
