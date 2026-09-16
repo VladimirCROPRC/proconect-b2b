@@ -224,7 +224,7 @@ export async function syncOrangeTicketWorkbook(projectId: string) {
 
   const token = await tokenFor(c);
   const shareId = `u!${base64url(encoder.encode(workbookUrl))}`;
-  const shared = await graphJson<OrangeWorkbookDriveItem>(await graph(token, `/shares/${encodeURIComponent(shareId)}/driveItem?$select=id,parentReference,remoteItem`));
+  const shared = await graphJson<OrangeWorkbookDriveItem>(await graph(token, `/shares/${encodeURIComponent(shareId)}/driveItem?$select=id,parentReference,remoteItem`, {\n    headers: { Prefer: "redeemSharingLinkIfNecessary" },\n  }));
   const itemId = shared.remoteItem?.id ?? shared.id;
   const driveId = shared.remoteItem?.parentReference?.driveId ?? shared.parentReference?.driveId;
   if (!itemId || !driveId) throw new RemoteFailure("Excel Online: registrul partajat nu a putut fi identificat.");

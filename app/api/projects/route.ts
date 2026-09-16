@@ -50,7 +50,7 @@ export async function POST(request: Request) {
         if (!excel.configured) syncWarnings.push("Registrul Excel Online nu este configurat.");
       } catch (error) {
         console.error("Proconect Orange workbook sync error:", error instanceof Error ? error.message : "Unknown Excel Online failure");
-        syncWarnings.push("Tichetul a fost salvat, dar rândul din Excel Online necesită reîncercare.");
+        syncWarnings.push(`Tichetul a fost salvat, dar Excel Online a răspuns: ${error instanceof Error ? error.message : "eroare necunoscută"}`);
       }
     }
     return Response.json({ project: result.project, ...(syncWarnings.length ? { warnings: syncWarnings } : {}) }, { status: 201 });
