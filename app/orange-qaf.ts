@@ -5,6 +5,7 @@ import { zipPackage } from "./report-docx";
 
 type AssetEnvironment = { ASSETS?: { fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> } };
 type Material = { source?: string; code?: string; quantity?: number };
+type DamageLocation = { lat?: number; lon?: number; placedAt?: number };
 type ZipEntry = { name: string; content: Uint8Array };
 const decoder = new TextDecoder();
 const encoder = new TextEncoder();
@@ -54,15 +55,50 @@ function writeQuantity(xml: string, cell: string, quantity: number) {
   return populated.test(xml) ? xml.replace(populated, `<c r="${cell}"$1><v>${value}</v></c>`) : xml;
 }
 
-async function selectedMaterials(projectId: string) {
+async function orangeDocumentation(projectId: string) {
   const row = await getRawDb().prepare("SELECT content_json FROM project_field_documentation WHERE project_id = ? LIMIT 1").bind(projectId).first<{ content_json: string }>();
-  if (!row?.content_json) return [] as Material[];
+  if (!row?.content_json) return { materials: [] as Material[] };
   try {
-    const documentation = JSON.parse(row.content_json) as { intervention?: { execution?: { materials?: Material[] } } };
-    return Array.isArray(documentation.intervention?.execution?.materials) ? documentation.intervention!.execution!.materials! : [];
+    const documentation = JSON.parse(row.content_json) as { intervention?: { assessment?: { damageLocation?: DamageLocation; documentedAt?: number }; execution?: { materials?: Material[] } } };
+    return {
+      materials: Array.isArray(documentation.intervention?.execution?.materials) ? documentation.intervention!.execution!.materials! : [],
+      damageLocation: documentation.intervention?.assessment?.damageLocation,
+      documentedAt: documentation.intervention?.assessment?.documentedAt,
+    };
   } catch {
-    return [] as Material[];
+    return { materials: [] as Material[] };
   }
+}
+
+function writeNumber(xml: string, cell: string, value: number) {
+  return writeQuantity(xml, cell, value);
+}
+
+function writeText(xml: string, cell: string, value: string) {
+  const selfClosing = new RegExp(`<c r="${cell}"([^>]*)\\/>`);
+  const populated = new RegExp(`<c r="${cell}"([^>]*)>.*?<\\/c>`);
+  const render = (attributes: string) => `<c r="${cell}"${attributes.replace(/\\s+t="[^"]*"/g, "")} t="inlineStr"><is><t>${value}</t></is></c>`;
+  const empty = selfClosing.exec(xml);
+  if (empty) return xml.replace(empty[0], render(empty[1]));
+  const existing = populated.exec(xml);
+  return existing ? xml.replace(existing[0], render(existing[1])) : xml;
+}
+
+function localPlacement(timestamp: number | undefined) {
+  if (!timestamp || !Number.isFinite(timestamp)) return null;
+  const parts = new Intl.DateTimeFormat("ro-RO", {
+    timeZone: "Europe/Bucharest", day: "2-digit", month: "2-digit", year: "numeric",
+    hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+  }).formatToParts(new Date(timestamp));
+  const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? "";
+  const day = Number(value("day"));
+  const month = Number(value("month"));
+  const year = Number(value("year"));
+  const hour = value("hour");
+  const minute = value("minute");
+  return Number.isFinite(day) && Number.isFinite(month) && Number.isFinite(year) && hour && minute
+    ? { day, month, year, time: `${hour}:${minute}` }
+    : null;
 }
 
 /** Builds the approved QAF and fills only the material quantity cells selected by the technician. */
@@ -72,8 +108,9 @@ export async function buildOrangeQafXlsx(projectId: string) {
   const response = await assets.fetch(new Request("https://assets.local/templates/QAF.xlsx"));
   if (!response.ok) throw new Error("Șablonul QAF Orange nu a putut fi încărcat.");
   const files = await unzip(new Uint8Array(await response.arrayBuffer()));
+  const documentation = await orangeDocumentation(projectId);
   const quantities = new Map<string, number>();
-  for (const item of await selectedMaterials(projectId)) {
+  for (const item of documentation.materials) {
     const quantity = Number(item.quantity);
     if ((item.source !== "orange" && item.source !== "proconect") || !item.code || !Number.isFinite(quantity) || quantity <= 0) continue;
     const key = `${item.source}:${item.code}`;
@@ -93,6 +130,25 @@ export async function buildOrangeQafXlsx(projectId: string) {
     });
     entry.content = encoder.encode(xml);
   }
+  const main = files.find((file) => file.name === "xl/worksheets/sheet1.xml");
+  if (!main) throw new Error("Șablonul QAF Orange nu conține foaia principală.");
+  const location = documentation.damageLocation;
+  const placed = localPlacement(location?.placedAt ?? documentation.documentedAt);
+  let mainXml = decoder.decode(main.content);
+  if (location && Number.isFinite(location.lat) && Number.isFinite(location.lon)) {
+    mainXml = writeNumber(mainXml, "C34", Number(location.lat!.toFixed(6)));
+    mainXml = writeNumber(mainXml, "E34", Number(location.lon!.toFixed(6)));
+  }
+  if (placed) {
+    for (const row of [19, 20]) {
+      mainXml = writeNumber(mainXml, `C${row}`, placed.day);
+      mainXml = writeNumber(mainXml, `D${row}`, placed.month);
+      mainXml = writeNumber(mainXml, `E${row}`, placed.year);
+      mainXml = writeText(mainXml, `G${row}`, placed.time);
+    }
+  }
+  main.content = encoder.encode(mainXml);
+
   const workbook = zipPackage(files);
   return workbook.buffer.slice(workbook.byteOffset, workbook.byteOffset + workbook.byteLength) as ArrayBuffer;
 }

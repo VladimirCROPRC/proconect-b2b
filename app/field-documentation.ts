@@ -98,7 +98,7 @@ export type InterventionDamageType = "FO cut" | "Atenuare" | "Echipament";
 
 export type InterventionAssessmentSummary = {
   damageType: InterventionDamageType;
-  damageLocation?: { lat: number; lon: number };
+  damageLocation?: { lat: number; lon: number; placedAt?: number };
   photoCount: number;
   geotaggedPhotoCount: number;
   documentedAt: number;

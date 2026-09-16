@@ -349,7 +349,7 @@ export function InterventionOperationsSection({
                 <small>Alege categoria care descrie natura problemei constatate.</small>
               </label>
 
-              {orangeIntervention && <DamageLocationPicker value={damageLocation} onChange={setDamageLocation} onNotify={onNotify} />}
+              {orangeIntervention && <DamageLocationPicker value={damageLocation} onChange={(location) => setDamageLocation({ ...location, placedAt: Date.now() })} onNotify={onNotify} />}
 
               <div className="intervention-photo-heading">
                 <div><h3>Fotografii constatare</h3><p>Imagini clare din care reiese natura avariei.</p></div>
