@@ -653,6 +653,7 @@ export default function Home() {
       orangeInterventionType: isOrangeForm ? orangeInterventionType : "",
       sla: isOrangeForm ? orangeSla : "",
       departureLocality: isOrangeForm ? String(form.get("departureLocality") || "").trim() : "",
+      county: isOrangeForm ? String(form.get("county") || "").trim() : "",
       client: String(form.get("client")),
       address: isOrangeForm ? String(form.get("address") || "").trim() : String(form.get("address")),
       contact: isOrangeForm ? "Orange" : String(form.get("contact")),
@@ -726,6 +727,7 @@ export default function Home() {
       orangeInterventionType: isOrangeForm ? orangeInterventionType : "",
       sla: isOrangeForm ? orangeSla : "",
       departureLocality: isOrangeForm ? String(form.get("departureLocality") || "").trim() : "",
+      county: isOrangeForm ? String(form.get("county") || "").trim() : "",
       client: String(form.get("client") || ""),
       address: isOrangeForm ? String(form.get("address") || "").trim() : String(form.get("address") || ""),
       contact: isOrangeForm ? "Orange" : String(form.get("contact") || ""),
@@ -1675,6 +1677,7 @@ export default function Home() {
                   <label><span>Tip intervenție *</span><select name="orangeInterventionType" required value={orangeInterventionType ?? ""} onChange={(event) => { setOrangeInterventionType(event.target.value as Project["orangeInterventionType"]); setOrangeSla(""); }}><option value="" disabled>Selectează tipul</option><option>FITT</option><option>IMO</option><option>PBM</option></select></label>
                   <label><span>SLA *</span><select name="sla" required value={orangeSla} disabled={!orangeInterventionType} onChange={(event) => setOrangeSla(event.target.value)}><option value="" disabled>{orangeInterventionType ? "Selectează SLA" : "Selectează mai întâi tipul"}</option>{orangeInterventionType && orangeSlaOptions[orangeInterventionType]?.map((option) => <option key={option}>{option}</option>)}</select></label>
                   <label className="wide"><span>Localitate plecare echipă *</span><input name="departureLocality" required maxLength={150} defaultValue={editingProject?.departureLocality ?? ""} placeholder="Localitatea de plecare" /></label>
+                  <label><span>Județ *</span><input name="county" required maxLength={100} defaultValue={editingProject?.county ?? ""} placeholder="Județ" /></label>
                 </>}
                 {!isOrangeForm && <><label><span>Persoană de contact *</span><input name="contact" required defaultValue={editingProject?.contact} placeholder="Nume și prenume" /></label>
                 <label><span>Telefon *</span><input name="phone" required defaultValue={editingProject?.phone} placeholder="+40 7xx xxx xxx" /></label>

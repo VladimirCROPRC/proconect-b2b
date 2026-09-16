@@ -1,6 +1,10 @@
 import type { ProjectFieldDocumentation } from "./field-documentation";
 
-export type ProjectActivityType = "Instalare" | "Intervenție" | "Survey";
+export type ProjectActivityType = "Instalare" | "Intervenție" | "Intervenție Orange" | "Survey";
+export type MediaConverterType = "" | "100 Mbps" | "1 Gbps" | "JumboFrame";
+export type OrangeTopology = "" | "FO BB" | "FO Local VHBB";
+export type OrangeRouteType = "" | "Aerian" | "Subteran" | "Mixt";
+export type OrangeInterventionType = "" | "FITT" | "IMO" | "PBM";
 
 export type CpeCatalogItem = {
   name: string;
@@ -10,6 +14,15 @@ export type CpeCatalogItem = {
 export type ProjectRecord = {
   id: string;
   activityType: ProjectActivityType;
+  orderNumber?: string;
+  foSectionName?: string;
+  topology?: OrangeTopology;
+  cableCapacity?: number;
+  routeType?: OrangeRouteType;
+  orangeInterventionType?: OrangeInterventionType;
+  sla?: string;
+  departureLocality?: string;
+  county?: string;
   client: string;
   address: string;
   contact: string;
@@ -21,6 +34,7 @@ export type ProjectRecord = {
   cpeRequiresGrounding: boolean;
   sfp: boolean;
   mc: boolean;
+  mcType: MediaConverterType;
   terminalBox: boolean;
   status: "Planificat" | "În desfășurare" | "De verificat" | "Finalizat";
   date: string;
@@ -43,6 +57,7 @@ export const initialProjects: ProjectRecord[] = [
     cpeRequiresGrounding: false,
     sfp: true,
     mc: false,
+    mcType: "",
     terminalBox: true,
     status: "În desfășurare",
     date: "21 aug, 09:30",
@@ -63,6 +78,7 @@ export const initialProjects: ProjectRecord[] = [
     cpeRequiresGrounding: false,
     sfp: true,
     mc: true,
+    mcType: "1 Gbps",
     terminalBox: true,
     status: "Planificat",
     date: "22 aug, 11:00",
@@ -83,6 +99,7 @@ export const initialProjects: ProjectRecord[] = [
     cpeRequiresGrounding: false,
     sfp: true,
     mc: false,
+    mcType: "",
     terminalBox: false,
     status: "De verificat",
     date: "20 aug, 14:15",
@@ -103,6 +120,7 @@ export const initialProjects: ProjectRecord[] = [
     cpeRequiresGrounding: false,
     sfp: true,
     mc: false,
+    mcType: "",
     terminalBox: true,
     status: "Finalizat",
     date: "19 aug, 10:00",

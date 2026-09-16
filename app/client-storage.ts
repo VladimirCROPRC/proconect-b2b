@@ -76,7 +76,9 @@ async function stampFieldPhoto(file: File, geo: string, capturedAt: number) {
   const source = await loadPhoto(file);
   const canvas = document.createElement("canvas");
   const longestSide = Math.max(source.width, source.height);
-  const scale = Math.min(1, 3200 / longestSide);
+  // Mobile camera files can exceed the request-body limit before reaching the Worker.
+  // 2048 px retains enough detail for field evidence while keeping uploads reliable.
+  const scale = Math.min(1, 2048 / longestSide);
   canvas.width = Math.max(1, Math.round(source.width * scale));
   canvas.height = Math.max(1, Math.round(source.height * scale));
 
@@ -126,7 +128,7 @@ async function stampFieldPhoto(file: File, geo: string, capturedAt: number) {
         else reject(new Error("Fotografia nu a putut fi marcată cu data, ora și locația."));
       },
       "image/jpeg",
-      0.9,
+      0.8,
     );
   });
 
@@ -156,8 +158,20 @@ export async function uploadProjectFile(input: {
   if (geo) form.set("geo", geo);
 
   const response = await fetch("/api/files", { method: "POST", credentials: "same-origin", body: form });
-  const payload = (await response.json()) as { file?: StoredProjectFile; error?: string };
-  if (!response.ok || !payload.file) throw new Error(payload.error || "Fișierul nu a putut fi încărcat.");
+  const responseText = await response.text();
+  let payload: { file?: StoredProjectFile; error?: string } = {};
+  try {
+    payload = responseText ? JSON.parse(responseText) as typeof payload : {};
+  } catch {
+    if (response.status === 413 || /payload too large/i.test(responseText)) {
+      throw new Error("Fotografia este prea mare pentru încărcare. Reîncearcă după ce aplicația o comprimă sau selectează o fotografie mai mică.");
+    }
+    throw new Error(`Fișierul nu a putut fi încărcat (HTTP ${response.status}).`);
+  }
+  if (!response.ok || !payload.file) {
+    if (response.status === 413) throw new Error("Fotografia este prea mare pentru încărcare.");
+    throw new Error(payload.error || "Fișierul nu a putut fi încărcat.");
+  }
   return payload.file;
 }
 
