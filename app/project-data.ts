@@ -2,6 +2,9 @@ import type { ProjectFieldDocumentation } from "./field-documentation";
 
 export type ProjectActivityType = "Instalare" | "Intervenție" | "Intervenție Orange" | "Survey";
 export type MediaConverterType = "" | "100 Mbps" | "1 Gbps" | "JumboFrame";
+export type OrangeTopology = "" | "FO BB" | "FO Local VHBB";
+export type OrangeRouteType = "" | "Aerian" | "Subteran" | "Mixt";
+export type OrangeInterventionType = "" | "FITT" | "IMO" | "PBM";
 
 export type CpeCatalogItem = {
   name: string;
@@ -12,6 +15,13 @@ export type ProjectRecord = {
   id: string;
   activityType: ProjectActivityType;
   orderNumber?: string;
+  foSectionName?: string;
+  topology?: OrangeTopology;
+  cableCapacity?: number;
+  routeType?: OrangeRouteType;
+  orangeInterventionType?: OrangeInterventionType;
+  sla?: string;
+  departureLocality?: string;
   client: string;
   address: string;
   contact: string;

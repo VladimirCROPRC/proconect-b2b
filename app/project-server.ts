@@ -8,6 +8,13 @@ type ProjectRow = {
   id: string;
   activity_type: ProjectActivityType;
   order_number: string;
+  fo_section_name: string;
+  topology: string;
+  cable_capacity: number;
+  route_type: string;
+  orange_intervention_type: string;
+  sla: string;
+  departure_locality: string;
   client: string;
   address: string;
   contact: string;
@@ -62,6 +69,28 @@ function normalizeMediaConverterType(mc: boolean, value: unknown) {
   return mediaConverterTypes.has(type) ? type as ProjectRecord["mcType"] : "";
 }
 
+const orangeTopologies = new Set(["FO BB", "FO Local VHBB"]);
+const orangeRouteTypes = new Set(["Aerian", "Subteran", "Mixt"]);
+const orangeInterventionSlas: Record<string, Set<string>> = {
+  IMO: new Set(["Y10", "Y8", "Y6"]),
+  PBM: new Set(["minor", "Mediu", "Major"]),
+  FITT: new Set(["Minor 12h", "Major 8h", "Critic 4h"]),
+};
+
+const orangeInterventionCauses = new Set(["Accident-Orice tip de accident (masina,etc.)","Clima-Alunecari de teren, viituri, furtuna, etc…","Defect-Defect cablu/cutie jonctiune, etc,…","Lucrari infrastructura-Lucrari efectuate de companiile nationale","Lucrari civile-Lucrari efectuate de persoane fizice","Primarie-Decizii primarie de a taia cablul","Vandalism-Furt"]);
+
+function normalizeOrangeDetails(input: ProjectRecord, activityType: ProjectActivityType) {
+  if (activityType !== "Intervenție Orange") return { foSectionName: "", topology: "" as ProjectRecord["topology"], cableCapacity: 0, routeType: "" as ProjectRecord["routeType"], orangeInterventionType: "" as ProjectRecord["orangeInterventionType"], sla: "", departureLocality: "" };
+  const foSectionName = typeof input.foSectionName === "string" ? input.foSectionName.trim().slice(0, 200) : "";
+  const topology = orangeTopologies.has(input.topology ?? "") ? input.topology! : "";
+  const cableCapacity = Number(input.cableCapacity);
+  const routeType = orangeRouteTypes.has(input.routeType ?? "") ? input.routeType! : "";
+  const orangeInterventionType = typeof input.orangeInterventionType === "string" && orangeInterventionSlas[input.orangeInterventionType] ? input.orangeInterventionType as ProjectRecord["orangeInterventionType"] : "";
+  const sla = typeof input.sla === "string" && orangeInterventionType && orangeInterventionSlas[orangeInterventionType]?.has(input.sla) ? input.sla : "";
+  const departureLocality = typeof input.departureLocality === "string" ? input.departureLocality.trim().slice(0, 150) : "";
+  return { foSectionName, topology, cableCapacity, routeType, orangeInterventionType, sla, departureLocality };
+}
+
 function validWorkIdentifier(value: string, activityType: ProjectActivityType) {
   return activityType === "Intervenție" || activityType === "Intervenție Orange"
     ? /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,39}$/.test(value)
@@ -91,6 +120,13 @@ function projectRowToRecord(row: ProjectRow): ProjectRecord {
     id: row.id,
     activityType: row.activity_type,
     orderNumber: row.order_number,
+    foSectionName: row.fo_section_name,
+    topology: row.topology as ProjectRecord["topology"],
+    cableCapacity: row.cable_capacity,
+    routeType: row.route_type as ProjectRecord["routeType"],
+    orangeInterventionType: row.orange_intervention_type as ProjectRecord["orangeInterventionType"],
+    sla: row.sla,
+    departureLocality: row.departure_locality,
     client: row.client,
     address: row.address,
     contact: row.contact,
@@ -114,12 +150,19 @@ function projectRowToRecord(row: ProjectRow): ProjectRecord {
 function insertProjectStatement(project: ProjectRecord, technicianUsername: string, createdBy: string, createdAt = Date.now()) {
   return getRawDb()
     .prepare(
-      "INSERT INTO projects (id, activity_type, order_number, client, address, contact, phone, email, requirements, technician, technician_username, cpe, cpe_requires_grounding, sfp, mc, mc_type, terminal_box, status, scheduled_label, ipwo, splice, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO projects (id, activity_type, order_number, fo_section_name, topology, cable_capacity, route_type, orange_intervention_type, sla, departure_locality, client, address, contact, phone, email, requirements, technician, technician_username, cpe, cpe_requires_grounding, sfp, mc, mc_type, terminal_box, status, scheduled_label, ipwo, splice, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(
       project.id,
       project.activityType,
       project.orderNumber ?? "",
+      project.foSectionName ?? "",
+      project.topology ?? "",
+      project.cableCapacity ?? 0,
+      project.routeType ?? "",
+      project.orangeInterventionType ?? "",
+      project.sla ?? "",
+      project.departureLocality ?? "",
       project.client,
       project.address,
       project.contact,
@@ -249,11 +292,15 @@ export async function createProject(input: ProjectRecord, createdBy: Authenticat
       status: 400 as const,
     };
   }
+  const orangeDetails = normalizeOrangeDetails(input, activityType);
   const required = activityType === "Intervenție Orange"
-    ? [input.client, input.requirements, input.technician]
+    ? [input.client, input.requirements, input.technician, orangeDetails.foSectionName, orangeDetails.topology, orangeDetails.routeType, orangeDetails.orangeInterventionType, orangeDetails.sla, orangeDetails.departureLocality]
     : [input.client, input.address, input.contact, input.phone, input.requirements, input.technician, ...(activityType === "Instalare" ? [input.cpe] : [])];
   if (required.some((value) => typeof value !== "string" || !value.trim())) {
     return { error: "Completează toate informațiile obligatorii ale proiectului.", status: 400 as const };
+  }
+  if (activityType === "Intervenție Orange" && (!Number.isInteger(orangeDetails.cableCapacity) || orangeDetails.cableCapacity < 1 || orangeDetails.cableCapacity > 10000)) {
+    return { error: "Introdu o capacitate validă a cablului.", status: 400 as const };
   }
   const existing = await getRawDb().prepare("SELECT id FROM projects WHERE id = ? LIMIT 1").bind(workId).first();
   if (existing) return { error: activityType === "Intervenție" || activityType === "Intervenție Orange" ? "Numărul tichetului există deja. Verifică valoarea introdusă." : "Request ID există deja. Verifică numărul introdus.", status: 409 as const };
@@ -279,6 +326,7 @@ export async function createProject(input: ProjectRecord, createdBy: Authenticat
     id: workId,
     activityType,
     orderNumber: activityType === "Intervenție" && typeof input.orderNumber === "string" ? input.orderNumber.trim().slice(0, 100) : "",
+    ...orangeDetails,
     client: input.client.trim(),
     address: input.address.trim(),
     contact: input.contact.trim(),
@@ -307,11 +355,15 @@ export async function updateProject(input: ProjectRecord) {
   if (!validWorkIdentifier(input.id, activityType)) {
     return { error: activityType === "Intervenție" || activityType === "Intervenție Orange" ? "Numărul tichetului nu este valid." : "Request ID-ul proiectului nu este valid.", status: 400 as const };
   }
+  const orangeDetails = normalizeOrangeDetails(input, activityType);
   const required = activityType === "Intervenție Orange"
-    ? [input.client, input.requirements, input.technician]
+    ? [input.client, input.requirements, input.technician, orangeDetails.foSectionName, orangeDetails.topology, orangeDetails.routeType, orangeDetails.orangeInterventionType, orangeDetails.sla, orangeDetails.departureLocality]
     : [input.client, input.address, input.contact, input.phone, input.requirements, input.technician, ...(activityType === "Instalare" ? [input.cpe] : [])];
   if (required.some((value) => typeof value !== "string" || !value.trim())) {
     return { error: "Completează toate informațiile obligatorii ale proiectului.", status: 400 as const };
+  }
+  if (activityType === "Intervenție Orange" && (!Number.isInteger(orangeDetails.cableCapacity) || orangeDetails.cableCapacity < 1 || orangeDetails.cableCapacity > 10000)) {
+    return { error: "Introdu o capacitate validă a cablului.", status: 400 as const };
   }
   if (!["Planificat", "În desfășurare", "De verificat", "Finalizat"].includes(input.status)) {
     return { error: "Statusul proiectului nu este valid.", status: 400 as const };
@@ -341,6 +393,7 @@ export async function updateProject(input: ProjectRecord) {
     id: existing.id,
     activityType: ["Instalare", "Intervenție", "Intervenție Orange", "Survey"].includes(input.activityType) ? input.activityType : existing.activity_type,
     orderNumber: activityType === "Intervenție" && typeof input.orderNumber === "string" ? input.orderNumber.trim().slice(0, 100) : "",
+    ...orangeDetails,
     client: input.client.trim(),
     address: input.address.trim(),
     contact: input.contact.trim(),
@@ -361,10 +414,17 @@ export async function updateProject(input: ProjectRecord) {
   const now = Date.now();
   const statements = [
     getRawDb().prepare(
-      "UPDATE projects SET activity_type = ?, order_number = ?, client = ?, address = ?, contact = ?, phone = ?, email = ?, requirements = ?, technician = ?, technician_username = ?, cpe = ?, cpe_requires_grounding = ?, sfp = ?, mc = ?, mc_type = ?, terminal_box = ?, status = ?, scheduled_label = ?, ipwo = ?, splice = ?, updated_at = ? WHERE id = ?",
+      "UPDATE projects SET activity_type = ?, order_number = ?, fo_section_name = ?, topology = ?, cable_capacity = ?, route_type = ?, orange_intervention_type = ?, sla = ?, departure_locality = ?, client = ?, address = ?, contact = ?, phone = ?, email = ?, requirements = ?, technician = ?, technician_username = ?, cpe = ?, cpe_requires_grounding = ?, sfp = ?, mc = ?, mc_type = ?, terminal_box = ?, status = ?, scheduled_label = ?, ipwo = ?, splice = ?, updated_at = ? WHERE id = ?",
     ).bind(
       project.activityType,
       project.orderNumber ?? "",
+      project.foSectionName ?? "",
+      project.topology ?? "",
+      project.cableCapacity ?? 0,
+      project.routeType ?? "",
+      project.orangeInterventionType ?? "",
+      project.sla ?? "",
+      project.departureLocality ?? "",
       project.client,
       project.address,
       project.contact,
@@ -596,7 +656,7 @@ export async function saveFieldDocumentation(projectId: string, section: string,
     }
 
     const intervention = content as {
-      assessment?: { damageType?: unknown; damageLocation?: { lat?: unknown; lon?: unknown } };
+      assessment?: { damageType?: unknown; cause?: unknown; damageLocation?: { lat?: unknown; lon?: unknown } };
       execution?: Partial<InterventionExecutionSummary>;
       documentation?: Partial<InterventionDocumentationSummary>;
     };
@@ -606,6 +666,9 @@ export async function saveFieldDocumentation(projectId: string, section: string,
     const assessment = intervention?.assessment;
     if (!assessment || !["FO cut", "Atenuare", "Echipament"].includes(String(assessment.damageType))) {
       return { error: "Selectează tipul avariei înainte de salvarea constatării.", status: 400 as const };
+    }
+    if (project.activity_type === "Intervenție Orange" && (typeof assessment.cause !== "string" || !orangeInterventionCauses.has(assessment.cause))) {
+      return { error: "Selectează cauza avariei Orange.", status: 400 as const };
     }
     if (project.activity_type === "Intervenție Orange" && (!assessment.damageLocation || typeof assessment.damageLocation.lat !== "number" || typeof assessment.damageLocation.lon !== "number" || !Number.isFinite(assessment.damageLocation.lat) || !Number.isFinite(assessment.damageLocation.lon))) {
       return { error: "Amplasează locația avariei Orange pe hartă.", status: 400 as const };

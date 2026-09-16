@@ -56,18 +56,36 @@ function writeQuantity(xml: string, cell: string, quantity: number) {
 }
 
 async function orangeDocumentation(projectId: string) {
-  const row = await getRawDb().prepare("SELECT content_json FROM project_field_documentation WHERE project_id = ? LIMIT 1").bind(projectId).first<{ content_json: string }>();
-  if (!row?.content_json) return { materials: [] as Material[] };
-  try {
-    const documentation = JSON.parse(row.content_json) as { intervention?: { assessment?: { damageLocation?: DamageLocation; documentedAt?: number }; execution?: { materials?: Material[] } } };
-    return {
-      materials: Array.isArray(documentation.intervention?.execution?.materials) ? documentation.intervention!.execution!.materials! : [],
-      damageLocation: documentation.intervention?.assessment?.damageLocation,
-      documentedAt: documentation.intervention?.assessment?.documentedAt,
-    };
-  } catch {
-    return { materials: [] as Material[] };
+  const row = await getRawDb().prepare(
+    "SELECT projects.client, projects.address, projects.fo_section_name, projects.topology, projects.cable_capacity, projects.route_type, projects.orange_intervention_type, projects.sla, projects.departure_locality, project_field_documentation.content_json FROM projects LEFT JOIN project_field_documentation ON project_field_documentation.project_id = projects.id WHERE projects.id = ? LIMIT 1",
+  ).bind(projectId).first<{
+    client: string; address: string; fo_section_name: string; topology: string; cable_capacity: number;
+    route_type: string; orange_intervention_type: string; sla: string; departure_locality: string; content_json: string | null;
+  }>();
+  if (!row) return null;
+  let materials: Material[] = [];
+  let damageLocation: DamageLocation | undefined;
+  let documentedAt: number | undefined;
+  let cause = "";
+  if (row.content_json) {
+    try {
+      const documentation = JSON.parse(row.content_json) as {
+        intervention?: { assessment?: { cause?: string; damageLocation?: DamageLocation; documentedAt?: number }; execution?: { materials?: Material[] } };
+      };
+      materials = Array.isArray(documentation.intervention?.execution?.materials) ? documentation.intervention!.execution!.materials! : [];
+      damageLocation = documentation.intervention?.assessment?.damageLocation;
+      documentedAt = documentation.intervention?.assessment?.documentedAt;
+      cause = documentation.intervention?.assessment?.cause ?? "";
+    } catch {
+      // The ticket data remains usable even if older field documentation is malformed.
+    }
   }
+  return {
+    materials, damageLocation, documentedAt, cause,
+    siteA: row.client ?? "", siteB: row.address ?? "", foSectionName: row.fo_section_name ?? "",
+    topology: row.topology ?? "", cableCapacity: Number(row.cable_capacity) || 0, routeType: row.route_type ?? "",
+    interventionType: row.orange_intervention_type ?? "", sla: row.sla ?? "", departureLocality: row.departure_locality ?? "",
+  };
 }
 
 function writeNumber(xml: string, cell: string, value: number) {
@@ -77,7 +95,8 @@ function writeNumber(xml: string, cell: string, value: number) {
 function writeText(xml: string, cell: string, value: string) {
   const selfClosing = new RegExp(`<c r="${cell}"([^>]*)\\/>`);
   const populated = new RegExp(`<c r="${cell}"([^>]*)>.*?<\\/c>`);
-  const render = (attributes: string) => `<c r="${cell}"${attributes.replace(/\\s+t="[^"]*"/g, "")} t="inlineStr"><is><t>${value}</t></is></c>`;
+  const escaped = value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const render = (attributes: string) => `<c r="${cell}"${attributes.replace(/\\s+t="[^"]*"/g, "")} t="inlineStr"><is><t>${escaped}</t></is></c>`;
   const empty = selfClosing.exec(xml);
   if (empty) return xml.replace(empty[0], render(empty[1]));
   const existing = populated.exec(xml);
@@ -109,6 +128,7 @@ export async function buildOrangeQafXlsx(projectId: string) {
   if (!response.ok) throw new Error("Șablonul QAF Orange nu a putut fi încărcat.");
   const files = await unzip(new Uint8Array(await response.arrayBuffer()));
   const documentation = await orangeDocumentation(projectId);
+  if (!documentation) throw new Error("Tichetul Orange nu a fost găsit.");
   const quantities = new Map<string, number>();
   for (const item of documentation.materials) {
     const quantity = Number(item.quantity);
@@ -135,6 +155,15 @@ export async function buildOrangeQafXlsx(projectId: string) {
   const location = documentation.damageLocation;
   const placed = localPlacement(location?.placedAt ?? documentation.documentedAt);
   let mainXml = decoder.decode(main.content);
+  const textCells: Array<[string, string]> = [
+    ["D5", documentation.siteA], ["K5", documentation.siteB], ["D7", documentation.foSectionName],
+    ["D9", documentation.topology], ["I11", documentation.routeType], ["D14", documentation.interventionType],
+    ["F14", documentation.sla], ["D15", projectId], ["D16", documentation.departureLocality], ["C23", documentation.cause],
+  ];
+  for (const [cell, value] of textCells) {
+    if (value) mainXml = writeText(mainXml, cell, value);
+  }
+  if (documentation.cableCapacity > 0) mainXml = writeNumber(mainXml, "D11", documentation.cableCapacity);
   if (location && Number.isFinite(location.lat) && Number.isFinite(location.lon)) {
     mainXml = writeNumber(mainXml, "C34", Number(location.lat!.toFixed(6)));
     mainXml = writeNumber(mainXml, "E34", Number(location.lon!.toFixed(6)));

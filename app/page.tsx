@@ -112,6 +112,12 @@ const emptyProject: Project = {
   splice: "",
 };
 
+const orangeSlaOptions: Record<Exclude<Project["orangeInterventionType"], "" | undefined>, string[]> = {
+  IMO: ["Y10", "Y8", "Y6"],
+  PBM: ["minor", "Mediu", "Major"],
+  FITT: ["Minor 12h", "Major 8h", "Critic 4h"],
+};
+
 const statusClass: Record<Project["status"], string> = {
   Planificat: "status status-blue",
   "În desfășurare": "status status-violet",
@@ -192,6 +198,8 @@ export default function Home() {
   const [mapXtremeFile, setMapXtremeFile] = useState<File | null>(null);
   const [projectSaving, setProjectSaving] = useState(false);
   const [mcSelected, setMcSelected] = useState(false);
+  const [orangeInterventionType, setOrangeInterventionType] = useState<Project["orangeInterventionType"]>("");
+  const [orangeSla, setOrangeSla] = useState("");
   const [projectDataReady, setProjectDataReady] = useState(false);
   const [activeProjectId, setActiveProjectId] = useState("");
   const [clientService, setClientService] = useState<ServiceType>("Internet");
@@ -602,6 +610,8 @@ export default function Home() {
     setSelected(null);
     setEditingProject(project);
     setMcSelected(project.mc);
+    setOrangeInterventionType(project.orangeInterventionType ?? "");
+    setOrangeSla(project.sla ?? "");
     setIpwoName(project.ipwo === "Fișier neîncărcat" ? "" : project.ipwo);
     setSpliceName(project.splice === "Fișier neîncărcat" ? "" : project.splice);
     setIpwoFile(null);
@@ -634,6 +644,13 @@ export default function Home() {
       id,
       activityType,
       orderNumber: activityType === "Intervenție" ? String(form.get("orderNumber") || "").trim() : "",
+      foSectionName: isOrangeForm ? String(form.get("foSectionName") || "").trim() : "",
+      topology: (isOrangeForm ? String(form.get("topology") || "") : "") as Project["topology"],
+      cableCapacity: isOrangeForm ? Number(form.get("cableCapacity")) : 0,
+      routeType: (isOrangeForm ? String(form.get("routeType") || "") : "") as Project["routeType"],
+      orangeInterventionType: isOrangeForm ? orangeInterventionType : "",
+      sla: isOrangeForm ? orangeSla : "",
+      departureLocality: isOrangeForm ? String(form.get("departureLocality") || "").trim() : "",
       client: String(form.get("client")),
       address: isOrangeForm ? String(form.get("address") || "").trim() : String(form.get("address")),
       contact: isOrangeForm ? "Orange" : String(form.get("contact")),
@@ -699,6 +716,13 @@ export default function Home() {
       ...editingProject,
       activityType: String(form.get("activityType") || editingProject.activityType) as ProjectActivityType,
       orderNumber: String(form.get("activityType") || editingProject.activityType) === "Intervenție" ? String(form.get("orderNumber") || "").trim() : "",
+      foSectionName: isOrangeForm ? String(form.get("foSectionName") || "").trim() : "",
+      topology: (isOrangeForm ? String(form.get("topology") || "") : "") as Project["topology"],
+      cableCapacity: isOrangeForm ? Number(form.get("cableCapacity")) : 0,
+      routeType: (isOrangeForm ? String(form.get("routeType") || "") : "") as Project["routeType"],
+      orangeInterventionType: isOrangeForm ? orangeInterventionType : "",
+      sla: isOrangeForm ? orangeSla : "",
+      departureLocality: isOrangeForm ? String(form.get("departureLocality") || "").trim() : "",
       client: String(form.get("client") || ""),
       address: isOrangeForm ? String(form.get("address") || "").trim() : String(form.get("address") || ""),
       contact: isOrangeForm ? "Orange" : String(form.get("contact") || ""),
@@ -1337,7 +1361,7 @@ export default function Home() {
               </div>
               <div className="page-heading-actions">
                 {view === "interventions" && canManageDocuments && <button className="secondary-button" onClick={exportTicketsWithoutOrder}>Export Excel fără comandă</button>}
-                {canCreateCurrentActivity && <button className="primary-button" onClick={() => { setEditingProject(null); setMcSelected(false); setOptixFile(null); setMapXtremeFile(null); setModal("project"); }}><span>＋</span> {currentActivitySection.createLabel}</button>}
+                {canCreateCurrentActivity && <button className="primary-button" onClick={() => { setEditingProject(null); setMcSelected(false); setOrangeInterventionType(""); setOrangeSla(""); setOptixFile(null); setMapXtremeFile(null); setModal("project"); }}><span>＋</span> {currentActivitySection.createLabel}</button>}
               </div>
             </section>
 
@@ -1640,6 +1664,15 @@ export default function Home() {
                   <label><span>Client LEC (opțional)</span><input name="lec" maxLength={100} placeholder="Location Engineering Code client" /></label>
                 </>}
                 <label className="wide"><span>{isOrangeForm ? "Cod site B (opțional)" : isInstallationForm ? "Adresă instalare *" : "Adresă lucrare *"}</span><input name="address" required={!isOrangeForm} defaultValue={editingProject?.address} placeholder={isOrangeForm ? "Codul site-ului B" : "Stradă, număr, localitate"} /></label>
+                {isOrangeForm && <>
+                  <label className="wide"><span>Denumirea tronsonului FO *</span><input name="foSectionName" required maxLength={200} defaultValue={editingProject?.foSectionName ?? ""} placeholder="Denumirea tronsonului FO" /></label>
+                  <label><span>Topologie tronson *</span><select name="topology" required defaultValue={editingProject?.topology ?? ""}><option value="" disabled>Selectează topologia</option><option>FO BB</option><option>FO Local VHBB</option></select></label>
+                  <label><span>Capacitate cablu *</span><input name="cableCapacity" type="number" min="1" max="10000" step="1" required defaultValue={editingProject?.cableCapacity || ""} placeholder="Număr fibre" /></label>
+                  <label><span>Tip traseu *</span><select name="routeType" required defaultValue={editingProject?.routeType ?? ""}><option value="" disabled>Selectează tipul</option><option>Aerian</option><option>Subteran</option><option>Mixt</option></select></label>
+                  <label><span>Tip intervenție *</span><select name="orangeInterventionType" required value={orangeInterventionType ?? ""} onChange={(event) => { setOrangeInterventionType(event.target.value as Project["orangeInterventionType"]); setOrangeSla(""); }}><option value="" disabled>Selectează tipul</option><option>FITT</option><option>IMO</option><option>PBM</option></select></label>
+                  <label><span>SLA *</span><select name="sla" required value={orangeSla} disabled={!orangeInterventionType} onChange={(event) => setOrangeSla(event.target.value)}><option value="" disabled>{orangeInterventionType ? "Selectează SLA" : "Selectează mai întâi tipul"}</option>{orangeInterventionType && orangeSlaOptions[orangeInterventionType]?.map((option) => <option key={option}>{option}</option>)}</select></label>
+                  <label className="wide"><span>Localitate plecare echipă *</span><input name="departureLocality" required maxLength={150} defaultValue={editingProject?.departureLocality ?? ""} placeholder="Localitatea de plecare" /></label>
+                </>}
                 {!isOrangeForm && <><label><span>Persoană de contact *</span><input name="contact" required defaultValue={editingProject?.contact} placeholder="Nume și prenume" /></label>
                 <label><span>Telefon *</span><input name="phone" required defaultValue={editingProject?.phone} placeholder="+40 7xx xxx xxx" /></label>
                 <label className="wide"><span>E-mail</span><input name="email" type="email" defaultValue={editingProject?.email} placeholder="contact@companie.ro" /></label></>}

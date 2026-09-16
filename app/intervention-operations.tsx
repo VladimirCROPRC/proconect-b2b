@@ -4,7 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { deleteProjectFile, fetchProjectFiles, formatCapturedAt, uploadProjectFile, type StoredProjectFile } from "./client-storage";
 import { InterventionExecutionSection } from "./intervention-execution";
 import { DamageLocationPicker } from "./damage-location-picker";
-import type { InterventionDamageType, InterventionExecutionActivity, InterventionFieldSummary } from "./field-documentation";
+import type { InterventionCause, InterventionDamageType, InterventionExecutionActivity, InterventionFieldSummary } from "./field-documentation";
 import type { ProjectRecord } from "./project-data";
 
 type InterventionSection = "assessment" | "execution" | "documentation";
@@ -86,6 +86,7 @@ function buildInterventionReport(project: ProjectRecord, summary?: InterventionF
     `Locație: ${project.address}`,
     `Tehnician: ${project.technician}`,
     `Avarie constatată: ${summary?.assessment?.damageType ?? "Necompletată"}.`,
+    ...(summary?.assessment?.cause ? [`Cauză: ${summary.assessment.cause}.`] : []),
     ...(summary?.assessment?.damageLocation ? [`Locația avariei: ${summary.assessment.damageLocation.lat.toFixed(6)}, ${summary.assessment.damageLocation.lon.toFixed(6)}.`] : []),
     "Operațiuni efectuate:",
     ...activityLines,
@@ -138,6 +139,7 @@ export function InterventionOperationsSection({
   onSaved,
 }: InterventionOperationsProps) {
   const [damageType, setDamageType] = useState<InterventionDamageType | "">(initialSummary?.assessment?.damageType ?? "");
+  const [cause, setCause] = useState<InterventionCause | "">(initialSummary?.assessment?.cause ?? "");
   const [damageLocation, setDamageLocation] = useState(initialSummary?.assessment?.damageLocation);
   const [photos, setPhotos] = useState<StoredProjectFile[]>([]);
   const [loadingPhotos, setLoadingPhotos] = useState(true);
@@ -152,6 +154,7 @@ export function InterventionOperationsSection({
     queueMicrotask(() => {
       if (!mounted) return;
       setDamageType(initialSummary?.assessment?.damageType ?? "");
+      setCause(initialSummary?.assessment?.cause ?? "");
       setDamageLocation(initialSummary?.assessment?.damageLocation);
       setPhotos([]);
       setLoadingPhotos(true);
@@ -172,7 +175,7 @@ export function InterventionOperationsSection({
     return () => {
       mounted = false;
     };
-  }, [project.id, initialSummary?.assessment?.damageType, initialSummary?.assessment?.damageLocation]);
+  }, [project.id, initialSummary?.assessment?.damageType, initialSummary?.assessment?.cause, initialSummary?.assessment?.damageLocation]);
 
   useEffect(() => {
     let mounted = true;
@@ -186,9 +189,9 @@ export function InterventionOperationsSection({
 
   const validPhotos = photos.filter((photo) => validPhotoCoordinates(photo.geo));
   const orangeIntervention = project.activityType === "Intervenție Orange";
-  const completedItems = Number(Boolean(damageType)) + Number(validPhotos.length > 0) + Number(!orangeIntervention || Boolean(damageLocation));
-  const progress = Math.round((completedItems / (orangeIntervention ? 3 : 2)) * 100);
-  const ready = Boolean(damageType) && validPhotos.length > 0 && (!orangeIntervention || Boolean(damageLocation));
+  const completedItems = Number(Boolean(damageType)) + Number(validPhotos.length > 0) + Number(!orangeIntervention || Boolean(damageLocation)) + Number(!orangeIntervention || Boolean(cause));
+  const progress = Math.round((completedItems / (orangeIntervention ? 4 : 2)) * 100);
+  const ready = Boolean(damageType) && validPhotos.length > 0 && (!orangeIntervention || (Boolean(cause) && Boolean(damageLocation)));
   const executionActivities = initialSummary?.execution?.activities ?? [];
   const totalExecutionPhotos = executionActivities.reduce((total, activity) => total + activity.photoCount, 0);
   const totalCableMeters = executionActivities.reduce((total, activity) => total + (activity.type === "fo-installation" ? activity.cableLengthMeters ?? 0 : 0), 0);
@@ -238,8 +241,8 @@ export function InterventionOperationsSection({
 
   async function saveAssessment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!damageType || !validPhotos.length || (orangeIntervention && !damageLocation)) {
-      setError(orangeIntervention ? "Selectează tipul avariei, amplasează locația pe hartă și adaugă cel puțin o fotografie cu GPS valid." : "Selectează tipul avariei și adaugă cel puțin o fotografie cu GPS valid.");
+    if (!damageType || !validPhotos.length || (orangeIntervention && (!cause || !damageLocation))) {
+      setError(orangeIntervention ? "Selectează tipul și cauza avariei, amplasează locația pe hartă și adaugă cel puțin o fotografie cu GPS valid." : "Selectează tipul avariei și adaugă cel puțin o fotografie cu GPS valid.");
       return;
     }
 
@@ -250,6 +253,7 @@ export function InterventionOperationsSection({
         ...initialSummary,
         assessment: {
           damageType,
+          ...(cause ? { cause } : {}),
           ...(damageLocation ? { damageLocation } : {}),
           photoCount: photos.length,
           geotaggedPhotoCount: validPhotos.length,
@@ -349,6 +353,23 @@ export function InterventionOperationsSection({
                 <small>Alege categoria care descrie natura problemei constatate.</small>
               </label>
 
+              {orangeIntervention && (
+                <label className="intervention-damage-field">
+                  <span>Cauza avariei <b>OBLIGATORIU</b></span>
+                  <select value={cause} onChange={(event) => setCause(event.target.value as InterventionCause | "")} required>
+                    <option value="">Selectează cauza</option>
+                    <option value="Accident-Orice tip de accident (masina,etc.)">Accident-Orice tip de accident (masina,etc.)</option>
+                    <option value="Clima-Alunecari de teren, viituri, furtuna, etc…">Clima-Alunecari de teren, viituri, furtuna, etc…</option>
+                    <option value="Defect-Defect cablu/cutie jonctiune, etc,…">Defect-Defect cablu/cutie jonctiune, etc,…</option>
+                    <option value="Lucrari infrastructura-Lucrari efectuate de companiile nationale">Lucrari infrastructura-Lucrari efectuate de companiile nationale</option>
+                    <option value="Lucrari civile-Lucrari efectuate de persoane fizice">Lucrari civile-Lucrari efectuate de persoane fizice</option>
+                    <option value="Primarie-Decizii primarie de a taia cablul">Primarie-Decizii primarie de a taia cablul</option>
+                    <option value="Vandalism-Furt">Vandalism-Furt</option>
+                  </select>
+                  <small>Alege cauza constatată în teren.</small>
+                </label>
+              )}
+
               {orangeIntervention && <DamageLocationPicker value={damageLocation} onChange={(location) => setDamageLocation({ ...location, placedAt: Date.now() })} onNotify={onNotify} />}
 
               <div className="intervention-photo-heading">
@@ -395,6 +416,7 @@ export function InterventionOperationsSection({
             <div className="summary-progress"><div><span>Progres</span><strong>{progress}%</strong></div><i><b style={{ width: `${progress}%` }} /></i></div>
             <div className="summary-checklist">
               <div className={damageType ? "done" : ""}><span>{damageType ? "✓" : "○"}</span><p><strong>Tipul avariei</strong><small>{damageType || "În așteptare"}</small></p></div>
+              {orangeIntervention && <div className={cause ? "done" : ""}><span>{cause ? "✓" : "○"}</span><p><strong>Cauza avariei</strong><small>{cause || "Selectează cauza"}</small></p></div>}
               {orangeIntervention && <div className={damageLocation ? "done" : ""}><span>{damageLocation ? "✓" : "○"}</span><p><strong>Locația avariei</strong><small>{damageLocation ? `${damageLocation.lat.toFixed(6)}, ${damageLocation.lon.toFixed(6)}` : "Amplasează punctul pe hartă"}</small></p></div>}
               <div className={validPhotos.length ? "done" : ""}><span>{validPhotos.length ? "✓" : "○"}</span><p><strong>Fotografii geotagate</strong><small>{validPhotos.length ? `${validPhotos.length} ${validPhotos.length === 1 ? "fotografie cu GPS valid" : "fotografii cu GPS valid"}` : "Minimum o fotografie obligatorie"}</small></p></div>
             </div>

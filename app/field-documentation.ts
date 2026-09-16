@@ -96,8 +96,18 @@ export type ClientFieldSummary = {
 
 export type InterventionDamageType = "FO cut" | "Atenuare" | "Echipament";
 
+export type InterventionCause =
+  | "Accident-Orice tip de accident (masina,etc.)"
+  | "Clima-Alunecari de teren, viituri, furtuna, etc…"
+  | "Defect-Defect cablu/cutie jonctiune, etc,…"
+  | "Lucrari infrastructura-Lucrari efectuate de companiile nationale"
+  | "Lucrari civile-Lucrari efectuate de persoane fizice"
+  | "Primarie-Decizii primarie de a taia cablul"
+  | "Vandalism-Furt";
+
 export type InterventionAssessmentSummary = {
   damageType: InterventionDamageType;
+  cause?: InterventionCause;
   damageLocation?: { lat: number; lon: number; placedAt?: number };
   photoCount: number;
   geotaggedPhotoCount: number;
