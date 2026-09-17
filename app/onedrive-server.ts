@@ -13,7 +13,7 @@ type Job = { id: string; kind: "file" | "project"; item_id: string; revision: nu
 type Item = { id: string; webUrl?: string; folder?: object; driveType?: string; owner?: { user?: { id?: string; displayName?: string; email?: string } } };
 const encoder = new TextEncoder();
 const settingsId = "onedrive";
-const scope = "offline_access https://graph.microsoft.com/Files.ReadWrite.All";
+const scope = "offline_access https://graph.microsoft.com/Files.ReadWrite";
 const environment = () => env as unknown as Environment;
 export function oneDriveConfigured() {
   const e = environment();
