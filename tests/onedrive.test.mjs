@@ -66,11 +66,11 @@ test('provider selection, fixed origin, unique safe names, and retry delays', as
 test('OneDrive server with isolated SQLite, fake Microsoft responses and fake R2', async t => {
   const db = new DatabaseSync(':memory:');
   db.exec(await source('drizzle/0005_onedrive_backup.sql'));
-  db.exec(`CREATE TABLE projects(id TEXT PRIMARY KEY, client TEXT, activity_type TEXT);
+  db.exec(`CREATE TABLE projects(id TEXT PRIMARY KEY, client TEXT);
     CREATE TABLE project_files(id TEXT PRIMARY KEY, project_id TEXT, section TEXT, category TEXT, original_name TEXT, content_type TEXT, storage_key TEXT, geolocation TEXT, captured_at INTEGER, uploaded_by TEXT);
     CREATE TABLE project_reports(project_id TEXT, content_json TEXT);
     CREATE TABLE project_field_documentation(project_id TEXT, content_json TEXT);
-    INSERT INTO projects VALUES ('RID-1', 'Test client', 'Instalare');
+    INSERT INTO projects VALUES ('RID-1', 'Test client');
     INSERT INTO project_files VALUES ('f-1','RID-1','client','grounding','photo.jpg','image/jpeg','object-1','44,26',1,'tech');`);
   const env = {};
   const raw = { prepare(sql) { let values = []; return {
@@ -79,24 +79,11 @@ test('OneDrive server with isolated SQLite, fake Microsoft responses and fake R2
     async all() { return { results: db.prepare(sql).all(...values) }; },
     async run() { return { meta: { changes: Number(db.prepare(sql).run(...values).changes) } }; },
   }; }, async batch(statements) { db.exec('BEGIN'); try { const r = []; for (const s of statements) r.push(await s.run()); db.exec('COMMIT'); return r; } catch (e) { db.exec('ROLLBACK'); throw e; } } };
-  globalThis.__od = {
-    env,
-    getRawDb: () => raw,
-    getFileRow: async id => db.prepare('SELECT * FROM project_files WHERE id = ?').get(id),
-    bucket: () => ({ get: async () => ({ body: new Blob(['photo']).stream() }) }),
-    buildAcceptanceReportDocx: async () => new Uint8Array(),
-    buildSpliceSheetXlsx: async () => new Uint8Array(),
-    buildMaterialSheetPdf: async () => new Uint8Array(),
-    buildOrangeQafXlsx: async () => new Uint8Array(),
-  };
+  globalThis.__od = { env, getRawDb: () => raw, getFileRow: async id => db.prepare('SELECT * FROM project_files WHERE id = ?').get(id), bucket: () => ({ get: async () => ({ body: new Blob(['photo']).stream() }) }) };
   let text = await source('app/onedrive-server.ts');
   text = text.replace('import { env } from "cloudflare:workers";', 'const { env } = globalThis.__od;')
     .replace('import { getRawDb } from "../db";', 'const { getRawDb } = globalThis.__od;')
     .replace('import { bucket, getFileRow } from "./project-server";', 'const { bucket, getFileRow } = globalThis.__od;')
-    .replace('import { buildAcceptanceReportDocx } from "./report-docx";', 'const { buildAcceptanceReportDocx } = globalThis.__od;')
-    .replace('import { buildSpliceSheetXlsx } from "./splice-xlsx";', 'const { buildSpliceSheetXlsx } = globalThis.__od;')
-    .replace('import { buildMaterialSheetPdf } from "./material-pdf";', 'const { buildMaterialSheetPdf } = globalThis.__od;')
-    .replace('import { buildOrangeQafXlsx } from "./orange-qaf";', 'const { buildOrangeQafXlsx } = globalThis.__od;')
     .replace('"./onedrive-core"', JSON.stringify(coreUrl));
   const server = await import(moduleUrl(text));
   const originalFetch = globalThis.fetch;
@@ -159,26 +146,21 @@ test('OneDrive server with isolated SQLite, fake Microsoft responses and fake R2
       await assert.rejects(server.setBackupMode('invalid'));
       await server.setBackupMode('both');
       assert.equal(await server.backupMode(), 'both');
-      assert.equal((await server.oneDriveStatus()).pending, 1);
+      assert.equal((await server.oneDriveStatus()).pending, 2);
       await Promise.all([server.drainOneDrive(), server.drainOneDrive()]);
       assert.equal(uploads, 1);
       await server.drainOneDrive();
       assert.equal((await server.oneDriveStatus()).pending, 0);
-      const decodedCalls = calls.map(value => decodeURIComponent(value));
-      assert.ok(decodedCalls.some(value => value.includes(":/Instalări")));
-      assert.ok(decodedCalls.some(value => value.includes(":/RID-1")));
-      assert.ok(decodedCalls.some(value => value.includes(":/03_Client")));
-      assert.ok(decodedCalls.every(value => !value.includes("Date_lucrare.json")));
-      assert.ok(decodedCalls.every(value => !value.includes("RID-1--")));
     });
-    await t.test('project metadata is not exported to OneDrive', async () => {
+    await t.test('report changes enqueue a new revision', async () => {
       await server.queueOneDrive('project', 'RID-1');
+      assert.equal((await server.oneDriveStatus()).pending, 1);
+      await server.drainOneDrive();
       assert.equal((await server.oneDriveStatus()).pending, 0);
-      assert.ok(calls.every(value => !value.includes('Date_lucrare.json')));
     });
     await t.test('an edit during upload remains pending after the old revision finishes', async () => {
-      await server.queueOneDrive('file', 'f-1');
-      onUpload = () => server.queueOneDrive('file', 'f-1');
+      await server.queueOneDrive('project', 'RID-1');
+      onUpload = () => server.queueOneDrive('project', 'RID-1');
       await server.drainOneDrive();
       assert.equal((await server.oneDriveStatus()).pending, 1);
       await server.drainOneDrive();

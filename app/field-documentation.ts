@@ -31,13 +31,6 @@ export type RouteFieldSummary = {
   routePoints?: Array<{ lat: number; lon: number }>;
 };
 
-export type SpliceConnection = {
-  siteBuffer: string;
-  siteFiber: string;
-  clientBuffer: string;
-  clientFiber: string;
-};
-
 export type SpliceFieldSummary = {
   noIntervention?: boolean;
   noInterventionReason?: string;
@@ -53,11 +46,6 @@ export type SpliceFieldSummary = {
     junction: { id: string; code: string; name: string; region: string; documented: boolean; lat: number; lon: number };
     junctionKind: "" | "existing" | "new";
     network: "" | "mobile" | "fixed";
-    siteCableType?: string;
-    clientCableType?: string;
-    spliceMode?: "fiber" | "end-to-end";
-    spliceCount?: number;
-    connections?: SpliceConnection[];
     siteBuffer: string;
     siteFiber: string;
     clientBuffer: string;
@@ -66,10 +54,6 @@ export type SpliceFieldSummary = {
   }>;
 };
 
-export type ClientSfpType = "SFP 1Gb A SC" | "SFP 1Gb A LC" | "SFP 10Gb A LC";
-export type SiteSfpType = "SFP 1Gb B SC" | "SFP 1Gb B LC" | "SFP 10Gb B LC";
-export type FieldMediaConverterType = "100 Mbps" | "1 Gbps" | "JumboFrame";
-
 export type SiteFieldSummary = {
   noIntervention?: boolean;
   noInterventionReason?: string;
@@ -77,10 +61,6 @@ export type SiteFieldSummary = {
   odfPort: string;
   etn: string;
   etnPort: string;
-  mediaConverterInstalled?: boolean;
-  mediaConverterType?: FieldMediaConverterType | "";
-  sfpInstalled?: boolean;
-  sfpType?: SiteSfpType | "";
   photos?: Record<"odfPort" | "etn" | "overview", string>;
 };
 
@@ -90,31 +70,18 @@ export type ClientFieldSummary = {
   clientHasNoGroundingSystem?: boolean;
   service: "Internet" | "VPN" | "Internet+OL" | "OL";
   equipment: string[];
-  sfpQuantity?: number;
-  sfpType?: ClientSfpType | "";
 };
 
 export type InterventionDamageType = "FO cut" | "Atenuare" | "Echipament";
 
-export type InterventionCause =
-  | "Accident-Orice tip de accident (masina,etc.)"
-  | "Clima-Alunecari de teren, viituri, furtuna, etc…"
-  | "Defect-Defect cablu/cutie jonctiune, etc,…"
-  | "Lucrari infrastructura-Lucrari efectuate de companiile nationale"
-  | "Lucrari civile-Lucrari efectuate de persoane fizice"
-  | "Primarie-Decizii primarie de a taia cablul"
-  | "Vandalism-Furt";
-
 export type InterventionAssessmentSummary = {
   damageType: InterventionDamageType;
-  cause?: InterventionCause;
-  damageLocation?: { lat: number; lon: number; placedAt?: number };
   photoCount: number;
   geotaggedPhotoCount: number;
   documentedAt: number;
 };
 
-export type InterventionActivityType = "fo-installation" | "junction-installation" | "chamber-installation" | "diagnostics" | "splice-repair";
+export type InterventionActivityType = "fo-installation" | "junction-installation" | "diagnostics" | "splice-repair";
 
 export type InterventionJunction = {
   id: string;
@@ -142,17 +109,8 @@ export type InterventionExecutionActivity = {
   documentedAt: number;
 };
 
-export type InterventionMaterialSelection = {
-  source: "orange" | "proconect";
-  code: string;
-  description: string;
-  unit: string;
-  quantity: number;
-};
-
 export type InterventionExecutionSummary = {
   activities: InterventionExecutionActivity[];
-  materials?: InterventionMaterialSelection[];
   documentedAt: number;
 };
 

@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { ProjectFieldDocumentation, RouteMethod } from "./field-documentation";
-import { fetchProjectFiles, uploadProjectFile, type StoredProjectFile } from "./client-storage";
 
 type DocumentProject = {
   id: string;
@@ -11,28 +10,15 @@ type DocumentProject = {
   cpe: string;
   sfp: boolean;
   mc: boolean;
-  mcType: "" | "100 Mbps" | "1 Gbps" | "JumboFrame";
   terminalBox: boolean;
-  splice: string;
 };
 
 type ReportDraft = {
   title: string;
   siteLabel: string;
-  siteCode: string;
-  lec: string;
   site: string;
   route: string;
   client: string;
-  materialChambers: string;
-  materialPoles: string;
-};
-
-type ReferenceCategory = "optix" | "mapxtreme";
-
-const referenceReportLines: Record<ReferenceCategory, string> = {
-  optix: "Nu necesită Optix.",
-  mapxtreme: "Nu necesită MapXtreme.",
 };
 
 type BudgetSuggestion = {
@@ -95,41 +81,29 @@ function buildReport(project: DocumentProject, fieldData: ProjectFieldDocumentat
     ? [
         `S-a cablat portul ${fieldData.site.etnPort} din switch ${fieldData.site.etn}.`,
         `Conexiunea a fost realizată în ODF ${fieldData.site.odf}, portul ${fieldData.site.odfPort}.`,
-        ...(fieldData.site.mediaConverterInstalled && fieldData.site.mediaConverterType ? [`S-a instalat Media Converter ${fieldData.site.mediaConverterType} în site.`] : []),
-        ...(fieldData.site.sfpInstalled && fieldData.site.sfpType ? [`S-a instalat ${fieldData.site.sfpType} în site.`] : []),
       ]
     : ["Datele pentru ODF și eTN nu au fost încă salvate din teren."];
 
   const routeLines = fieldData.route?.noIntervention
     ? [`Nu s-a intervenit la traseul FO. Motiv: ${fieldData.route.noInterventionReason}.`]
     : fieldData.route?.segments.length
-    ? (() => {
-        const cableTypes = [...new Set(fieldData.route.segments.map((segment) => segment.cableType.match(/(4|12|24|48|96)[ ]*F/i)?.[1]).filter((value): value is string => Boolean(value)).map((value) => `${value}F`))];
-        const cableDescription = cableTypes.length === 1 ? `un cablu FO ${cableTypes[0]}` : `cabluri FO ${cableTypes.join(", ")}`;
-        return [`S-a instalat ${cableDescription} între ${fieldData.route.junction.label} și locația clientului, în lungime de ${fieldData.route.totalLengthMeters.toLocaleString("ro-RO")} m, din care ${fieldData.route.segments.map((segment) => `${segment.lengthMeters.toLocaleString("ro-RO")} m ${segment.label.toLocaleLowerCase("ro-RO")}`).join(", ")}.`];
-      })()
+    ? [
+        `S-a instalat un traseu FO între ${fieldData.route.junction.label} și locația clientului, în lungime de ${fieldData.route.totalLengthMeters.toLocaleString("ro-RO")} m, din care ${fieldData.route.segments.map((segment) => `${segment.lengthMeters.toLocaleString("ro-RO")} m ${segment.label.toLocaleLowerCase("ro-RO")}`).join(", ")}.`,
+        `Tipuri de cablu utilizate: ${fieldData.route.segments.map((segment) => `${segment.cableType} (${segment.label.toLocaleLowerCase("ro-RO")})`).join(", ")}.`,
+      ]
     : ["Traseul FO nu a fost încă salvat din teren."];
-
-  if (fieldData.route?.segments.some((segment) => segment.method === "aerial")) {
-    const accessories = [
-      ["Bărcuță", fieldData.route.aerialMaterials.boat],
-      ["Colier tablă inox", fieldData.route.aerialMaterials.stainlessClamp],
-      ["Cârlig", fieldData.route.aerialMaterials.hook],
-      ["Armorod", fieldData.route.aerialMaterials.armorod],
-    ].filter((item): item is [string, number] => Number(item[1]) > 0);
-    if (accessories.length) routeLines.push(`Accesorii instalare aeriană: ${accessories.map(([name, quantity]) => `${name}: ${quantity.toLocaleString("ro-RO")} buc.`).join(", ")}`);
-  }
 
   if (fieldData.splices?.noIntervention) {
     routeLines.push(`Nu s-a intervenit la sudurile FO. Motiv: ${fieldData.splices.noInterventionReason}.`);
   } else if (fieldData.splices?.count) {
-    routeLines.push(`Total suduri FO: ${fieldData.splices.count}.`);
+    const junctions = [...new Set(fieldData.splices.junctions.map((junction) => junction.label))].join(", ");
+    routeLines.push(`S-au executat ${fieldData.splices.count} ${fieldData.splices.count === 1 ? "sudură FO" : "suduri FO"}${junctions ? ` în ${junctions}` : ""}.`);
   }
 
   const equipment = fieldData.client?.equipment ?? [
     project.cpe,
     ...(project.sfp ? ["SFP optic"] : []),
-    ...(project.mc ? [`Media Converter${project.mcType ? ` ${project.mcType}` : ""}`] : []),
+    ...(project.mc ? ["Media Converter"] : []),
     ...(project.terminalBox ? ["Terminal Box"] : []),
   ];
   const clientLines = fieldData.client?.noIntervention
@@ -146,13 +120,9 @@ function buildReport(project: DocumentProject, fieldData: ProjectFieldDocumentat
   return {
     title: "Raport acceptanță",
     siteLabel: inferSiteLabel(project, fieldData),
-    siteCode: "",
-    lec: "",
     site: asBullets(siteLines),
     route: asBullets(routeLines),
     client: asBullets(clientLines),
-    materialChambers: "0",
-    materialPoles: "0",
   };
 }
 
@@ -240,9 +210,7 @@ function buildBudgetSuggestions(fieldData: ProjectFieldDocumentation): BudgetSug
 }
 
 export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props) {
-  const [tab, setTab] = useState<"report" | "splices" | "materials" | "estimate" | "references">("report");
-  const [referenceFiles, setReferenceFiles] = useState<StoredProjectFile[]>([]);
-  const [referenceUploading, setReferenceUploading] = useState<"optix" | "mapxtreme" | "">("");
+  const [tab, setTab] = useState<"report" | "estimate">("report");
   const [report, setReport] = useState(() => buildReport(project, fieldData));
   const [suggestions, setSuggestions] = useState(() => buildBudgetSuggestions(fieldData));
   const [savedAt, setSavedAt] = useState("");
@@ -260,7 +228,7 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
         const payload = (await response.json()) as { saved?: { report: ReportDraft; updatedAt: number } | null; error?: string };
         if (!response.ok) throw new Error(payload.error || "Raportul nu este disponibil momentan.");
         if (!active || !payload.saved) return;
-        setReport({ ...buildReport(project, fieldData), ...payload.saved.report });
+        setReport(payload.saved.report);
         setSavedAt(new Intl.DateTimeFormat("ro-RO", { hour: "2-digit", minute: "2-digit" }).format(new Date(payload.saved.updatedAt)));
       })
       .catch(() => {
@@ -270,73 +238,6 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
       active = false;
     };
   }, [project.id, fieldData]);
-
-  useEffect(() => {
-    let active = true;
-    fetchProjectFiles(project.id, "project")
-      .then((files) => {
-        if (active) setReferenceFiles(files.filter((file) => file.category === "optix" || file.category === "mapxtreme"));
-      })
-      .catch(() => {
-        if (active) setReferenceFiles([]);
-      });
-    return () => {
-      active = false;
-    };
-  }, [project.id]);
-
-  function referenceNotRequired(category: ReferenceCategory) {
-    const expected = referenceReportLines[category].toLocaleLowerCase("ro-RO");
-    return report.client.split("\n").some((line) => line.replace(/^[–—-]\s*/, "").trim().toLocaleLowerCase("ro-RO") === expected);
-  }
-
-  function setReferenceNotRequired(category: ReferenceCategory, checked: boolean) {
-    const text = referenceReportLines[category];
-    const retained = report.client
-      .split("\n")
-      .filter((line) => line.replace(/^[–—-]\s*/, "").trim().toLocaleLowerCase("ro-RO") !== text.toLocaleLowerCase("ro-RO"));
-    const updatedReport = { ...report, client: [...retained, ...(checked ? [`–  ${text}`] : [])].filter(Boolean).join("\n") };
-    setReport(updatedReport);
-    void saveReport(
-      checked ? `Raportul a fost actualizat cu „${text}”` : `Mențiunea pentru ${category === "optix" ? "Optix" : "MapXtreme"} a fost eliminată din raport.`,
-      updatedReport,
-    );
-  }
-
-  async function uploadReferencePhoto(category: ReferenceCategory, file: File | null) {
-    if (!file) return;
-    setReferenceUploading(category);
-    try {
-      const stored = await uploadProjectFile({ projectId: project.id, section: "project", category, file });
-      setReferenceFiles((current) => [stored, ...current.filter((item) => item.category !== category)]);
-      onNotify("Poza " + (category === "optix" ? "Optix" : "MapXtreme") + " a fost salvată.");
-    } catch (error) {
-      onNotify(error instanceof Error ? error.message : "Poza nu a putut fi încărcată.");
-    } finally {
-      setReferenceUploading("");
-    }
-  }
-
-  const cableMaterials = useMemo(() => {
-    const totals = new Map<string, number>();
-    for (const segment of fieldData.route?.segments ?? []) totals.set(segment.cableType, (totals.get(segment.cableType) ?? 0) + segment.lengthMeters);
-    return [...totals.entries()].map(([name, quantity]) => ({ name, quantity, unit: "m" }));
-  }, [fieldData.route]);
-  const vodafoneMaterials = [
-    ...(project.cpe ? [{ name: `CPE ${project.cpe}`, quantity: 1, unit: "buc." }] : []),
-    ...(project.sfp ? [{ name: fieldData.client?.sfpType || "SFP", quantity: fieldData.client?.sfpQuantity || 1, unit: "buc." }] : []),
-    ...(project.mc ? [{ name: `Media Converter${project.mcType ? ` ${project.mcType}` : ""}`, quantity: 1, unit: "buc." }] : []),
-    ...(project.terminalBox ? [{ name: "Terminal Box", quantity: 1, unit: "buc." }] : []),
-    ...(fieldData.site?.mediaConverterInstalled && fieldData.site.mediaConverterType ? [{ name: `Media Converter ${fieldData.site.mediaConverterType} · site`, quantity: 1, unit: "buc." }] : []),
-    ...(fieldData.site?.sfpInstalled && fieldData.site.sfpType ? [{ name: `${fieldData.site.sfpType} · site`, quantity: 1, unit: "buc." }] : []),
-    ...cableMaterials,
-  ];
-  const proconectMaterials = [
-    { name: "Bărcuță", quantity: fieldData.route?.aerialMaterials.boat ?? 0, unit: "buc." },
-    { name: "Colier tablă inox", quantity: fieldData.route?.aerialMaterials.stainlessClamp ?? 0, unit: "buc." },
-    { name: "Cârlig", quantity: fieldData.route?.aerialMaterials.hook ?? 0, unit: "buc." },
-    { name: "Armorod", quantity: fieldData.route?.aerialMaterials.armorod ?? 0, unit: "buc." },
-  ].filter((item) => item.quantity > 0);
 
   const selectedSuggestions = suggestions.filter((item) => item.selected);
   const estimateTotal = useMemo(
@@ -349,28 +250,22 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
   }
 
   function regenerate() {
-    setReport((current) => {
-      const generated = buildReport(project, fieldData);
-      const referenceLines = (Object.keys(referenceReportLines) as ReferenceCategory[])
-        .filter((category) => current.client.split("\n").some((line) => line.replace(/^[–—-]\s*/, "").trim().toLocaleLowerCase("ro-RO") === referenceReportLines[category].toLocaleLowerCase("ro-RO")))
-        .map((category) => `–  ${referenceReportLines[category]}`);
-      return { ...generated, siteCode: current.siteCode, lec: current.lec, client: [generated.client, ...referenceLines].join("\n") };
-    });
+    setReport(buildReport(project, fieldData));
     onNotify("Raportul a fost regenerat din operațiunile salvate în teren.");
   }
 
-  async function saveReport(successMessage = `Raportul de acceptanță pentru ${project.id} a fost salvat permanent.`, reportToSave: ReportDraft = report) {
+  async function saveReport() {
     try {
       const response = await fetch("/api/reports", {
         method: "PATCH",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId: project.id, report: reportToSave }),
+        body: JSON.stringify({ projectId: project.id, report }),
       });
       const payload = (await response.json()) as { updatedAt?: number; error?: string };
       if (!response.ok || !payload.updatedAt) throw new Error(payload.error || "Raportul nu a putut fi salvat.");
       setSavedAt(new Intl.DateTimeFormat("ro-RO", { hour: "2-digit", minute: "2-digit" }).format(new Date(payload.updatedAt)));
-      onNotify(successMessage);
+      onNotify(`Raportul de acceptanță pentru ${project.id} a fost salvat permanent.`);
     } catch (error) {
       onNotify(error instanceof Error ? error.message : "Raportul de acceptanță nu a putut fi salvat.");
     }
@@ -389,60 +284,23 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
 
       <div className="documents-tabs" role="tablist" aria-label="Subsecțiuni documente">
         <button className={tab === "report" ? "active" : ""} onClick={() => setTab("report")}><span>DOC</span><div><strong>Raport de acceptanță</strong><small>Previzualizare și editare</small></div></button>
-        <button className={tab === "splices" ? "active" : ""} onClick={() => setTab("splices")}><span>FO</span><div><strong>Fișă de suduri</strong><small>Corespondență fibre</small></div><b>{fieldData.splices?.records?.length ?? 0}</b></button>
-        <button className={tab === "materials" ? "active" : ""} onClick={() => setTab("materials")}><span>MAT</span><div><strong>Fișă de materiale</strong><small>Vodafone și Proconect</small></div><b>{vodafoneMaterials.length + proconectMaterials.length}</b></button>
         <button className={tab === "estimate" ? "active" : ""} onClick={() => setTab("estimate")}><span>EUR</span><div><strong>Sugestii deviz</strong><small>Operațiuni și materiale</small></div><b>{suggestions.length}</b></button>
-        <button className={tab === "references" ? "active" : ""} onClick={() => setTab("references")}><span>IMG</span><div><strong>Optix și MapXtreme</strong><small>Imagini de referință</small></div><b>{referenceFiles.length}</b></button>
       </div>
-
-      {tab === "references" && (
-        <section className="splice-sheet-card">
-          <div className="document-toolbar">
-            <div><span>IMG</span><p><strong>Imagini de referință · {project.id}</strong><small>Încarcă separat capturile Optix și MapXtreme</small></p></div>
-          </div>
-          <div className="form-section">
-            <div className="upload-grid">
-              {(["optix", "mapxtreme"] as const).map((category) => {
-                const saved = referenceFiles.find((file) => file.category === category);
-                const label = category === "optix" ? "Optix" : "MapXtreme";
-                const notRequired = referenceNotRequired(category);
-                return (
-                  <div className="reference-upload-item" key={category}>
-                    <label className={saved ? "upload-box has-file" : "upload-box"}>
-                      <input type="file" accept=".png,.jpg,.jpeg,image/*" disabled={Boolean(referenceUploading) || notRequired} onChange={(event) => void uploadReferencePhoto(category, event.target.files?.[0] ?? null)} />
-                      <b>{referenceUploading === category ? "…" : saved ? "✓" : "↑"}</b>
-                      <strong>{saved?.name || "Încarcă poza " + label}</strong>
-                      <small>{notRequired ? "Marcată ca nefiind necesară" : saved ? "Poză salvată · selectează alta pentru o versiune nouă" : "PNG sau JPG, max. 20 MB"}</small>
-                    </label>
-                    <label className="reference-not-required">
-                      <input type="checkbox" checked={notRequired} onChange={(event) => setReferenceNotRequired(category, event.target.checked)} />
-                      <span>Nu e necesar</span>
-                    </label>
-                  </div>
-                );
-              })}
-            </div>
-            {referenceFiles.length > 0 && <div className="drive-note"><span>✓</span><div><strong>{referenceFiles.length === 2 ? "Ambele imagini sunt salvate" : "O imagine este salvată"}</strong><p>Fișierele sunt incluse în dosarul de documente al instalării și în sincronizarea configurată.</p></div></div>}
-          </div>
-        </section>
-      )}
 
       {tab === "report" && (
         <div className="report-workspace">
           <section className="acceptance-preview-card">
-            <div className="document-toolbar"><div><span>W</span><p><strong>Raport acceptanță · {project.id}</strong><small>Model: Raport acceptanta.docx</small></p></div><div><button onClick={regenerate}>↻ Generează din teren</button><button className="primary-button" onClick={() => void saveReport()}>Salvează</button></div></div>
+            <div className="document-toolbar"><div><span>W</span><p><strong>Raport acceptanță · {project.id}</strong><small>Model: Raport acceptanta.docx</small></p></div><div><button onClick={regenerate}>↻ Generează din teren</button><button className="primary-button" onClick={saveReport}>Salvează</button></div></div>
             <article className="acceptance-paper">
               <input className="report-title-input" value={report.title} onChange={(event) => updateReport("title", event.target.value)} aria-label="Titlul raportului" />
-              <input className="report-site-input" value={`Site ${report.siteCode || project.id}`} readOnly aria-label="Site și cod site" />
+              <input className="report-site-input" value={report.siteLabel} onChange={(event) => updateReport("siteLabel", event.target.value)} aria-label="Identificator proiect sau site" />
               <section className="editable-report-section site-report-section">
-                {report.siteCode && <p className="report-metadata-line"><strong>Cod site:</strong> {report.siteCode}</p>}
                 <textarea value={report.site} onChange={(event) => updateReport("site", event.target.value)} rows={Math.max(2, report.site.split("\n").length + 1)} aria-label="Conținut secțiune Site" />
                 <small>Fiecare rând este inclus ca punct distinct în raport.</small>
               </section>
               {(["route", "client"] as const).map((section) => (
                 <section className="editable-report-section" key={section}>
-                  <h2>{section === "route" ? "Traseu" : `Client ${report.lec || ""}`.trim()}</h2>
-                  {section === "client" && report.lec && <p className="report-metadata-line"><strong>Client LEC:</strong> {report.lec}</p>}
+                  <h2>{section === "route" ? "Traseu" : "Client"}</h2>
                   <textarea value={report[section]} onChange={(event) => updateReport(section, event.target.value)} rows={Math.max(2, report[section].split("\n").length + 1)} aria-label={`Conținut secțiune ${section}`} />
                   <small>Fiecare rând este inclus ca punct distinct în raport.</small>
                 </section>
@@ -462,79 +320,6 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
             <button className="secondary-button report-export" onClick={() => onNotify("Raportul va fi exportat în format DOCX după confirmarea administratorului.")}>Exportă DOCX <span>↗</span></button>
           </aside>
         </div>
-      )}
-
-      {tab === "splices" && (
-        <section className="splice-sheet-card">
-          <div className="document-toolbar splice-sheet-toolbar">
-            <div><span>FO</span><p><strong>Fișă de suduri · {project.id}</strong><small>Generată din înregistrările salvate în teren</small></p></div>
-            <div><button className="primary-button" onClick={() => window.print()}>Tipărește / Salvează PDF</button></div>
-          </div>
-          <article className="splice-sheet-paper">
-            <header>
-              <div><small>PRO CONECT</small><h1>Fișă de suduri fibră optică</h1></div>
-              <strong>{project.id}</strong>
-            </header>
-            <div className="splice-sheet-project">
-              <div><small>CLIENT</small><strong>{project.client}</strong></div>
-              <div><small>LOCAȚIE</small><strong>{project.address}</strong></div>
-              <div><small>COD SITE</small><strong>{report.siteCode || "Nespecificat"}</strong></div>
-              <div><small>CLIENT LEC</small><strong>{report.lec || "Nespecificat"}</strong></div>
-              <div><small>DIAGRAMĂ DE REFERINȚĂ</small><strong>{project.splice || "Neîncărcată"}</strong></div>
-              <div><small>TOTAL SUDURI</small><strong>{fieldData.splices?.count ?? 0}</strong></div>
-            </div>
-            {fieldData.splices?.noIntervention ? (
-              <div className="splice-sheet-empty"><strong>Nu s-a intervenit la sudurile FO</strong><p>{fieldData.splices.noInterventionReason}</p></div>
-            ) : fieldData.splices?.records?.length ? (
-              <div className="splice-sheet-table-wrap">
-                <table className="splice-sheet-table">
-                  <thead><tr><th>NR.</th><th>JONCȚIUNE</th><th>TIP / REȚEA</th><th>COORDONATE</th><th>CABLU SITE</th><th>BUFFER / FIBRĂ SITE</th><th>CABLU CLIENT</th><th>BUFFER / FIBRĂ CLIENT</th></tr></thead>
-                  <tbody>{fieldData.splices.records.map((record, index) => (
-                    <tr key={record.id}>
-                      <td>{index + 1}</td>
-                      <td><strong>{record.junction.documented ? record.junction.code : "Fără cod"}</strong><small>{record.junction.name}</small></td>
-                      <td><strong>{record.junction.documented ? "Documentată" : record.junctionKind === "new" ? "Nouă" : "Existentă"}</strong><small>{record.network === "mobile" ? "Vodafone Mobil" : record.network === "fixed" ? "Vodafone Fixed" : "—"}</small></td>
-                      <td>{record.junction.documented ? "—" : `${record.junction.lat.toFixed(6)}, ${record.junction.lon.toFixed(6)}`}</td>
-                      <td>{record.siteCableType || "Nespecificat"}</td>
-                      <td>{record.siteBuffer} / {record.siteFiber}</td>
-                      <td>{record.clientCableType || "Nespecificat"}</td>
-                      <td>{record.clientBuffer} / {record.clientFiber}</td>
-                    </tr>
-                  ))}</tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="splice-sheet-empty"><strong>Nu există suduri salvate</strong><p>Completează secțiunea „Suduri FO” pentru a genera fișa.</p></div>
-            )}
-            <footer><span>{project.id} · {project.client}</span><span>Fișă generată din datele documentate în aplicație</span></footer>
-          </article>
-        </section>
-      )}
-
-      {tab === "materials" && (
-        <section className="material-sheet-card">
-          <div className="document-toolbar material-sheet-toolbar">
-            <div><span>MAT</span><p><strong>Fișă de materiale · {project.id}</strong><small>Generată din echipamentele și materialele documentate</small></p></div>
-            <div><button onClick={() => window.print()}>Tipărește / PDF</button><button className="primary-button" onClick={() => void saveReport(`Fișa de materiale pentru ${project.id} a fost salvată.`)}>Salvează fișa</button></div>
-          </div>
-          <article className="material-sheet-paper">
-            <header><div><small>PRO CONECT</small><h1>Fișă de materiale</h1></div><strong>{project.id}</strong></header>
-            <div className="material-sheet-project"><span><small>CLIENT</small><strong>{project.client}</strong></span><span><small>LOCAȚIE</small><strong>{project.address}</strong></span></div>
-            <section>
-              <h2>Materiale Vodafone</h2>
-              <table><thead><tr><th>NR.</th><th>MATERIAL</th><th>CANTITATE</th><th>UM</th></tr></thead><tbody>
-                {vodafoneMaterials.length ? vodafoneMaterials.map((item, index) => <tr key={item.name}><td>{index + 1}</td><td>{item.name}</td><td>{item.quantity.toLocaleString("ro-RO")}</td><td>{item.unit}</td></tr>) : <tr><td colSpan={4}>Nu există materiale Vodafone documentate.</td></tr>}
-              </tbody></table>
-            </section>
-            <section>
-              <h2>Materiale Proconect</h2>
-              <table><thead><tr><th>NR.</th><th>MATERIAL</th><th>CANTITATE</th><th>UM</th></tr></thead><tbody>
-                {proconectMaterials.map((item, index) => <tr key={item.name}><td>{index + 1}</td><td>{item.name}</td><td>{item.quantity.toLocaleString("ro-RO")}</td><td>{item.unit}</td></tr>)}
-              </tbody></table>
-            </section>
-            <footer><span>{project.id} · {project.client}</span><span>Cantități preluate din documentația proiectului</span></footer>
-          </article>
-        </section>
       )}
 
       {tab === "estimate" && (

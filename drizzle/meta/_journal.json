@@ -43,27 +43,6 @@
       "when": 1787875200000,
       "tag": "0005_onedrive_backup",
       "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "6",
-      "when": 1788048000000,
-      "tag": "0006_map_site_dataset",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "6",
-      "when": 1788134400000,
-      "tag": "0007_map_site_chunks",
-      "breakpoints": true
-    },
-    {
-      "idx": 8,
-      "version": "6",
-      "when": 1799712000000,
-      "tag": "0008_project_order_number",
-      "breakpoints": true
     }
   ]
 }

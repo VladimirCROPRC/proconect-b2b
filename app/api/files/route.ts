@@ -1,5 +1,5 @@
 import { getAuthorizedProject, getFileRow, hasCompletedProjectSafety, hasValidPhotoCoordinates, isManagementRole, listProjectFiles, removeFile, storeFile, validateUpload } from "../../project-server";
-import { deleteFileBackups, syncFileIfConnected } from "../../backup-server";
+import { syncFileIfConnected } from "../../backup-server";
 import { queueOneDrive } from "../../onedrive-server";
 import { currentSession, sameOrigin } from "../../server-auth";
 
@@ -59,7 +59,7 @@ export async function POST(request: Request) {
       return Response.json({ error: "Încarcă fotografiile Pretask și EIP înainte de accesarea lucrării." }, { status: 403 });
     }
     if (section === "intervention-assessment" || section === "intervention-execution") {
-      if (project.activity_type !== "Intervenție" && project.activity_type !== "Intervenție Orange") {
+      if (project.activity_type !== "Intervenție") {
         return Response.json({ error: "Aceste fotografii sunt disponibile numai pentru intervenții." }, { status: 400 });
       }
       if (typeof geo !== "string" || !hasValidPhotoCoordinates(geo)) {
@@ -102,12 +102,10 @@ export async function DELETE(request: Request) {
     if (file.section !== "safety" && !(await hasCompletedProjectSafety(file.project_id, session.account))) {
       return Response.json({ error: "Încarcă fotografiile Pretask și EIP înainte de accesarea lucrării." }, { status: 403 });
     }
-    await deleteFileBackups(body.fileId);
     await removeFile(body.fileId);
     try { await queueOneDrive("project", file.project_id); } catch { console.error("OneDrive project export requires retry"); }
     return Response.json({ removed: true });
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : "Fișierul nu a putut fi șters.";
-    return Response.json({ error: detail }, { status: 503 });
+  } catch {
+    return Response.json({ error: "Fișierul nu a putut fi șters." }, { status: 503 });
   }
 }

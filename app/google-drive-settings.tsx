@@ -168,7 +168,6 @@ export function GoogleDriveSettings({ initialStatus, onStatusChange, onNotify }:
   const activityFolders = status?.activityFolders ?? {
     Instalare: "Instalari",
     "Intervenție": "Interventii",
-    "Intervenție Orange": "Interventii Orange",
     Survey: "Survey",
   };
   const activitySections = status?.activitySections ?? {
@@ -180,7 +179,6 @@ export function GoogleDriveSettings({ initialStatus, onStatusChange, onNotify }:
       project: "04_Documente interventie",
       documents: "05_Documente administrative",
     },
-    "Intervenție Orange": {},
   };
 
   return (
@@ -257,12 +255,12 @@ export function GoogleDriveSettings({ initialStatus, onStatusChange, onNotify }:
         </section>
 
         <section className="project-card drive-structure-card">
-          <div className="card-heading"><div><h2>Structura dosarelor</h2><p>Patru categorii independente, fiecare cu propriile lucrări.</p></div></div>
+          <div className="card-heading"><div><h2>Structura dosarelor</h2><p>Trei categorii independente, fiecare cu propriile lucrări.</p></div></div>
           <div className="drive-folder-tree">
             <div className="drive-tree-root"><span>▰</span><strong>Proconect B2B</strong></div>
             {Object.entries(activityFolders).map(([activity, folder]) => <div className="drive-activity-tree" key={activity}>
-              <div className="drive-tree-project"><span>▰</span><strong>{folder}</strong><small>{activity === "Instalare" ? "Instalări B2B" : activity === "Intervenție" ? "Intervenții tehnice" : activity === "Intervenție Orange" ? "Intervenții Orange" : "Vizite și evaluări"}</small></div>
-              <div className="drive-tree-section"><span>▰</span><div><strong>{activity === "Instalare" ? "RID10482" : activity === "Intervenție" ? "INC-10483 · Număr tichet" : activity === "Intervenție Orange" ? "Număr tichet Orange" : "RID + Request ID"}</strong><small>{(activity === "Intervenție" || activity === "Intervenție Orange") ? "Dosarul tichetului" : "Dosarul lucrării"}</small></div></div>
+              <div className="drive-tree-project"><span>▰</span><strong>{folder}</strong><small>{activity === "Instalare" ? "Instalări B2B" : activity === "Intervenție" ? "Intervenții tehnice" : "Vizite și evaluări"}</small></div>
+              <div className="drive-tree-section"><span>▰</span><div><strong>{activity === "Instalare" ? "RID10482" : activity === "Intervenție" ? "INC-10483 · Număr tichet" : "RID + Request ID"}</strong><small>{activity === "Intervenție" ? "Dosarul tichetului" : "Dosarul lucrării"}</small></div></div>
               {Object.entries(activitySections[activity] ?? {}).map(([section, name]) => <div className="drive-tree-section drive-tree-nested" key={section}><span>▰</span><div><strong>{name}</strong><small>{sectionLabels[section] ?? "Documentele lucrării"}</small></div></div>)}
             </div>)}
           </div>

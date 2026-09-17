@@ -4,9 +4,6 @@ import { usesGoogle } from "./onedrive-core";
 import { getRawDb } from "../db";
 import type { ProjectActivityType } from "./project-data";
 import { bucket, getFileRow, readReport } from "./project-server";
-import { buildAcceptanceReportDocx } from "./report-docx";
-import { buildMaterialSheetPdf } from "./material-pdf";
-import { buildOrangeQafXlsx } from "./orange-qaf";
 
 type DriveEnvironment = { PROCONECT_DRIVE_ENCRYPTION_KEY?: string };
 type DriveSettingsRow = {
@@ -40,7 +37,6 @@ const activityFolderMarker = "__activityFolder";
 export const driveActivityFolders: Record<ProjectActivityType, string> = {
   Instalare: "Instalari",
   "Intervenție": "Interventii",
-  "Intervenție Orange": "Interventii Orange",
   Survey: "Survey",
 };
 
@@ -64,7 +60,6 @@ const activitySectionFolders: Record<ProjectActivityType, Record<string, string>
     project: "05_Documente interventie",
     documents: "06_Documente administrative",
   },
-  "Intervenție Orange": {},
   Survey: {
     safety: "01_Pretask_si_EIP",
     project: "02_Documente survey",
@@ -371,50 +366,11 @@ async function uploadDriveFile(name: string, contentType: string, content: Array
   return result.id;
 }
 
-async function uploadOrangeQaf(projectId: string, folderId: string) {
-  const filename = `${readableOrangeName(projectId)}.xlsx`;
-  await uploadDriveFile(
-    filename,
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    await buildOrangeQafXlsx(projectId),
-    folderId,
-    "QAF Orange generat automat din șablonul aprobat",
-    await findDriveFileByName(folderId, filename),
-  );
-}
-
-function readableOrangeName(value: string) {
-  return value.normalize("NFC").replace(/[\u0000-\u001f"*:<>?\/\\|#%]/g, "_").replace(/^[. ]+|[. ]+$/g, "").slice(0, 140) || "Tichet Orange";
-}
-
 export async function syncProjectIfConnected(projectId: string) {
   if (!usesGoogle(await backupMode())) return false;
   if (!isConnected(await settings())) return false;
-  const folders = await ensureProjectFolder(projectId);
-  const project = await getRawDb().prepare("SELECT activity_type FROM projects WHERE id = ? LIMIT 1").bind(projectId).first<{ activity_type: ProjectActivityType }>();
-  if (project?.activity_type === "Intervenție Orange") await uploadOrangeQaf(projectId, folders.folder_id);
+  await ensureProjectFolder(projectId);
   return true;
-}
-
-export async function deleteDriveFileCopy(fileId: string) {
-  const synced = await getRawDb().prepare("SELECT drive_file_id FROM google_drive_file_sync WHERE file_id = ? LIMIT 1")
-    .bind(fileId).first<{ drive_file_id: string }>();
-  if (!synced?.drive_file_id) return;
-  const configuration = await settings();
-  if (!isConnected(configuration)) throw new Error("Reconectează Google Drive pentru a șterge copia arhivată.");
-  const headers = new Headers({ Authorization: `Bearer ${await accessToken()}` });
-  const response = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(synced.drive_file_id)}`, { method: "DELETE", headers });
-  if (!response.ok && response.status !== 404) throw new Error(`Google Drive nu a putut șterge copia fișierului (${response.status}).`);
-  await getRawDb().prepare("DELETE FROM google_drive_file_sync WHERE file_id = ?").bind(fileId).run();
-}
-
-function splicePhotoFolder(category: string) {
-  const parts = category.split(":");
-  if (parts.length < 3) return "";
-  const token = parts[1] ?? "";
-  if (!token) return "";
-  const undocumented = /^J_nedocumentata_(\d+)$/i.exec(token);
-  return undocumented ? `J nedocumentată ${undocumented[1]}` : token;
 }
 
 export async function syncFileIfConnected(fileId: string) {
@@ -428,14 +384,10 @@ export async function syncFileIfConnected(fileId: string) {
   try {
     const folders = await ensureProjectFolder(file.project_id);
     const sectionFolders = JSON.parse(folders.section_folders_json) as Record<string, string>;
-    const project = await getRawDb().prepare("SELECT activity_type FROM projects WHERE id = ? LIMIT 1").bind(file.project_id).first<{ activity_type: ProjectActivityType }>();
     const stored = await bucket().get(file.storage_key);
     if (!stored) throw new Error("Fișierul nu mai este disponibil în stocarea proiectului.");
     const description = [file.category, file.geolocation ? `GPS: ${file.geolocation}` : "", `Încărcat de: ${file.uploaded_by}`].filter(Boolean).join(" · ");
-    let destinationFolderId = project?.activity_type === "Intervenție Orange" ? folders.folder_id : (sectionFolders[file.section] ?? folders.folder_id);
-    const spliceFolder = project?.activity_type !== "Intervenție Orange" && file.section === "splices" ? splicePhotoFolder(file.category) : "";
-    if (spliceFolder) destinationFolderId = (await findOrCreateFolder(spliceFolder, destinationFolderId)).id;
-    const driveFileId = await uploadDriveFile(file.original_name, file.content_type, await new Response(stored.body).arrayBuffer(), destinationFolderId, description, synced?.drive_file_id || undefined);
+    const driveFileId = await uploadDriveFile(file.original_name, file.content_type, await new Response(stored.body).arrayBuffer(), sectionFolders[file.section] ?? folders.folder_id, description, synced?.drive_file_id || undefined);
     await getRawDb().prepare("INSERT INTO google_drive_file_sync (file_id, project_id, drive_file_id, status, last_error, updated_at) VALUES (?, ?, ?, 'synced', '', ?) ON CONFLICT(file_id) DO UPDATE SET drive_file_id = excluded.drive_file_id, status = 'synced', last_error = '', updated_at = excluded.updated_at")
       .bind(file.id, file.project_id, driveFileId, Date.now()).run();
     return true;
@@ -447,48 +399,16 @@ export async function syncFileIfConnected(fileId: string) {
   }
 }
 
-async function findDriveFileByName(folderId: string, name: string) {
-  const escaped = name.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
-  const query = encodeURIComponent(`'${folderId}' in parents and name = '${escaped}' and trashed = false`);
-  const response = await googleFetch(`https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id)&pageSize=1`);
-  const payload = await response.json() as GoogleFileResponse;
-  return payload.files?.[0]?.id;
-}
-
 export async function syncReportIfConnected(projectId: string) {
   if (!usesGoogle(await backupMode())) return false;
   if (!isConnected(await settings())) return false;
   const saved = await readReport(projectId);
-  const folders = await ensureProjectFolder(projectId);
-  const project = await getRawDb().prepare("SELECT activity_type FROM projects WHERE id = ? LIMIT 1").bind(projectId).first<{ activity_type: ProjectActivityType }>();
-  if (project?.activity_type === "Intervenție Orange") {
-    await uploadOrangeQaf(projectId, folders.folder_id);
-    return true;
-  }
   if (!saved) return false;
+  const folders = await ensureProjectFolder(projectId);
   const sectionFolders = JSON.parse(folders.section_folders_json) as Record<string, string>;
-  const document = buildAcceptanceReportDocx(projectId, saved.report);
-  const driveFileId = await uploadDriveFile(
-    `Raport_acceptanta_${projectId}.docx`,
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    document.buffer,
-    sectionFolders.documents,
-    "Raport administrativ Word generat din Proconect B2B",
-    folders.report_file_id || undefined
-  );
+  const lines = ["RAPORT DE ACCEPTANȚĂ", `Proiect: ${projectId}`, "", ...Object.entries(saved.report).map(([key, value]) => `${key.replace(/([A-Z])/g, " $1")}: ${value}`)];
+  const driveFileId = await uploadDriveFile(`Raport_acceptanta_${projectId}.txt`, "text/plain; charset=UTF-8", lines.join("\n"), sectionFolders.documents, "Raport administrativ generat din Proconect B2B", folders.report_file_id || undefined);
   await getRawDb().prepare("UPDATE google_drive_project_folders SET report_file_id = ?, updated_at = ? WHERE project_id = ?").bind(driveFileId, Date.now(), projectId).run();
-  const materialPdf = await buildMaterialSheetPdf(projectId);
-  if (materialPdf) {
-    const materialName = `Fisa_materiale_${projectId}.pdf`;
-    await uploadDriveFile(
-      materialName,
-      "application/pdf",
-      materialPdf,
-      sectionFolders.documents,
-      "Fisa de materiale PDF landscape generata din Proconect B2B",
-      await findDriveFileByName(sectionFolders.documents, materialName),
-    );
-  }
   return true;
 }
 

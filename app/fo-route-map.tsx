@@ -4,16 +4,14 @@ import {
   useEffect,
   useDeferredValue,
   useMemo,
+  useRef,
   useState,
   type MouseEvent,
+  type PointerEvent,
 } from "react";
 import { deleteProjectFile, fetchProjectFiles, formatCapturedAt, uploadProjectFile } from "./client-storage";
 import type { RouteFieldSummary } from "./field-documentation";
 import { NoInterventionControl } from "./no-intervention-control";
-import { useMapGestures } from "./use-map-gestures";
-import { useMapFullscreen } from "./use-map-fullscreen";
-import { fetchMapSites, mapSiteMarkerClass } from "./map-sites-client";
-import { MapSiteLegend } from "./map-site-legend";
 
 type Coordinate = { lat: number; lon: number };
 type MapMode = "pan" | "client" | "route" | "undocumented";
@@ -66,7 +64,6 @@ type RoutePhoto = {
 
 type Props = {
   project: RouteProject;
-  variant?: "installation" | "survey";
   initialSummary?: RouteFieldSummary;
   onNotify: (message: string) => void;
   onSaved?: (summary: RouteFieldSummary) => Promise<void> | void;
@@ -171,10 +168,6 @@ function formatCoordinate(point: Coordinate) {
   return `${point.lat.toFixed(6)}, ${point.lon.toFixed(6)}`;
 }
 
-function googleMapsUrl(point: Coordinate) {
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${point.lat},${point.lon}`)}`;
-}
-
 function parseLengthMeters(value: string) {
   const length = Number(value.trim().replace(",", "."));
   return Number.isFinite(length) && length > 0 ? length : 0;
@@ -222,14 +215,13 @@ function lowerLatitudeBound(rows: OptixSiteRow[], latitude: number) {
   return low;
 }
 
-export function FoRouteSection({ project: projectItem, variant = "installation", initialSummary, onNotify, onSaved }: Props) {
-  const surveyMode = variant === "survey";
+export function FoRouteSection({ project: projectItem, initialSummary, onNotify, onSaved }: Props) {
   const [sites, setSites] = useState<OptixSiteRow[]>([]);
   const [sitesStatus, setSitesStatus] = useState<"loading" | "ready" | "error">("loading");
   const [sourceName, setSourceName] = useState("Optix Sites.xlsx");
   const [rejectedSites, setRejectedSites] = useState(0);
   const [center, setCenter] = useState(DEFAULT_CENTER);
-  const [zoom, setZoom] = useState(15);
+  const [zoom, setZoom] = useState(13);
   const [mode, setMode] = useState<MapMode>("client");
   const [endA, setEndA] = useState<RouteEnd | null>(null);
   const [endB, setEndB] = useState<RouteEnd | null>(null);
@@ -260,26 +252,24 @@ export function FoRouteSection({ project: projectItem, variant = "installation",
     armorod: "",
   });
   const [routePhotos, setRoutePhotos] = useState<RoutePhoto[]>([]);
-  const [deletingRoute, setDeletingRoute] = useState(false);
   const [noIntervention, setNoIntervention] = useState(false);
   const [noInterventionReason, setNoInterventionReason] = useState("");
-  const mapGestures = useMapGestures({
-    center,
-    zoom,
-    setCenter,
-    setZoom,
-    project,
-    unproject,
-    mapWidth: MAP_WIDTH,
-    mapHeight: MAP_HEIGHT,
-    maximumZoom: 25,
-    mousePan: mode === "pan",
-  });
-  const mapFullscreen = useMapFullscreen();
+  const dragRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    centerX: number;
+    centerY: number;
+  } | null>(null);
 
   useEffect(() => {
     let active = true;
-    fetchMapSites().then((payload) => {
+    fetch("/data/optix-sites.json")
+      .then((response) => {
+        if (!response.ok) throw new Error("Date indisponibile");
+        return response.json() as Promise<OptixPayload>;
+      })
+      .then((payload) => {
         if (!active) return;
         setSites(payload.sites);
         setSourceName(payload.source);
@@ -341,16 +331,13 @@ export function FoRouteSection({ project: projectItem, variant = "installation",
   }, [projectItem.id, initialSummary]);
 
   const tiles = useMemo(() => {
-    const sourceZoom = Math.min(zoom, 19);
-    const overzoomScale = 2 ** (zoom - sourceZoom);
-    const renderedTileSize = TILE_SIZE * overzoomScale;
     const projectedCenter = project(center, zoom);
-    const tilesAcross = 2 ** sourceZoom;
-    const firstX = Math.floor((projectedCenter.x - MAP_WIDTH / 2) / renderedTileSize);
-    const lastX = Math.floor((projectedCenter.x + MAP_WIDTH / 2) / renderedTileSize);
-    const firstY = Math.floor((projectedCenter.y - MAP_HEIGHT / 2) / renderedTileSize);
-    const lastY = Math.floor((projectedCenter.y + MAP_HEIGHT / 2) / renderedTileSize);
-    const result: Array<{ key: string; x: number; y: number; size: number; sourceZoom: number; urlX: number; urlY: number }> = [];
+    const tilesAcross = 2 ** zoom;
+    const firstX = Math.floor((projectedCenter.x - MAP_WIDTH / 2) / TILE_SIZE);
+    const lastX = Math.floor((projectedCenter.x + MAP_WIDTH / 2) / TILE_SIZE);
+    const firstY = Math.floor((projectedCenter.y - MAP_HEIGHT / 2) / TILE_SIZE);
+    const lastY = Math.floor((projectedCenter.y + MAP_HEIGHT / 2) / TILE_SIZE);
+    const result: Array<{ key: string; x: number; y: number; urlX: number; urlY: number }> = [];
 
     for (let tileX = firstX; tileX <= lastX; tileX += 1) {
       for (let tileY = firstY; tileY <= lastY; tileY += 1) {
@@ -358,10 +345,8 @@ export function FoRouteSection({ project: projectItem, variant = "installation",
         const wrappedX = ((tileX % tilesAcross) + tilesAcross) % tilesAcross;
         result.push({
           key: `${zoom}-${tileX}-${tileY}`,
-          x: tileX * renderedTileSize - (projectedCenter.x - MAP_WIDTH / 2),
-          y: tileY * renderedTileSize - (projectedCenter.y - MAP_HEIGHT / 2),
-          size: renderedTileSize,
-          sourceZoom,
+          x: tileX * TILE_SIZE - (projectedCenter.x - MAP_WIDTH / 2),
+          y: tileY * TILE_SIZE - (projectedCenter.y - MAP_HEIGHT / 2),
           urlX: wrappedX,
           urlY: tileY,
         });
@@ -405,12 +390,22 @@ export function FoRouteSection({ project: projectItem, variant = "installation",
   const searchResults = useMemo(() => {
     const query = deferredSearch.trim().toLocaleLowerCase("ro");
     if (query.length < 2) return [];
-    const exactMatches: OptixSite[] = [];
+    const resultBuckets: Array<Array<{ site: OptixSite; score: number }>> = [[], [], [], [], []];
     for (let index = 0; index < sites.length; index += 1) {
       const site = siteFromRow(sites[index], index);
-      if (site.code.trim().toLocaleLowerCase("ro") === query) exactMatches.push(site);
+      const code = site.code.toLocaleLowerCase("ro");
+      const name = site.name.toLocaleLowerCase("ro");
+      const city = site.city.toLocaleLowerCase("ro");
+      const haystack = `${code} ${name} ${site.address} ${city} ${site.county}`.toLocaleLowerCase("ro");
+      const score = code === query ? 0 : code.startsWith(query) ? 1 : name.startsWith(query) ? 2 : city.startsWith(query) ? 3 : 4;
+      if (haystack.includes(query) && resultBuckets[score].length < 12) {
+        resultBuckets[score].push({ site, score });
+      }
     }
-    return exactMatches.slice(0, 6);
+    return resultBuckets
+      .flat()
+      .slice(0, 6)
+      .map(({ site }) => site);
   }, [deferredSearch, sites]);
 
   const routeCoordinates = useMemo(
@@ -422,6 +417,7 @@ export function FoRouteSection({ project: projectItem, variant = "installation",
     (total, point, index) => total + distanceBetween(routeCoordinates[index], point),
     0
   );
+  const endAUsesGps = Boolean(currentLocation && endA && distanceBetween(currentLocation, endA) < 2);
   const incompleteCableMethod = selectedInstallationMethods.find((method) => !cableTypes[method].trim());
   const incompleteLengthMethod = selectedInstallationMethods.find((method) => !parseLengthMeters(installationLengths[method]));
   const incompleteAerialMaterial = selectedInstallationMethods.includes("aerial")
@@ -442,14 +438,12 @@ export function FoRouteSection({ project: projectItem, variant = "installation",
     endA &&
     endB &&
     undocumentedJunctionReady &&
-    (surveyMode || (
-      selectedInstallationMethods.length &&
-      !incompleteCableMethod &&
-      !incompleteLengthMethod &&
-      !incompleteAerialMaterial &&
-      requiredRoutePhotos &&
-      !missingRoutePhotos
-    ))
+    selectedInstallationMethods.length &&
+    !incompleteCableMethod &&
+    !incompleteLengthMethod &&
+    !incompleteAerialMaterial &&
+    requiredRoutePhotos &&
+    !missingRoutePhotos
   );
 
   function resetRoute() {
@@ -513,7 +507,7 @@ export function FoRouteSection({ project: projectItem, variant = "installation",
   }
 
   function handleMapClick(event: MouseEvent<HTMLDivElement>) {
-    if (mapGestures.consumeSuppressedClick() || mode === "pan") return;
+    if (mode === "pan") return;
     const coordinate = mapCoordinate(event);
     if (mode === "client") {
       setEndA({
@@ -646,6 +640,34 @@ export function FoRouteSection({ project: projectItem, variant = "installation",
     setCenter(unproject({ x: projectedCenter.x + deltaX, y: projectedCenter.y + deltaY }, zoom));
   }
 
+  function handlePointerDown(event: PointerEvent<HTMLDivElement>) {
+    if (mode !== "pan") return;
+    const projectedCenter = project(center, zoom);
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      centerX: projectedCenter.x,
+      centerY: projectedCenter.y,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function handlePointerMove(event: PointerEvent<HTMLDivElement>) {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const deltaX = ((event.clientX - drag.startX) / rect.width) * MAP_WIDTH;
+    const deltaY = ((event.clientY - drag.startY) / rect.height) * MAP_HEIGHT;
+    setCenter(unproject({ x: drag.centerX - deltaX, y: drag.centerY - deltaY }, zoom));
+  }
+
+  function handlePointerUp(event: PointerEvent<HTMLDivElement>) {
+    if (dragRef.current?.pointerId !== event.pointerId) return;
+    dragRef.current = null;
+    event.currentTarget.releasePointerCapture(event.pointerId);
+  }
+
   function fitRoute() {
     if (!routeCoordinates.length) return;
     const latitude = routeCoordinates.reduce((sum, point) => sum + point.lat, 0) / routeCoordinates.length;
@@ -690,23 +712,23 @@ export function FoRouteSection({ project: projectItem, variant = "installation",
       onNotify("Alege dacă joncțiunea nedocumentată aparține rețelei Vodafone Mobil sau Vodafone Fixed.");
       return;
     }
-    if (!surveyMode && !selectedInstallationMethods.length) {
+    if (!selectedInstallationMethods.length) {
       onNotify("Selectează cel puțin un tip de instalare pentru traseul FO.");
       return;
     }
-    if (!surveyMode && incompleteCableMethod) {
+    if (incompleteCableMethod) {
       onNotify(`Completează tipul de cablu pentru „${installationCatalog[incompleteCableMethod].title}”.`);
       return;
     }
-    if (!surveyMode && incompleteLengthMethod) {
+    if (incompleteLengthMethod) {
       onNotify(`Completează lungimea instalată pentru „${installationCatalog[incompleteLengthMethod].title}”.`);
       return;
     }
-    if (!surveyMode && incompleteAerialMaterial) {
+    if (incompleteAerialMaterial) {
       onNotify(`Completează cantitatea pentru „${aerialMaterialCatalog[incompleteAerialMaterial]}” la instalarea aeriană.`);
       return;
     }
-    if (!surveyMode && missingRoutePhotos) {
+    if (missingRoutePhotos) {
       onNotify(`Mai sunt necesare ${missingRoutePhotos} ${missingRoutePhotos === 1 ? "fotografie geolocalizată" : "fotografii geolocalizate"} pentru această lungime.`);
       return;
     }
@@ -721,13 +743,13 @@ export function FoRouteSection({ project: projectItem, variant = "installation",
     const summary: RouteFieldSummary = {
       noIntervention: false,
       noInterventionReason: "",
-      segments: surveyMode ? [] : selectedInstallationMethods.map((method) => ({
+      segments: selectedInstallationMethods.map((method) => ({
         method,
         label: installationCatalog[method].title,
         cableType: cableTypes[method].trim(),
         lengthMeters: parseLengthMeters(installationLengths[method]),
       })),
-      totalLengthMeters: surveyMode ? Math.round(routeDistance) : totalInstalledLength,
+      totalLengthMeters: totalInstalledLength,
       junction: {
         label: endB.documented ? `${endB.code} · ${endB.name}` : `Joncțiune nedocumentată · ${undocumentedJunctionType === "new" ? "nou instalată" : "existentă"}`,
         documented: endB.documented,
@@ -745,40 +767,9 @@ export function FoRouteSection({ project: projectItem, variant = "installation",
     };
     try {
       await onSaved?.(summary);
-      onNotify(surveyMode ? `Harta Survey pentru ${projectItem.id} a fost salvată · ${junctionDetail}${networkDetail} · ${formatDistance(routeDistance)}.` : `Traseul FO pentru ${projectItem.id} a fost salvat permanent · ${junctionDetail}${networkDetail} · ${formatLengthMeters(totalInstalledLength)} instalați · ${selectedInstallationMethods.length} ${selectedInstallationMethods.length === 1 ? "tip de instalare" : "tipuri de instalare"}.`);
+      onNotify(`Traseul FO pentru ${projectItem.id} a fost salvat permanent · ${junctionDetail}${networkDetail} · ${formatLengthMeters(totalInstalledLength)} instalați · ${selectedInstallationMethods.length} ${selectedInstallationMethods.length === 1 ? "tip de instalare" : "tipuri de instalare"}.`);
     } catch (error) {
       onNotify(error instanceof Error ? error.message : "Traseul FO nu a putut fi salvat.");
-    }
-  }
-
-  async function deleteSavedRoute() {
-    if (!window.confirm("Ștergi traseul FO și toate fotografiile aferente?")) return;
-    setDeletingRoute(true);
-    try {
-      const emptySummary: RouteFieldSummary = {
-        noIntervention: false,
-        noInterventionReason: "",
-        segments: [],
-        totalLengthMeters: 0,
-        junction: { label: "Traseu șters", documented: true, kind: "documented" },
-        aerialMaterials: { boat: 0, stainlessClamp: 0, hook: 0, armorod: 0 },
-        routePoints: [],
-      };
-      const removals = await Promise.allSettled(routePhotos.map((photo) => deleteProjectFile(photo.id)));
-      const removedIds = new Set(routePhotos.filter((_, index) => removals[index].status === "fulfilled").map((photo) => photo.id));
-      setRoutePhotos((current) => current.filter((photo) => !removedIds.has(photo.id)));
-      const failed = removals.filter((result) => result.status === "rejected").length;
-      if (failed) throw new Error(`${failed} fotografii nu au putut fi șterse din toate destinațiile. Reîncearcă ștergerea traseului.`);
-      await onSaved?.(emptySummary);
-      setRoutePhotos([]);
-      resetRoute();
-      setNoIntervention(false);
-      setNoInterventionReason("");
-      onNotify("Traseul FO și fotografiile aferente au fost șterse din aplicație, Google Drive și OneDrive.");
-    } catch (error) {
-      onNotify(error instanceof Error ? error.message : "Traseul FO nu a putut fi șters.");
-    } finally {
-      setDeletingRoute(false);
     }
   }
 
@@ -799,12 +790,12 @@ export function FoRouteSection({ project: projectItem, variant = "installation",
   };
 
   return (
-    <div className={`page-wrap fo-route-page ${surveyMode ? "survey-route-page" : ""}`}>
+    <div className="page-wrap fo-route-page">
       <section className="page-heading client-heading">
         <div>
-          <p className="eyebrow">{surveyMode ? "HARTĂ SURVEY" : "DOCUMENTAȚIE TRASEU FIBRĂ OPTICĂ"}</p>
-          <h1>{surveyMode ? "Hartă Survey" : "Traseu FO"}</h1>
-          <p>{surveyMode ? "Marchează clientul, traseul propus și joncțiunea observată." : "Marchează clientul, alege joncțiunea și trasează cablul direct pe hartă."}</p>
+          <p className="eyebrow">DOCUMENTAȚIE TRASEU FIBRĂ OPTICĂ</p>
+          <h1>Traseu FO</h1>
+          <p>Marchează clientul, alege joncțiunea și trasează cablul direct pe hartă.</p>
         </div>
         <div className="field-technician">
           <span className="avatar">{projectItem.technician.split(" ").map((part) => part[0]).join("").slice(0, 2)}</span>
@@ -824,15 +815,15 @@ export function FoRouteSection({ project: projectItem, variant = "installation",
         </div>
       </section>
 
-      {!surveyMode && <NoInterventionControl
+      <NoInterventionControl
         sectionLabel="Traseu FO"
         noIntervention={noIntervention}
         reason={noInterventionReason}
         onSelectionChange={setNoIntervention}
         onReasonChange={setNoInterventionReason}
-      />}
+      />
 
-      {!surveyMode && noIntervention ? (
+      {noIntervention ? (
         <section className="no-intervention-save-card">
           <span>—</span>
           <div><strong>Traseu FO fără intervenție</strong><p>Nu sunt necesare traseul pe hartă, materialele, lungimile sau fotografiile de execuție. Motivul introdus va apărea în raport.</p></div>
@@ -840,19 +831,14 @@ export function FoRouteSection({ project: projectItem, variant = "installation",
         </section>
       ) : <div className="fo-route-layout">
         <div className="fo-map-column">
-          <section className={`fo-map-card ${mapFullscreen.fullscreen ? "map-fullscreen" : ""}`}>
+          <section className="fo-map-card">
             <div className="fo-map-head">
               <div><small>MOD ACTIV</small><strong>{modeLabel[mode]}</strong></div>
               <div className="fo-map-actions">
-                <button className={mode === "client" ? "active" : ""} onClick={() => setMode("client")}>Client</button>
+                <button className={mode === "pan" ? "active" : ""} onClick={() => setMode("pan")}><span>✥</span> Mută</button>
+                <button className={mode === "client" ? "active" : ""} onClick={() => setMode("client")}><span>A</span> Client</button>
                 <button className={mode === "route" ? "active" : ""} onClick={() => setMode("route")}><span>⌁</span> Trasează</button>
-                <button className={mode === "undocumented" ? "active" : ""} onClick={() => setMode("undocumented")}>J fără cod</button>
-                <button
-                  className="fo-fullscreen-toggle"
-                  onClick={mapFullscreen.toggleFullscreen}
-                  aria-pressed={mapFullscreen.fullscreen}
-                  aria-label={mapFullscreen.fullscreen ? "Închide harta pe tot ecranul" : "Deschide harta pe tot ecranul"}
-                ><span>{mapFullscreen.fullscreen ? "×" : "⛶"}</span> {mapFullscreen.fullscreen ? "Închide" : "Ecran complet"}</button>
+                <button className={mode === "undocumented" ? "active" : ""} onClick={() => setMode("undocumented")}><span>B?</span> B fără cod</button>
               </div>
             </div>
 
@@ -861,24 +847,23 @@ export function FoRouteSection({ project: projectItem, variant = "installation",
               role="application"
               aria-label="Hartă OpenStreetMap pentru trasarea cablului de fibră optică"
               onClick={handleMapClick}
-              onPointerDown={mapGestures.onPointerDown}
-              onPointerMove={mapGestures.onPointerMove}
-              onPointerUp={mapGestures.onPointerUp}
-              onPointerCancel={mapGestures.onPointerCancel}
-              onWheel={mapGestures.onWheel}
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onPointerCancel={handlePointerUp}
             >
               <div className="fo-map-tiles" aria-hidden="true">
                 {tiles.map((tile) => (
                   <img
                     key={tile.key}
-                    src={`https://tile.openstreetmap.org/${tile.sourceZoom}/${tile.urlX}/${tile.urlY}.png`}
+                    src={`https://tile.openstreetmap.org/${zoom}/${tile.urlX}/${tile.urlY}.png`}
                     alt=""
                     draggable={false}
                     style={{
                       left: `${(tile.x / MAP_WIDTH) * 100}%`,
                       top: `${(tile.y / MAP_HEIGHT) * 100}%`,
-                      width: `${(tile.size / MAP_WIDTH) * 100}%`,
-                      height: `${(tile.size / MAP_HEIGHT) * 100}%`,
+                      width: `${(TILE_SIZE / MAP_WIDTH) * 100}%`,
+                      height: `${(TILE_SIZE / MAP_HEIGHT) * 100}%`,
                     }}
                   />
                 ))}
@@ -895,7 +880,7 @@ export function FoRouteSection({ project: projectItem, variant = "installation",
 
               {visibleSites.map(({ site, point }) => (
                 <button
-                  className={`fo-site-marker ${mapSiteMarkerClass(site.code)} ${endB?.id === site.id ? "selected" : ""}`}
+                  className={`fo-site-marker ${endB?.id === site.id ? "selected" : ""}`}
                   style={{ left: `${(point.x / MAP_WIDTH) * 100}%`, top: `${(point.y / MAP_HEIGHT) * 100}%` }}
                   key={site.id}
                   title={`${site.code} · ${site.name}`}
@@ -914,15 +899,17 @@ export function FoRouteSection({ project: projectItem, variant = "installation",
 
               {endA && (() => {
                 const point = screenPoint(endA, center, zoom);
-                return <span className="fo-placed-dot client-dot" aria-label="Punct client" style={{ left: `${(point.x / MAP_WIDTH) * 100}%`, top: `${(point.y / MAP_HEIGHT) * 100}%` }} />;
+                return <span className="fo-end-marker end-a" style={{ left: `${(point.x / MAP_WIDTH) * 100}%`, top: `${(point.y / MAP_HEIGHT) * 100}%` }}><b>A</b><small>{endAUsesGps ? "CLIENT · GPS" : "CLIENT"}</small></span>;
               })()}
               {endB && (() => {
                 const point = screenPoint(endB, center, zoom);
-                return <span className={`fo-placed-dot junction-dot ${endB.documented ? "" : "undocumented"}`} aria-label="Punct joncțiune" style={{ left: `${(point.x / MAP_WIDTH) * 100}%`, top: `${(point.y / MAP_HEIGHT) * 100}%` }} />;
+                const junctionMarker = undocumentedJunctionType === "existing" ? "EX" : undocumentedJunctionType === "new" ? "NOU" : "";
+                const networkMarker = undocumentedJunctionNetwork === "mobile" ? "MOBIL" : undocumentedJunctionNetwork === "fixed" ? "FIXED" : "";
+                const markerLabel = endB.documented ? endB.code : [junctionMarker, networkMarker].filter(Boolean).join(" · ") || "ALEGE DATE";
+                return <span className={`fo-end-marker end-b ${endB.documented ? "" : "undocumented"}`} style={{ left: `${(point.x / MAP_WIDTH) * 100}%`, top: `${(point.y / MAP_HEIGHT) * 100}%` }}><b>B</b><small>{markerLabel}</small></span>;
               })()}
 
-              <div className="fo-map-instruction"><span>{mode === "pan" ? "✥" : mode === "client" ? "A" : mode === "route" ? "⌁" : "B?"}</span>{mode === "pan" ? "Glisează harta · apropie două degete pentru zoom" : mode === "client" ? "Atinge pentru Client A · glisează sau folosește pinch zoom" : mode === "route" ? "Atinge pentru punct · glisează sau folosește pinch zoom" : "Atinge pentru joncțiune · glisează sau folosește pinch zoom"}</div>
-              <div className="fo-route-live-distance" aria-live="polite"><small>LUNGIME TRASEU</small><strong>{formatLengthMeters(Math.round(routeDistance))}</strong></div>
+              <div className="fo-map-instruction"><span>{mode === "pan" ? "✥" : mode === "client" ? "A" : mode === "route" ? "⌁" : "B?"}</span>{mode === "pan" ? "Trage harta pentru deplasare" : mode === "client" ? "Atinge harta la locația clientului" : mode === "route" ? "Atinge succesiv traseul cablului" : "Atinge locul joncțiunii nedocumentate"}</div>
 
               <button
                 className={`fo-locate-button ${currentLocation ? "located" : ""}`}
@@ -935,8 +922,8 @@ export function FoRouteSection({ project: projectItem, variant = "installation",
               </button>
 
               <div className="fo-zoom" onClick={(event) => event.stopPropagation()}>
-                <button onClick={() => setZoom((current) => clamp(current + 1, 7, 25))} aria-label="Mărește harta">＋</button>
-                <button onClick={() => setZoom((current) => clamp(current - 1, 7, 25))} aria-label="Micșorează harta">−</button>
+                <button onClick={() => setZoom((current) => clamp(current + 1, 7, 18))} aria-label="Mărește harta">＋</button>
+                <button onClick={() => setZoom((current) => clamp(current - 1, 7, 18))} aria-label="Micșorează harta">−</button>
               </div>
               <div className="fo-pan-pad" onClick={(event) => event.stopPropagation()}>
                 <button onClick={() => panMap(0, -160)} aria-label="Mută harta spre nord">↑</button>
@@ -948,7 +935,6 @@ export function FoRouteSection({ project: projectItem, variant = "installation",
               <a className="fo-attribution" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>© OpenStreetMap contributors</a>
             </div>
 
-          <MapSiteLegend />
             <div className="fo-map-footer">
               <button onClick={locateCurrentPosition} disabled={gpsLoading}><span>⌖</span>{gpsLoading ? "Se caută GPS…" : "Identifică locația curentă"}</button>
               <button onClick={() => setRoutePoints((current) => current.slice(0, -1))} disabled={!routePoints.length}><span>↶</span>Anulează ultimul punct</button>
@@ -961,26 +947,17 @@ export function FoRouteSection({ project: projectItem, variant = "installation",
         <aside className="fo-route-side">
           <section className="fo-search-card">
             <div className="fo-side-title"><span>B</span><div><h2>Joncțiune documentată</h2><p>Alege un punct pe hartă sau caută în registru.</p></div></div>
-            <label className="fo-site-search"><span>⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Introdu codul exact, ex. J2…" /></label>
+            <label className="fo-site-search"><span>⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cod, nume sau localitate…" /></label>
             {search.length >= 2 && (
               <div className="fo-search-results">
-                {searchResults.filter((site) => site.code.trim().toLocaleLowerCase("ro") === search.trim().toLocaleLowerCase("ro")).map((site) => (
-                  <article className={endB?.id === site.id ? "selected" : ""} key={site.id}>
-                    <button className="fo-exact-junction-name" onClick={() => setDocumentedEnd(site)}>
-                      <strong>{site.code}</strong>
-                      <b>Arată pe hartă</b>
-                    </button>
-                    <a href={googleMapsUrl(site)} target="_blank" rel="noreferrer" aria-label={`Deschide joncțiunea ${site.code} în Google Maps`}>Google Maps ↗</a>
-                  </article>
+                {searchResults.map((site) => (
+                  <button key={site.id} onClick={() => setDocumentedEnd(site)}>
+                    <span>{site.code}</span>
+                    <div><strong>{site.name}</strong><small>{site.city}{site.county ? ` · ${site.county}` : ""}</small></div>
+                    <b>→</b>
+                  </button>
                 ))}
-                {!searchResults.some((site) => site.code.trim().toLocaleLowerCase("ro") === search.trim().toLocaleLowerCase("ro")) && <p>Nicio joncțiune cu acest cod.</p>}
-              </div>
-            )}
-            {endB?.documented && (
-              <div className="fo-selected-junction">
-                <div><small>JONCȚIUNE SELECTATĂ</small><strong>{endB.code} · {endB.name}</strong><span>{formatCoordinate(endB)}</span></div>
-                <button onClick={() => { setCenter({ lat: endB.lat, lon: endB.lon }); setZoom((current) => Math.max(current, 18)); }}>Arată punctul</button>
-                <a href={googleMapsUrl(endB)} target="_blank" rel="noreferrer">Google Maps ↗</a>
+                {!searchResults.length && <p>Niciun punct găsit.</p>}
               </div>
             )}
             <button className="fo-undocumented-button" onClick={() => setMode("undocumented")}><span>＋</span><div><strong>Joncțiune nedocumentată</strong><small>Plasează manual capătul B pe hartă</small></div></button>
@@ -1052,10 +1029,12 @@ export function FoRouteSection({ project: projectItem, variant = "installation",
                       <div className="fo-installation-fields">
                         <label className="fo-cable-input">
                           <span>TIP CABLU INSTALAT *</span>
-                          <select value={cableTypes[method]} onChange={(event) => setCableTypes((current) => ({ ...current, [method]: event.target.value }))}>
-                            <option value="">Selectează tipul cablului</option>
-                            {[4, 12, 24, 48, 96].map((fibers) => <option key={fibers} value={`Cablu FO ${fibers}F`}>{fibers} fibre</option>)}
-                          </select>
+                          <input
+                            list="fo-cable-suggestions"
+                            value={cableTypes[method]}
+                            onChange={(event) => setCableTypes((current) => ({ ...current, [method]: event.target.value }))}
+                            placeholder="ex. Cablu FO 12F G.652D"
+                          />
                         </label>
                         <label className="fo-length-input">
                           <span>LUNGIME *</span>
@@ -1104,6 +1083,14 @@ export function FoRouteSection({ project: projectItem, variant = "installation",
                 );
               })}
             </div>
+            <datalist id="fo-cable-suggestions">
+              <option value="Cablu FO 2F G.657A2" />
+              <option value="Cablu FO 4F G.657A2" />
+              <option value="Cablu FO 12F G.652D" />
+              <option value="Microcablu FO 12F G.657A1" />
+              <option value="Cablu FO 24F G.652D" />
+              <option value="Cablu FO 48F G.652D" />
+            </datalist>
           </section>
 
           <section className="fo-route-photo-card">
@@ -1164,11 +1151,11 @@ export function FoRouteSection({ project: projectItem, variant = "installation",
                 <b>{endB && undocumentedJunctionReady ? "✓" : "○"}</b>
               </article>
             </div>
-            <div className={`fo-route-metrics ${surveyMode ? "survey-metrics" : ""}`}>
+            <div className="fo-route-metrics">
               <div><small>LUNGIME DESENATĂ</small><strong>{routeCoordinates.length > 1 ? formatDistance(routeDistance) : "—"}</strong></div>
               <div><small>PUNCTE INTERMEDIARE</small><strong>{routePoints.length}</strong></div>
-              {!surveyMode && <div><small>TOTAL CABLU INSTALAT</small><strong>{totalInstalledLength ? formatLengthMeters(totalInstalledLength) : "—"}</strong></div>}
-              {!surveyMode && <div><small>POZE TRASEU</small><strong>{geotaggedRoutePhotos}/{requiredRoutePhotos || "—"}</strong></div>}
+              <div><small>TOTAL CABLU INSTALAT</small><strong>{totalInstalledLength ? formatLengthMeters(totalInstalledLength) : "—"}</strong></div>
+              <div><small>POZE TRASEU</small><strong>{geotaggedRoutePhotos}/{requiredRoutePhotos || "—"}</strong></div>
             </div>
             {selectedInstallationMethods.length > 0 && (
               <div className="fo-cable-summary">
@@ -1190,11 +1177,11 @@ export function FoRouteSection({ project: projectItem, variant = "installation",
             <div className="fo-route-status">
               <span className={routeReady ? "ready" : ""}>{routeReady ? "✓" : "i"}</span>
               <p>
-                <strong>{routeReady ? (surveyMode ? "Harta Survey este pregătită pentru salvare" : "Traseu pregătit pentru salvare") : !endA || !endB ? "Mai sunt necesare capetele A și B" : !undocumentedJunctionTypeReady ? "Clasifică joncțiunea nedocumentată" : !undocumentedJunctionNetworkReady ? "Selectează rețeaua joncțiunii" : !selectedInstallationMethods.length ? "Selectează tipul de instalare" : incompleteCableMethod ? "Completează tipul de cablu" : incompleteLengthMethod ? "Completează lungimea instalată" : incompleteAerialMaterial ? "Completează materialele instalării aeriene" : "Completează documentarea foto"}</strong>
-                {routeReady ? (surveyMode ? "Clientul, traseul și joncțiunea sunt documentate." : "Capetele, traseul, cablurile, materialele, lungimile și fotografiile sunt documentate.") : !endA || !endB ? "Selectează punctele direct pe hartă." : !undocumentedJunctionTypeReady ? "Alege dacă punctul B este o joncțiune existentă sau nou instalată." : !undocumentedJunctionNetworkReady ? "Alege Vodafone Mobil sau Vodafone Fixed pentru punctul B." : !selectedInstallationMethods.length ? "Poți folosi una sau mai multe metode pe traseu." : incompleteCableMethod ? `Lipsește cablul pentru ${installationCatalog[incompleteCableMethod].title.toLowerCase()}.` : incompleteLengthMethod ? `Lipsește lungimea pentru ${installationCatalog[incompleteLengthMethod].title.toLowerCase()}.` : incompleteAerialMaterial ? `Lipsește cantitatea pentru ${aerialMaterialCatalog[incompleteAerialMaterial].toLowerCase()}.` : `Mai sunt necesare ${missingRoutePhotos} fotografii cu geolocație.`}
+                <strong>{routeReady ? "Traseu pregătit pentru salvare" : !endA || !endB ? "Mai sunt necesare capetele A și B" : !undocumentedJunctionTypeReady ? "Clasifică joncțiunea nedocumentată" : !undocumentedJunctionNetworkReady ? "Selectează rețeaua joncțiunii" : !selectedInstallationMethods.length ? "Selectează tipul de instalare" : incompleteCableMethod ? "Completează tipul de cablu" : incompleteLengthMethod ? "Completează lungimea instalată" : incompleteAerialMaterial ? "Completează materialele instalării aeriene" : "Completează documentarea foto"}</strong>
+                {routeReady ? "Capetele, traseul, cablurile, materialele, lungimile și fotografiile sunt documentate." : !endA || !endB ? "Selectează punctele direct pe hartă." : !undocumentedJunctionTypeReady ? "Alege dacă punctul B este o joncțiune existentă sau nou instalată." : !undocumentedJunctionNetworkReady ? "Alege Vodafone Mobil sau Vodafone Fixed pentru punctul B." : !selectedInstallationMethods.length ? "Poți folosi una sau mai multe metode pe traseu." : incompleteCableMethod ? `Lipsește cablul pentru ${installationCatalog[incompleteCableMethod].title.toLowerCase()}.` : incompleteLengthMethod ? `Lipsește lungimea pentru ${installationCatalog[incompleteLengthMethod].title.toLowerCase()}.` : incompleteAerialMaterial ? `Lipsește cantitatea pentru ${aerialMaterialCatalog[incompleteAerialMaterial].toLowerCase()}.` : `Mai sunt necesare ${missingRoutePhotos} fotografii cu geolocație.`}
               </p>
             </div>
-            <div className="record-actions"><button className="primary-button fo-save-route" onClick={saveRoute}>{surveyMode ? "Salvează harta Survey" : "Salvează traseul FO"} <span>→</span></button>{!surveyMode && (initialSummary || routePhotos.length > 0) && <button type="button" className="record-delete-button" onClick={() => void deleteSavedRoute()} disabled={deletingRoute}>{deletingRoute ? "Se șterge…" : "Șterge traseul FO"}</button>}</div>
+            <button className="primary-button fo-save-route" onClick={saveRoute}>Salvează traseul FO <span>→</span></button>
           </section>
         </aside>
       </div>}
