@@ -11,7 +11,9 @@ import {
 } from "react";
 import { deleteProjectFile, fetchProjectFiles, formatCapturedAt, uploadProjectFile } from "./client-storage";
 import type { RouteFieldSummary } from "./field-documentation";
+import { MapSiteLegend, mapSiteMarkerClass } from "./map-site-legend";
 import { NoInterventionControl } from "./no-intervention-control";
+import { useMapFullscreen } from "./use-map-fullscreen";
 
 type Coordinate = { lat: number; lon: number };
 type MapMode = "pan" | "client" | "route" | "undocumented";
@@ -261,6 +263,7 @@ export function FoRouteSection({ project: projectItem, initialSummary, onNotify,
     centerX: number;
     centerY: number;
   } | null>(null);
+  const mapFullscreen = useMapFullscreen();
 
   useEffect(() => {
     let active = true;
@@ -831,7 +834,7 @@ export function FoRouteSection({ project: projectItem, initialSummary, onNotify,
         </section>
       ) : <div className="fo-route-layout">
         <div className="fo-map-column">
-          <section className="fo-map-card">
+          <section className={`fo-map-card ${mapFullscreen.fullscreen ? "map-fullscreen" : ""}`}>
             <div className="fo-map-head">
               <div><small>MOD ACTIV</small><strong>{modeLabel[mode]}</strong></div>
               <div className="fo-map-actions">
@@ -839,6 +842,12 @@ export function FoRouteSection({ project: projectItem, initialSummary, onNotify,
                 <button className={mode === "client" ? "active" : ""} onClick={() => setMode("client")}><span>A</span> Client</button>
                 <button className={mode === "route" ? "active" : ""} onClick={() => setMode("route")}><span>⌁</span> Trasează</button>
                 <button className={mode === "undocumented" ? "active" : ""} onClick={() => setMode("undocumented")}><span>B?</span> B fără cod</button>
+                <button
+                  className="fo-fullscreen-toggle"
+                  onClick={mapFullscreen.toggleFullscreen}
+                  aria-pressed={mapFullscreen.fullscreen}
+                  aria-label={mapFullscreen.fullscreen ? "Închide harta pe tot ecranul" : "Deschide harta pe tot ecranul"}
+                ><span>{mapFullscreen.fullscreen ? "×" : "⛶"}</span> {mapFullscreen.fullscreen ? "Închide" : "Ecran complet"}</button>
               </div>
             </div>
 
@@ -880,7 +889,7 @@ export function FoRouteSection({ project: projectItem, initialSummary, onNotify,
 
               {visibleSites.map(({ site, point }) => (
                 <button
-                  className={`fo-site-marker ${endB?.id === site.id ? "selected" : ""}`}
+                  className={`fo-site-marker ${mapSiteMarkerClass(site.code)} ${endB?.id === site.id ? "selected" : ""}`}
                   style={{ left: `${(point.x / MAP_WIDTH) * 100}%`, top: `${(point.y / MAP_HEIGHT) * 100}%` }}
                   key={site.id}
                   title={`${site.code} · ${site.name}`}
@@ -934,6 +943,8 @@ export function FoRouteSection({ project: projectItem, initialSummary, onNotify,
               </div>
               <a className="fo-attribution" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>© OpenStreetMap contributors</a>
             </div>
+
+            <MapSiteLegend />
 
             <div className="fo-map-footer">
               <button onClick={locateCurrentPosition} disabled={gpsLoading}><span>⌖</span>{gpsLoading ? "Se caută GPS…" : "Identifică locația curentă"}</button>

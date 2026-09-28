@@ -9,7 +9,9 @@ import {
   type InterventionFieldSummary,
   type InterventionJunction,
 } from "./field-documentation";
+import { MapSiteLegend, mapSiteMarkerClass } from "./map-site-legend";
 import type { ProjectRecord } from "./project-data";
+import { useMapFullscreen } from "./use-map-fullscreen";
 
 type Coordinate = { lat: number; lon: number };
 type OptixSiteRow = [code: string, description: string, region: string, lat: number, lon: number];
@@ -179,6 +181,7 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
   const [error, setError] = useState("");
   const dragRef = useRef<DragState | null>(null);
   const deferredSearch = useDeferredValue(search);
+  const mapFullscreen = useMapFullscreen();
 
   useEffect(() => {
     let mounted = true;
@@ -559,13 +562,14 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
     </section>}
 
     <div className="intervention-map-layout">
-      <section className="splice-map-card intervention-map-card">
+      <section className={`splice-map-card intervention-map-card ${mapFullscreen.fullscreen ? "map-fullscreen" : ""}`}>
         <div className="splice-map-head intervention-map-head"><div><small>HARTĂ OPTIX ȘI OPENSTREETMAP</small><strong>{draft?.type ? activityCatalog[draft.type].title : "Puncte și activități ale intervenției"}</strong></div>
           <div className="intervention-map-actions">
             <button type="button" className={mode === "pan" ? "active" : ""} onClick={() => setMode("pan")}>Mută</button>
             {draft?.type !== "junction-installation" && <button type="button" className={mode === "documented" ? "active" : ""} onClick={() => setMode("documented")} disabled={!draft?.type}>Optix</button>}
             <button type="button" className={mode === "undocumented" ? "active" : ""} onClick={() => setMode("undocumented")} disabled={!draft?.type}>Pe hartă</button>
             {draft?.type === "fo-installation" && <button type="button" className={mode === "draw" ? "active" : ""} onClick={() => setMode("draw")}>Trasează</button>}
+            <button type="button" className="fo-fullscreen-toggle" onClick={mapFullscreen.toggleFullscreen} aria-pressed={mapFullscreen.fullscreen}>{mapFullscreen.fullscreen ? "× Închide" : "⛶ Ecran complet"}</button>
           </div>
         </div>
 
@@ -579,7 +583,7 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
             {routeCoordinates.length > 1 && <><polyline className="route-shadow" points={routeCoordinates.map((point) => { const position = screenPoint(point, center, zoom); return `${position.x},${position.y}`; }).join(" ")} /><polyline className="route-cable" points={routeCoordinates.map((point) => { const position = screenPoint(point, center, zoom); return `${position.x},${position.y}`; }).join(" ")} /></>}
           </svg>
 
-          {visibleSites.map(({ site, point }) => <button type="button" className={`fo-site-marker${draft?.endpointA?.id === site.id || draft?.endpointB?.id === site.id || draft?.junction?.id === site.id ? " selected" : ""}`} key={site.id} title={`${site.code} · ${site.name}`} aria-label={`Alege ${site.code} ${site.name}`} style={{ left: `${point.x / MAP_WIDTH * 100}%`, top: `${point.y / MAP_HEIGHT * 100}%` }} onClick={(event) => { event.stopPropagation(); pickDocumented(site); }}><i /></button>)}
+          {visibleSites.map(({ site, point }) => <button type="button" className={`fo-site-marker ${mapSiteMarkerClass(site.code)}${draft?.endpointA?.id === site.id || draft?.endpointB?.id === site.id || draft?.junction?.id === site.id ? " selected" : ""}`} key={site.id} title={`${site.code} · ${site.name}`} aria-label={`Alege ${site.code} ${site.name}`} style={{ left: `${point.x / MAP_WIDTH * 100}%`, top: `${point.y / MAP_HEIGHT * 100}%` }} onClick={(event) => { event.stopPropagation(); pickDocumented(site); }}><i /></button>)}
 
           {savedJunctions.map((junction) => { const point = screenPoint(junction, center, zoom); return <button type="button" key={junction.id} className="fo-site-marker intervention-field-marker" title={`${junction.kind === "new" ? "Joncțiune nouă" : "Joncțiune existentă"} · ${junction.network === "mobile" ? "Vodafone Mobil" : "Vodafone Fixed"}`} style={{ left: `${point.x / MAP_WIDTH * 100}%`, top: `${point.y / MAP_HEIGHT * 100}%` }} onClick={(event) => { event.stopPropagation(); if (draft?.type === "junction-installation") return; updateJunction(draft?.type === "fo-installation" ? activeSlot : "junction", { ...junction, network: junction.network ?? "" }); }}><i /></button>; })}
 
@@ -593,6 +597,7 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
           <a className="fo-attribution" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>© OpenStreetMap contributors</a>
         </div>
 
+        <MapSiteLegend />
         <div className="splice-map-search"><label><span>⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Caută după cod, nume sau localitate…" disabled={!draft?.type || draft.type === "junction-installation"} /></label><div className={`splice-data-state ${sitesStatus}`}><i>{sitesStatus === "ready" ? "✓" : sitesStatus === "error" ? "!" : "↻"}</i>{sitesStatus === "ready" ? `${sites.length.toLocaleString("ro-RO")} puncte` : sitesStatus === "error" ? "Date indisponibile" : "Se încarcă"}</div>
           {search.trim().length >= 2 && <div className="splice-search-results">{searchResults.map((site) => <button type="button" key={site.id} onClick={() => pickDocumented(site)}><span>{site.code}</span><div><strong>{site.name}</strong><small>{site.region}</small></div><b>→</b></button>)}{!searchResults.length && <p>Niciun punct găsit.</p>}</div>}
         </div>
