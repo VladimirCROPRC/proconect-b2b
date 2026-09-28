@@ -3,7 +3,9 @@
 import { useDeferredValue, useEffect, useMemo, useState, type MouseEvent } from "react";
 import { fetchProjectFiles, uploadProjectFile } from "./client-storage";
 import type { SpliceFieldSummary } from "./field-documentation";
+import { MapSiteLegend, mapSiteMarkerClass } from "./map-site-legend";
 import { NoInterventionControl } from "./no-intervention-control";
+import { useMapFullscreen } from "./use-map-fullscreen";
 
 type Coordinate = { lat: number; lon: number };
 type OptixSiteRow = [code: string, description: string, region: string, lat: number, lon: number];
@@ -170,6 +172,8 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
   const [noIntervention, setNoIntervention] = useState(false);
   const [noInterventionReason, setNoInterventionReason] = useState("");
   const deferredSearch = useDeferredValue(search);
+  const mapFullscreen = useMapFullscreen();
+
   useEffect(() => {
     let active = true;
     fetch("/data/optix-sites.json")
@@ -484,12 +488,24 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
           <button className="primary-button" onClick={saveNoIntervention}>Salvează secțiunea <span>→</span></button>
         </section>
       ) : <div className="splice-layout">
-        <section className="splice-map-card">
+        <section className={`splice-map-card ${mapFullscreen.fullscreen ? "map-fullscreen" : ""}`}>
           <div className="splice-map-head">
             <div><small>SELECTARE JONCȚIUNE</small><strong>{mode === "documented" ? "Punct documentat din registru" : "Punct nedocumentat pe hartă"}</strong></div>
             <div className="splice-mode-switch">
               <button className={mode === "documented" ? "active" : ""} onClick={() => setMode("documented")}>Documentată</button>
               <button className={mode === "undocumented" ? "active" : ""} onClick={() => setMode("undocumented")}>Nedocumentată</button>
+              {mapFullscreen.fullscreen && <button
+                className={`splice-header-locate ${currentLocation ? "located" : ""}`}
+                onClick={locateCurrentPosition}
+                disabled={gpsLoading}
+                aria-label="Identifică locația curentă pe harta sudurilor"
+              ><span>{gpsLoading ? "↻" : currentLocation ? "✓" : "⌖"}</span> {gpsLoading ? "Se caută…" : "Locația mea"}</button>}
+              <button
+                className="fo-fullscreen-toggle"
+                onClick={mapFullscreen.toggleFullscreen}
+                aria-pressed={mapFullscreen.fullscreen}
+                aria-label={mapFullscreen.fullscreen ? "Închide harta pe tot ecranul" : "Deschide harta pe tot ecranul"}
+              ><span>{mapFullscreen.fullscreen ? "×" : "⛶"}</span> {mapFullscreen.fullscreen ? "Închide" : "Ecran complet"}</button>
             </div>
           </div>
           <div className={`fo-map splice-map ${mode === "undocumented" ? "placing" : ""}`} onClick={handleMapClick} role="application" aria-label="Hartă OpenStreetMap pentru alegerea joncțiunii sudurii">
@@ -497,7 +513,7 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
               {tiles.map((tile) => <img key={tile.key} src={`https://tile.openstreetmap.org/${zoom}/${tile.urlX}/${tile.urlY}.png`} alt="" draggable={false} style={{ left: `${(tile.x / MAP_WIDTH) * 100}%`, top: `${(tile.y / MAP_HEIGHT) * 100}%`, width: `${(TILE_SIZE / MAP_WIDTH) * 100}%`, height: `${(TILE_SIZE / MAP_HEIGHT) * 100}%` }} />)}
             </div>
             {visibleSites.map(({ site, point }) => (
-              <button className={`fo-site-marker ${junction?.id === site.id ? "selected" : ""}`} style={{ left: `${(point.x / MAP_WIDTH) * 100}%`, top: `${(point.y / MAP_HEIGHT) * 100}%` }} key={site.id} title={`${site.code} · ${site.name}`} onClick={(event) => { event.stopPropagation(); chooseDocumented(site); }}><i /></button>
+              <button className={`fo-site-marker ${mapSiteMarkerClass(site.code)} ${junction?.id === site.id ? "selected" : ""}`} style={{ left: `${(point.x / MAP_WIDTH) * 100}%`, top: `${(point.y / MAP_HEIGHT) * 100}%` }} key={site.id} title={`${site.code} · ${site.name}`} onClick={(event) => { event.stopPropagation(); chooseDocumented(site); }}><i /></button>
             ))}
             {junction && (() => {
               const point = screenPoint(junction, center, zoom);
@@ -521,6 +537,7 @@ export function FoSplicesSection({ project: projectItem, initialSummary, onNotif
             <div className="fo-zoom" onClick={(event) => event.stopPropagation()}><button onClick={() => setZoom((current) => clamp(current + 1, 7, 18))}>＋</button><button onClick={() => setZoom((current) => clamp(current - 1, 7, 18))}>−</button></div>
             <a className="fo-attribution" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>© OpenStreetMap contributors</a>
           </div>
+          <MapSiteLegend />
           <div className="splice-map-search">
             <label><span>⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Caută după cod, nume sau localitate…" disabled={!creating} /></label>
             <div className={`splice-data-state ${sitesStatus}`}><i>{sitesStatus === "ready" ? "✓" : sitesStatus === "error" ? "!" : "↻"}</i>{sitesStatus === "ready" ? `${sites.length.toLocaleString("ro-RO")} site-uri` : sitesStatus === "error" ? "Date indisponibile" : "Se încarcă"}</div>
