@@ -21,8 +21,8 @@ Se selectează tehnicianul și o zi (De la = Până la) sau o perioadă.
   manoperele.
 - Orange/OROC folosește `work_date` și tehnicianul alocat tichetului.
 - Operațiunile fără fotografie asociată (inclusiv manopere manuale fără o
-  asociere salvată) se listează separat, fără atribuire arbitrară unei zile.
-  Această listă nu poate fi filtrată după perioadă.
+  asociere salvată) nu apar în interfață sau în Excel, fără atribuire
+  arbitrară unei zile. Nu sunt incluse în total.
 - Raportul anterior de realizări păstrează regulile existente; nu este înlocuit.
 
 ## Conținut și valori
@@ -47,9 +47,9 @@ exportată ca dată Excel; datele multiple sunt enumerate.
 
 Foaia principală conține total teren, total Orange/OROC (formulă care referă
 a doua foaie) și total general. Valorile neconfigurate rămân goale, iar
-lucrările cu valori incomplete sunt marcate. Manoperele fără dată sunt
-menționate pe aceeași linie a lucrării și excluse din valoare. O lucrare
-numai cu manopere nedatate are valoarea goală. Totalurile nu includ de
+lucrările cu valori incomplete sunt marcate. Manoperele fără dată sunt excluse complet din export. O lucrare numai
+cu manopere nedatate nu apare; dacă are și manopere datate, în linia sa
+apar doar cele datate. Totalurile nu includ de
 două ori detaliile și rămân valide când una dintre foi nu are lucrări.
 Interfața păstrează sumarul pe zile și detaliile pe manopere.
 
