@@ -5,11 +5,13 @@ export const orangeOrocTickets = sqliteTable("orange_oroc_tickets", {
   ticketNumber: text("ticket_number").notNull().unique(),
   workDate: text("work_date").notNull(),
   servicePackageCode: text("service_package_code").notNull(),
+  technicianUsername: text("technician_username"),
+  technicianName: text("technician_name").notNull().default(""),
   createdBy: text("created_by").notNull(),
   createdAt: integer("created_at").notNull(),
   updatedBy: text("updated_by").notNull(),
   updatedAt: integer("updated_at").notNull(),
-}, table => [index("orange_oroc_work_date_idx").on(table.workDate)]);
+}, table => [index("orange_oroc_work_date_idx").on(table.workDate), index("orange_oroc_technician_idx").on(table.technicianUsername, table.workDate)]);
 
 export const appUsers = sqliteTable(
   "app_users",

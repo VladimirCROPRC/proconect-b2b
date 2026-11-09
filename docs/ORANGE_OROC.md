@@ -1,13 +1,17 @@
 # Orange/OROC
 
 Secțiunea se găsește în **Activități → Orange/OROC**, inclusiv în navigarea mobilă.
-Este disponibilă coordonatorilor, managerilor și administratorilor. Tehnicienii
-nu pot accesa lista sau modifica înregistrările prin interfață ori API.
+Coordonatorii, managerii și administratorii pot crea, edita și aloca tichete.
+Tehnicienii văd numai tichetele alocate username-ului lor, fără drept de editare.
+Aceste limite sunt aplicate și în API, nu doar în interfață.
 
 Pentru fiecare tichet se introduc:
 
 - **Număr tichet**: text, normalizat la majuscule; zerourile de la început se păstrează.
 - **Data**: dată calendaristică, fără schimbarea zilei prin conversii de fus orar.
+- **Tehnician alocat**: selecție obligatorie dintre tehnicienii activi. Alocarea
+  poate fi schimbată prin editare; după realocare, tichetul dispare din lista
+  fostului tehnician și apare la noul tehnician.
 - **Pachet de servicii**: o selecție din cele șapte pachete principale din QAF,
   foaia `Services`, rândurile 4–10.
 
@@ -27,15 +31,22 @@ completată în exemplul QAF nu sunt transformate în pachete sau valori implici
 Nu se importă detaliile incidentului sau foile cu nume din QAF.
 
 Tichetele sunt salvate permanent și pot fi căutate după număr, dată sau pachet.
-Editarea permite corectarea tuturor celor trei câmpuri. Numerele duplicate sunt
+Editarea permite corectarea datelor și schimbarea tehnicianului. Numerele duplicate sunt
 respinse atât de API, cât și de constrângerea unică din baza de date. Se păstrează
 autorul și momentul creării, respectiv ale ultimei modificări.
 
 Înregistrarea este separată de proiectele de instalare: nu cere client, CPE,
 contact sau documentație Pretask pentru simpla înregistrare a celor trei câmpuri.
-Această versiune nu atribuie un tehnician și nu generează automat un deviz/QAF.
+Înregistrarea tichetului nu generează automat un deviz/QAF. Câmpul pentru numărul
+tichetului este gol la creare și nu are placeholder.
 
-Înainte de publicare trebuie aplicată migrarea `0010_orange_oroc_tickets.sql` prin
+Tichetele vechi fără tehnician sunt marcate «Nealocat» și pot fi alocate din
+«Editează». Nu se atribuie automat unei persoane alese arbitrar. O alocare
+istorică către un tehnician devenit inactiv poate fi păstrată la editarea altor
+date; alocările noi sunt permise numai către tehnicieni activi.
+
+Înainte de publicare trebuie aplicate migrările `0010_orange_oroc_tickets.sql`
+și `0011_orange_ticket_technician.sql` prin
 comanda D1 de deploy existentă. Catalogul conține numai datele generice din Services;
 fișierul incidentului atașat nu este publicat în repository.
 

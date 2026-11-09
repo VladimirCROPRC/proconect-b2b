@@ -20,18 +20,32 @@ test('QAF packages preserve all seven main codes and do not import the example q
 });
 
 test('ticket validation normalizes numbers, checks real calendar dates and accepts only QAF service packages', () => {
-  const input = { ticketNumber: '  fitt00123  ', workDate: '2026-11-09', servicePackageCode: 'SP1 FO' };
+  const input = { ticketNumber: '  fitt00123  ', workDate: '2026-11-09', servicePackageCode: 'SP1 FO', technicianUsername: 'tech' };
   assert.deepEqual(validateOrangeTicket(input), { ...input, ticketNumber: 'FITT00123' });
   for (const service of orangeServicePackages) assert.ok(validateOrangeTicket({ ...input, servicePackageCode: service.code }));
   for (const workDate of ['2026-02-30','2026-13-01','','09.11.2026']) assert.equal(validateOrangeTicket({ ...input, workDate }), null);
   assert.ok(validateOrangeTicket({ ...input, workDate: '2028-02-29' }));
   for (const ticketNumber of ['', 'FITT 123', '<script>', 'x'.repeat(65)]) assert.equal(validateOrangeTicket({ ...input, ticketNumber }), null);
   for (const servicePackageCode of ['SP4 FOA','SP6 FOU','SP7 FOU','Directed drilling','invalid']) assert.equal(validateOrangeTicket({ ...input, servicePackageCode }), null);
+  for (const technicianUsername of ['', ' ', undefined, 'x'.repeat(101)]) assert.equal(validateOrangeTicket({ ...input, technicianUsername }), null);
 });
 
-test('Orange/OROC API persists create/edit with audit, rejects duplicates and restricts access to coordination', async () => {
+test('assignment migration preserves existing tickets and leaves their assignee unset', async () => {
+  const db = new DatabaseSync(':memory:');
+  try {
+    db.exec(await source('drizzle/0010_orange_oroc_tickets.sql'));
+    db.prepare('INSERT INTO orange_oroc_tickets VALUES (?,?,?,?,?,?,?,?)').run('old','FITT00001','2026-11-09','SP1 FO','coord',1000,'coord',1000);
+    db.exec(await source('drizzle/0011_orange_ticket_technician.sql'));
+    const old=db.prepare('SELECT * FROM orange_oroc_tickets').get();
+    assert.equal(old.technician_username,null); assert.equal(old.ticket_number,'FITT00001'); assert.equal(old.created_at,1000);
+  } finally { db.close(); }
+});
+
+test('Orange/OROC API enforces assignee-scoped reads and coordination-only assignment writes', async () => {
   const db = new DatabaseSync(':memory:');
   db.exec(await source('drizzle/0010_orange_oroc_tickets.sql'));
+  db.exec(await source('drizzle/0011_orange_ticket_technician.sql'));
+  db.exec("CREATE TABLE app_users(username TEXT PRIMARY KEY, name TEXT, role TEXT, active INTEGER); INSERT INTO app_users VALUES ('tech','Technician One','Tehnician',1),('othertech','Technician Two','Tehnician',1),('inactive','Inactive','Tehnician',0),('admin','Admin','Admin',1);");
   let session = null;
   const adapter = { prepare(sql) { let args = []; return {
     bind(...values) { args=values; return this; },
@@ -44,23 +58,35 @@ test('Orange/OROC API persists create/edit with audit, rejects duplicates and re
     isManagementRole: account => ['Admin','Manager','Coordonator'].includes(account.role), validateOrangeTicket };
   const code = (await source('app/api/orange-oroc/route.ts')).replace(/^import .*;$/gm, '');
   const api = await import(moduleUrl('const {getRawDb,currentSession,sameOrigin,isManagementRole,validateOrangeTicket}=globalThis.__orangeApi;\n'+code));
-  const input = { ticketNumber: 'fitt00123', workDate: '2026-11-09', servicePackageCode: 'CR4 FOA' };
+  const input = { ticketNumber: 'fitt00123', workDate: '2026-11-09', servicePackageCode: 'CR4 FOA', technicianUsername: 'tech' };
   const request = (body=input, method='POST', origin='https://example.test') => new Request('https://example.test/api/orange-oroc', { method, headers: { Origin: origin, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   const get = () => api.GET(new Request('https://example.test/api/orange-oroc'));
   try {
     assert.equal((await get()).status,401);
     assert.equal((await api.POST(request())).status,401);
     session={account:{username:'tech',role:'Tehnician'}};
-    assert.equal((await get()).status,403);
+    assert.equal((await get()).status,200);
+    assert.deepEqual((await (await get()).json()).tickets,[]);
     assert.equal((await api.POST(request())).status,403);
     assert.equal((await api.PATCH(request({...input,id:'missing'},'PATCH'))).status,403);
     session={account:{username:'coord',role:'Coordonator'}};
+    for (const technicianUsername of ['inactive','admin','missing']) assert.equal((await api.POST(request({...input,technicianUsername}))).status,400);
     assert.equal((await api.POST(request(input,'POST','https://other.test'))).status,403);
     assert.equal((await api.POST(request({...input,workDate:'2026-02-30'}))).status,400);
     assert.equal((await api.POST(request({...input,servicePackageCode:'SP4 FOA'}))).status,400);
     const response=await api.POST(request()); assert.equal(response.status,201);
     const {ticket}=await response.json();
     assert.equal(ticket.ticketNumber,'FITT00123'); assert.equal(ticket.servicePackageCode,'CR4 FOA');
+    assert.equal(ticket.technicianUsername,'tech'); assert.equal(ticket.technicianName,'Technician One');
+    const assignedList=await (await get()).json();
+    assert.deepEqual(assignedList.technicians.map(user=>user.username),['tech','othertech']);
+    session.account={username:'tech',role:'Tehnician'};
+    const own=await (await get()).json();
+    assert.deepEqual(own.tickets.map(row=>row.id),[ticket.id]); assert.deepEqual(own.technicians,[]);
+    assert.equal((await api.PATCH(request({...input,id:ticket.id,technicianUsername:'othertech'},'PATCH'))).status,403);
+    session.account={username:'othertech',role:'Tehnician'};
+    assert.deepEqual((await (await get()).json()).tickets,[]);
+    session.account={username:'coord',role:'Coordonator'};
     assert.equal((await api.POST(request({...input,ticketNumber:'FITT00123'}))).status,409);
     assert.equal(db.prepare('SELECT count(*) AS n FROM orange_oroc_tickets').get().n,1);
     const created=db.prepare('SELECT * FROM orange_oroc_tickets').get();
@@ -74,6 +100,19 @@ test('Orange/OROC API persists create/edit with audit, rejects duplicates and re
     assert.equal(list.tickets[0].servicePackageCode,'CR6 FOU');
     const stored=db.prepare('SELECT * FROM orange_oroc_tickets').get();
     assert.equal(stored.created_by,'coord'); assert.equal(stored.updated_by,'manager'); assert.equal(stored.created_at,created.created_at);
+    const reassigned=await api.PATCH(request({...input,id:ticket.id,ticketNumber:'FITT00456',technicianUsername:'othertech'},'PATCH'));
+    assert.equal(reassigned.status,200);
+    session.account={username:'tech',role:'Tehnician'};
+    assert.deepEqual((await (await get()).json()).tickets,[]);
+    session.account={username:'othertech',role:'Tehnician'};
+    assert.deepEqual((await (await get()).json()).tickets.map(row=>row.id),[ticket.id]);
+    // Filtering is bound to the authenticated username, not query parameters.
+    const spoofed=await api.GET(new Request('https://example.test/api/orange-oroc?technician=tech'));
+    assert.deepEqual((await spoofed.json()).tickets.map(row=>row.id),[ticket.id]);
+    session.account={username:'manager',role:'Manager'};
+    db.prepare('UPDATE app_users SET active=0 WHERE username=?').run('othertech');
+    assert.equal((await api.PATCH(request({...input,id:ticket.id,ticketNumber:'FITT00456',technicianUsername:'othertech'},'PATCH'))).status,200);
+    assert.equal((await api.POST(request({...input,ticketNumber:'NEW001',technicianUsername:'othertech'}))).status,400);
     assert.equal((await api.PATCH(request({...input,id:'missing'},'PATCH'))).status,404);
     session.account.passwordResetRequired=true;
     assert.equal((await get()).status,401); assert.equal((await api.POST(request())).status,401);
