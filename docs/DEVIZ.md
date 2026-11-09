@@ -1,0 +1,66 @@
+# Deviz din documentația de teren
+
+Catalog: `BoQ_VBTS FO_PRC.xlsx`, foaia `VBTS Fibre Build`, rândurile 8–208.
+Identificatorii afișați sunt numerele rândurilor din fișier, nu coduri contractuale.
+Prețurile sunt în EUR fără TVA; unitățile sunt cele din BoQ.
+
+## Reguli automate
+
+Diametrul implicit aprobat pentru cablu este de până la 10 mm. Pentru intervalele
+din canalizație se folosește implicit diametrul de 10 mm.
+
+| Operațiune | Rând BoQ | Cantitate |
+| --- | --- | --- |
+| Cablu pe stâlpi | 91 | metri executați |
+| Cablu în canalizație | 83 | metri executați |
+| Cablu în pat de cablu existent | 95 | metri executați |
+| Cablu pe fațadă | 88 | metri executați |
+| Bărcuță / colier inox / cârlig / armorod | 138 / 139 / 140 / 141 | bucăți declarate |
+| Instalare joncțiune nouă | 100 | o operațiune pe joncțiune, include maximum 12 suduri |
+| Suduri suplimentare | 101 | numai peste pragul inclus în pachet |
+| Instalare CPE și acceptanță | 128 | echipamente documentate |
+| Instalare SFP / Media Converter | 132 | echipamente documentate |
+| Instalare Terminal Box | 110 | module documentate, include maximum 12 suduri/modul |
+
+Se generează și rânduri pentru conectarea ODF/eTN și toate activitățile din
+execuția intervențiilor. Acțiunile „Nu s-a intervenit” nu generează rânduri.
+
+## Confirmări necesare
+
+- Pentru accesul la joncțiuni existente, alege 102 sau 103 după pregătirea cablurilor.
+  Pachetul include maximum patru suduri. Sudurile peste acest prag apar la 101.
+- Pentru cutii noi, confirmă furnizarea și modelul (142–146). Dacă sunt furnizate
+  de beneficiar, alege „Inclus / beneficiar” și introdu o justificare.
+- Pentru site, confirmă lungimea patchcordului: 108 până la 5 m, 109 peste 5 m.
+- Pentru instalările FO din intervenții, confirmă montajul. Lungimea vine din teren.
+- Pentru diagnostic OTDR, completează numărul de fibre și distribuie între 111
+  (primele patru) și 112 (suplimentare). Fotografiile nu sunt număr de fibre.
+- Pentru remedieri și documentația veche cu numai un total de suduri, verifică
+  pachetul și distribuția; nu se inventează numărul de suduri sau joncțiuni.
+- Când aceeași lucrare este inclusă în alt pachet (de exemplu sudurile unui
+  Terminal Box), marcheaz-o „Inclus / beneficiar” și indică poziția care o include.
+
+Toate acțiunile din teren rămân vizibile. Pozițiile fără tarif confirmat sau cu
+cantitate zero blochează salvarea și exportul. Se pot adăuga manual și alte poziții
+din întregul catalog. Cantitățile și alegerea rândului pot fi corectate de management.
+Prețurile și unitățile sunt recalculare pe server din catalog, nu din cererea clientului.
+
+## Salvare și export
+
+`Salvează devizul` persistă devizul separat de raport, în `project_estimates`.
+La redeschidere se reconciliază cu acțiunile actuale: acțiuni noi adăugate,
+acțiuni eliminate din sursă înlăturate, poziții manuale păstrate. O schimbare a
+documentației între deschiderea și salvarea devizului produce răspuns 409.
+Devizul se salvează din nou după verificarea actualizărilor.
+
+Exportul CSV UTF-8 cu separator `;` include rândul BoQ, cantitatea, tariful,
+valoarea, documentarea și observațiile. Este un export pentru Excel, nu o
+completare a fișierului XLSX original. Valorile pe rând se rotunjesc la doi
+zecimale, iar totalul însumează aceste valori. Devizul nu este sincronizat automat
+cu fișierul de raport din Google Drive / OneDrive.
+
+Migrarea `0006_project_estimates.sql` trebuie aplicată înaintea publicării, prin
+comanda D1 de deploy existentă. Accesul este rezervat rolurilor de management.
+
+Validare: `node --test tests/project-budget.test.mjs`, `python3 scripts/test-migrations.py`,
+`npx wrangler types && npx tsc --noEmit`, `npm run lint`, `npm run build`.

@@ -171,3 +171,10 @@ export const onedriveJobs = sqliteTable("onedrive_jobs", {
   next_at: integer("next_at").notNull().default(0),
   last_error: text("last_error").notNull().default(""),
 }, (table) => [index("onedrive_jobs_pending_idx").on(table.next_at)]);
+
+export const projectEstimates = sqliteTable("project_estimates", {
+  projectId: text("project_id").primaryKey().references(() => projects.id, { onDelete: "cascade" }),
+  contentJson: text("content_json").notNull(),
+  updatedBy: text("updated_by").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});

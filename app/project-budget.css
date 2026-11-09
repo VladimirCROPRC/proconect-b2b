@@ -1,0 +1,20 @@
+.estimate-table select {
+  width: 240px;
+  max-width: 100%;
+  padding: 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  color: #172b4d;
+}
+.estimate-table td:nth-child(3) input {
+  display: block;
+  width: 100%;
+  min-width: 220px;
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+}
+.estimate-footer > div { flex-wrap: wrap; }
+.estimate-head em[role="status"] { display: block; margin-top: 6px; }
