@@ -75,8 +75,8 @@ Fișierul nu este sincronizat automat în Drive/OneDrive.
 
 În secțiunea **Echipă**, raportul **Realizări per tehnician** permite selectarea
 tehnicianului și perioadei, după **data creării proiectului** (`projects.created_at`),
-conform alegerii utilizatorului. Sunt incluse numai lucrările cu statusul
-`Finalizat`, alocate username-ului selectat. Ambele zile ale perioadei sunt incluse
+conform alegerii utilizatorului. Sunt incluse toate lucrările alocate username-ului selectat, indiferent de status.
+Statusul este afișat în tabel și în exportul Excel. Ambele zile ale perioadei sunt incluse
 în fusul `Europe/Bucharest`, inclusiv schimbările de oră. Fotografiile, data
 închiderii, editările și data devizului nu schimbă încadrarea proiectului.
 

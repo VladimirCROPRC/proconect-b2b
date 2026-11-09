@@ -49,7 +49,7 @@ export type TechnicianReport = {
   technician: { username: string; name: string };
   from: string;
   to: string;
-  works: Array<{ id: string; client: string; address: string; activityType: string; createdAt: number; total: number | null; estimateStatus: "salvat" | "lipsă" | "invalid" }>;
+  works: Array<{ id: string; client: string; address: string; activityType: string; status: string; createdAt: number; total: number | null; estimateStatus: "salvat" | "lipsă" | "invalid" }>;
   total: number;
   missingEstimates: number;
   undated: Array<{ id: string; client: string }>;

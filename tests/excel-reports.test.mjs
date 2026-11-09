@@ -67,10 +67,12 @@ print('XLSX structure, CRC, numeric cells, formulas, cached totals and Unicode v
 
 test('report workbook includes null amounts as blank and a summable total', () => {
   const sheet = models.technicianReportSheet({ technician: { username: 'a', name: 'Andrei' }, from: '2026-11-01', to: '2026-11-30', works: [
-    { id: 'RID1', activityType: 'Instalare', client: 'A', address: 'B', createdAt: reports.dayStart('2026-11-09'), total: 10.75, estimateStatus: 'salvat' },
-    { id: 'RID2', activityType: 'Instalare', client: 'A', address: 'B', createdAt: reports.dayStart('2026-11-09'), total: null, estimateStatus: 'lipsă' },
+    { id: 'RID1', activityType: 'Instalare', status: 'Finalizat', client: 'A', address: 'B', createdAt: reports.dayStart('2026-11-09'), total: 10.75, estimateStatus: 'salvat' },
+    { id: 'RID2', activityType: 'Instalare', status: 'Finalizat', client: 'A', address: 'B', createdAt: reports.dayStart('2026-11-09'), total: null, estimateStatus: 'lipsă' },
   ], total: 10.75, missingEstimates: 1, undated: [] });
   assert.equal(sheet.rows[1][5], null);
+  assert.equal(sheet.headers[7], 'Status lucrare');
+  assert.equal(sheet.rows[0][7], 'Finalizat');
   assert.deepEqual(sheet.rows[0][4], { date: '2026-11-09' });
   assert.deepEqual(sheet.rows[2][5], { formula: 'SUM(F5:F6)', value: 10.75 });
   const result = spawnSync('python3', ['-c', `import sys,io,zipfile,xml.etree.ElementTree as E
@@ -101,12 +103,12 @@ test('completion migration backfills only actual intervention validation dates',
   db.close();
 });
 
-test('report API enforces access and filters by username, final status and inclusive local dates', async () => {
+test('report API enforces access and includes all statuses and filters by username and inclusive creation dates', async () => {
   const db = new DatabaseSync(':memory:');
   db.exec('CREATE TABLE app_users(username TEXT, name TEXT, role TEXT); CREATE TABLE projects(id TEXT,client TEXT,address TEXT,activity_type TEXT,technician_username TEXT,technician TEXT,status TEXT,created_at INTEGER); CREATE TABLE project_estimates(project_id TEXT,content_json TEXT); CREATE TABLE project_files(project_id TEXT, uploaded_by TEXT, content_type TEXT, created_at INTEGER, captured_at INTEGER);');
   db.exec("INSERT INTO app_users VALUES ('a','Same Name','Tehnician'),('b','Same Name','Tehnician');");
   const { start, end } = reports.reportRange('2026-11-09', '2026-11-09');
-  for (const [id, user, status, at] of [['start','a','Finalizat',start],['late','a','Finalizat',end-1],['end','a','Finalizat',end],['other','b','Finalizat',start],['open','a','În desfășurare',start],['undated','a','Finalizat',null]]) db.prepare('INSERT INTO projects VALUES (?,?,?,?,?,?,?,?)').run(id,'Client','Address','Instalare',user,'Same Name',status,at);
+  for (const [id, user, status, at] of [['start','a','Finalizat',start],['late','a','Finalizat',end-1],['end','a','Finalizat',end],['other','b','Finalizat',start],['open','a','În desfășurare',start],['planned','a','Planificat',start],['undated','a','Finalizat',null]]) db.prepare('INSERT INTO projects VALUES (?,?,?,?,?,?,?,?)').run(id,'Client','Address','Instalare',user,'Same Name',status,at);
   for (const [id, user, status, at] of [["start","a","Finalizat",start],["late","a","Finalizat",end-1],["end","a","Finalizat",end],["other","b","Finalizat",start],["open","a","În desfășurare",start]]) {
     void status; db.prepare("INSERT INTO project_files VALUES (?,?,?,?,?)").run(id,user,"image/jpeg",at,1);
   }
@@ -128,16 +130,18 @@ test('report API enforces access and filters by username, final status and inclu
     const response=await api.GET(request('technician=a&from=2026-11-09&to=2026-11-09'));
     assert.equal(response.headers.get('Cache-Control'),'no-store');
     const {report}=await response.json();
-    assert.deepEqual(report.works.map(work=>work.id),['start','late']);
-    assert.equal(report.total,10.75); assert.equal(report.missingEstimates,1);
+    assert.deepEqual(report.works.map(work=>work.id),['open','planned','start','late']);
+    assert.equal(report.total,10.75); assert.equal(report.missingEstimates,3);
     assert.equal(report.works[1].total,null); assert.equal(report.works[1].estimateStatus,'lipsă');
     assert.equal(report.undated[0].id,'undated');
     assert.equal(report.works[0].createdAt,start);
-    assert.equal(report.works[1].createdAt,end-1);
+    assert.equal(report.works.find(work=>work.id==='late').createdAt,end-1);
+    assert.equal(report.works.find(work=>work.id==='open').status,'În desfășurare');
+    assert.equal(report.works.find(work=>work.id==='planned').status,'Planificat');
     // Uploading another photo does not change the creation-date report period.
     db.prepare('INSERT INTO project_files VALUES (?,?,?,?,?)').run('start','a','image/png',end+1000,1);
     const refreshed=await (await api.GET(request('technician=a&from=2026-11-09&to=2026-11-09'))).json();
-    assert.deepEqual(refreshed.report.works.map(work=>work.id),['start','late']);
+    assert.deepEqual(refreshed.report.works.map(work=>work.id),['open','planned','start','late']);
     session.account.passwordResetRequired=true; assert.equal((await api.GET(request())).status,401);
   } finally { delete globalThis.__techReports; db.close(); }
 });
