@@ -7,7 +7,8 @@ import { DatabaseSync } from 'node:sqlite';
 
 const source = path => readFile(new URL('../' + path, import.meta.url), 'utf8');
 const moduleUrl = code => 'data:text/javascript;base64,' + Buffer.from(stripTypeScriptTypes(code, { mode: 'transform', disableExperimentalWarning: true })).toString('base64');
-const reportUrl = moduleUrl(await source('app/technician-report.ts'));
+const valuesUrl = moduleUrl(await source('app/estimate-values.ts'));
+const reportUrl = moduleUrl((await source('app/technician-report.ts')).replace('"./estimate-values"', JSON.stringify(valuesUrl)));
 const reports = await import(reportUrl);
 const excel = await import(moduleUrl(await source('app/excel-export.ts')));
 const models = await import(moduleUrl((await source('app/workbook-models.ts')).replace('"./technician-report"', JSON.stringify(reportUrl))));
@@ -21,18 +22,19 @@ test('report periods include the entire local day and handle Romanian DST bounda
   assert.equal(reports.localDate(Date.parse('2026-11-08T23:30:00Z')), '2026-11-09');
 });
 
-test('saved totals round each line and distinguish zero, missing and corrupt estimates', () => {
+test('saved totals follow the template subtotal and distinguish zero, missing and corrupt estimates', () => {
   const row = { id: 'one', quantity: 3, unitPrice: 3.5823 };
-  assert.equal(reports.savedEstimateTotal(JSON.stringify([row, { ...row, id: 'two' }])), 21.5);
+  assert.equal(reports.savedEstimateTotal(JSON.stringify([row, { ...row, id: 'two' }])), 21.49);
   assert.equal(reports.savedEstimateTotal(JSON.stringify([{ ...row, unitPrice: 0 }])), 0);
   for (const bad of [null, '[]', 'broken', JSON.stringify([row, row]), JSON.stringify([{ ...row, unitPrice: -1 }]), JSON.stringify([{ ...row, quantity: '3' }])]) assert.equal(reports.savedEstimateTotal(bad), null);
 });
 
 test('actual XLSX ZIP opens with independent XML/CRC reader, formulas and typed numeric values', () => {
-  const sheet = models.estimateSheet({ id: 'RID1', client: '=MALICIOUS & Client', address: 'București <Centru>' }, [
-    { id: 'a', catalogPosition: '108', name: '=1+1', unit: 'each/patchcord', quantity: 3, unitPrice: 3.5823, evidence: 'Șantier & client', note: 'până la 5 m' },
-    { id: 'b', catalogPosition: '102', name: 'Acces', unit: 'each', quantity: 1, unitPrice: 14.09038, evidence: 'FO', note: '' },
-  ]);
+  const sheet = { name: 'Deviz', title: 'Test export', subtitle: 'București <Centru>',
+    headers: ['RID','BoQ','Lucrare','UM','Cantitate','Preț','Total','Documentare','Observații'], widths: [20,13,58,20,14,20,23,70,55], numericColumns:[4,5], moneyColumns:[6],
+    rows: [['RID1','108','=1+1','each',3,3.5823,{formula:'ROUND(E5*F5,2)',value:10.75},'Șantier & client','până la 5 m'],
+      ['RID1','102','Acces','each',1,14.09038,{formula:'ROUND(E6*F6,2)',value:14.09},'FO',''],
+      ['TOTAL','','','','','',{formula:'SUM(G5:G6)',value:24.84},'','']] };
   const bytes = excel.createExcelWorkbook(sheet);
   assert.equal(bytes[0], 0x50); assert.equal(bytes[1], 0x4b);
   const result = spawnSync('python3', ['-c', `import sys,zipfile,io,xml.etree.ElementTree as E
@@ -65,8 +67,8 @@ print('XLSX structure, CRC, numeric cells, formulas, cached totals and Unicode v
 
 test('report workbook includes null amounts as blank and a summable total', () => {
   const sheet = models.technicianReportSheet({ technician: { username: 'a', name: 'Andrei' }, from: '2026-11-01', to: '2026-11-30', works: [
-    { id: 'RID1', activityType: 'Instalare', client: 'A', address: 'B', completedAt: reports.dayStart('2026-11-09'), total: 10.75, estimateStatus: 'salvat' },
-    { id: 'RID2', activityType: 'Instalare', client: 'A', address: 'B', completedAt: reports.dayStart('2026-11-09'), total: null, estimateStatus: 'lipsă' },
+    { id: 'RID1', activityType: 'Instalare', client: 'A', address: 'B', createdAt: reports.dayStart('2026-11-09'), total: 10.75, estimateStatus: 'salvat' },
+    { id: 'RID2', activityType: 'Instalare', client: 'A', address: 'B', createdAt: reports.dayStart('2026-11-09'), total: null, estimateStatus: 'lipsă' },
   ], total: 10.75, missingEstimates: 1, undated: [] });
   assert.equal(sheet.rows[1][5], null);
   assert.deepEqual(sheet.rows[0][4], { date: '2026-11-09' });
@@ -101,11 +103,10 @@ test('completion migration backfills only actual intervention validation dates',
 
 test('report API enforces access and filters by username, final status and inclusive local dates', async () => {
   const db = new DatabaseSync(':memory:');
-  db.exec('CREATE TABLE app_users(username TEXT, name TEXT, role TEXT); CREATE TABLE projects(id TEXT,client TEXT,address TEXT,activity_type TEXT,technician_username TEXT,technician TEXT,status TEXT,completed_at INTEGER); CREATE TABLE project_estimates(project_id TEXT,content_json TEXT); CREATE TABLE project_files(project_id TEXT, uploaded_by TEXT, content_type TEXT, created_at INTEGER, captured_at INTEGER);');
+  db.exec('CREATE TABLE app_users(username TEXT, name TEXT, role TEXT); CREATE TABLE projects(id TEXT,client TEXT,address TEXT,activity_type TEXT,technician_username TEXT,technician TEXT,status TEXT,created_at INTEGER); CREATE TABLE project_estimates(project_id TEXT,content_json TEXT); CREATE TABLE project_files(project_id TEXT, uploaded_by TEXT, content_type TEXT, created_at INTEGER, captured_at INTEGER);');
   db.exec("INSERT INTO app_users VALUES ('a','Same Name','Tehnician'),('b','Same Name','Tehnician');");
   const { start, end } = reports.reportRange('2026-11-09', '2026-11-09');
   for (const [id, user, status, at] of [['start','a','Finalizat',start],['late','a','Finalizat',end-1],['end','a','Finalizat',end],['other','b','Finalizat',start],['open','a','În desfășurare',start],['undated','a','Finalizat',null]]) db.prepare('INSERT INTO projects VALUES (?,?,?,?,?,?,?,?)').run(id,'Client','Address','Instalare',user,'Same Name',status,at);
-  db.exec("UPDATE projects SET completed_at = 1");
   for (const [id, user, status, at] of [["start","a","Finalizat",start],["late","a","Finalizat",end-1],["end","a","Finalizat",end],["other","b","Finalizat",start],["open","a","În desfășurare",start]]) {
     void status; db.prepare("INSERT INTO project_files VALUES (?,?,?,?,?)").run(id,user,"image/jpeg",at,1);
   }
@@ -131,13 +132,12 @@ test('report API enforces access and filters by username, final status and inclu
     assert.equal(report.total,10.75); assert.equal(report.missingEstimates,1);
     assert.equal(report.works[1].total,null); assert.equal(report.works[1].estimateStatus,'lipsă');
     assert.equal(report.undated[0].id,'undated');
-    assert.equal(report.works[0].completedAt,start);
-    assert.equal(report.works[1].completedAt,end-1);
-    // A newly uploaded technician photo immediately moves the work to its
-    // actual latest upload date, without editing status or a manual date.
+    assert.equal(report.works[0].createdAt,start);
+    assert.equal(report.works[1].createdAt,end-1);
+    // Uploading another photo does not change the creation-date report period.
     db.prepare('INSERT INTO project_files VALUES (?,?,?,?,?)').run('start','a','image/png',end+1000,1);
     const refreshed=await (await api.GET(request('technician=a&from=2026-11-09&to=2026-11-09'))).json();
-    assert.deepEqual(refreshed.report.works.map(work=>work.id),['late']);
+    assert.deepEqual(refreshed.report.works.map(work=>work.id),['start','late']);
     session.account.passwordResetRequired=true; assert.equal((await api.GET(request())).status,401);
   } finally { delete globalThis.__techReports; db.close(); }
 });

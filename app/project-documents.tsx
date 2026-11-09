@@ -5,8 +5,8 @@ import type { ProjectFieldDocumentation } from "./field-documentation";
 import { boqCatalog } from "./boq-catalog";
 import { buildBudgetSuggestions, catalogSuggestion, budgetReady, reconcileBudget, normalizeBudget, type BudgetSuggestion } from "./project-budget";
 import "./project-budget.css";
-import { downloadExcel } from "./excel-export";
-import { estimateSheet } from "./workbook-models";
+import { downloadEstimateTemplate } from "./estimate-template";
+import { estimateTotal as calculateEstimateTotal } from "./estimate-values";
 
 type DocumentProject = {
   id: string;
@@ -149,7 +149,7 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
 
   const selectedSuggestions = suggestions.filter((item) => item.selected);
   const estimateTotal = useMemo(
-    () => selectedSuggestions.reduce((total, item) => total + Math.round(item.quantity * item.unitPrice * 100), 0) / 100,
+    () => calculateEstimateTotal(selectedSuggestions),
     [selectedSuggestions]
   );
 
@@ -220,7 +220,7 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
   async function exportEstimate() {
     const rows = await saveEstimate();
     if (!rows) return;
-    try { downloadExcel(estimateSheet(project, rows), `Deviz-${project.id}.xlsx`); }
+    try { await downloadEstimateTemplate(project, rows); }
     catch { onNotify("Devizul este salvat, dar fișierul Excel nu a putut fi generat. Reîncearcă descărcarea."); }
   }
 
@@ -273,7 +273,7 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
 
       {tab === "estimate" && (
         <section className="estimate-card">
-          <div className="estimate-head"><div><span>Σ</span><p><small>BoQ VBTS FO PRC</small><strong>Deviz din acțiunile executate</strong><em>Diametru implicit cablu ≤10 mm. Pozițiile sunt rândurile din foaia VBTS Fibre Build.</em><em role="status">{estimateState} {!budgetReady(suggestions) && "Completează pozițiile și cantitățile lipsă."}</em></p></div><div><small>{budgetReady(suggestions) ? "TOTAL FĂRĂ TVA" : "TOTAL PARȚIAL, FĂRĂ TVA"}</small><strong>{formatNumber(estimateTotal)} EUR</strong></div></div>
+          <div className="estimate-head"><div><span>Σ</span><p><small>BoQ VBTS FO PRC</small><strong>Deviz din acțiunile executate</strong><em>Diametru implicit cablu ≤10 mm. Cantitățile se cumulează pe poziții; totalul urmează formulele modelului Excel.</em><em role="status">{estimateState} {!budgetReady(suggestions) && "Completează pozițiile și cantitățile lipsă."}</em></p></div><div><small>{budgetReady(suggestions) ? "TOTAL FĂRĂ TVA" : "TOTAL PARȚIAL, FĂRĂ TVA"}</small><strong>{formatNumber(estimateTotal)} EUR</strong></div></div>
           {suggestions.length ? (
             <div className="estimate-table-wrap">
               <table className="estimate-table">

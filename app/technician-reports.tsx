@@ -44,7 +44,7 @@ export function TechnicianReports({ onEditWork }: { onEditWork: (id: string) => 
   }
 
   return <section className="technician-reports project-card">
-    <div className="card-heading"><div><h2>Realizări per tehnician</h2><p>Data finalizării este data ultimei fotografii încărcate de tehnicianul lucrării. Valori fără TVA.</p></div></div>
+    <div className="card-heading"><div><h2>Realizări per tehnician</h2><p>Perioada este filtrată după data creării proiectului. Valori fără TVA.</p></div></div>
     <form className="technician-report-filters" onSubmit={generate}>
       <label>Tehnician<select aria-label="Tehnician pentru raport" required value={technician} disabled={loading} onChange={event => { setTechnician(event.target.value); setReport(null); }}><option value="">Selectează tehnicianul</option>{technicians.map(tech => <option key={tech.username} value={tech.username}>{tech.name} (@{tech.username})</option>)}</select></label>
       <label>De la<input aria-label="Început perioadă" type="date" required value={from} max={to} disabled={loading} onChange={event => { setFrom(event.target.value); setReport(null); }} /></label>
@@ -55,11 +55,11 @@ export function TechnicianReports({ onEditWork }: { onEditWork: (id: string) => 
     {report && <div className="technician-report-result">
       <div className="technician-report-summary"><div><strong>{report.technician.name} · {report.works.length} lucrări finalizate</strong><p>{report.from} – {report.to} · Date în fusul Europe/Bucharest</p></div><strong>{money(report.total)}</strong><button className="secondary-button" onClick={exportReport}>Descarcă raport Excel</button></div>
       {report.missingEstimates > 0 && <p role="status">{report.missingEstimates} lucrări nu au un deviz valid salvat. Totalul include doar devizele disponibile.</p>}
-      <div className="estimate-table-wrap"><table className="estimate-table"><thead><tr><th>Lucrare</th><th>Tip</th><th>Client</th><th>Ultima fotografie / finalizare</th><th>Valoare deviz fără TVA</th></tr></thead><tbody>
-        {report.works.map(work => <tr key={work.id}><td><button className="secondary-button" onClick={() => onEditWork(work.id)}>{work.id}</button></td><td>{work.activityType}</td><td><strong>{work.client}</strong><small>{work.address}</small></td><td>{localDate(work.completedAt)}</td><td>{work.total === null ? `Deviz ${work.estimateStatus}` : money(work.total)}</td></tr>)}
+      <div className="estimate-table-wrap"><table className="estimate-table"><thead><tr><th>Lucrare</th><th>Tip</th><th>Client</th><th>Data creării</th><th>Valoare deviz fără TVA</th></tr></thead><tbody>
+        {report.works.map(work => <tr key={work.id}><td><button className="secondary-button" onClick={() => onEditWork(work.id)}>{work.id}</button></td><td>{work.activityType}</td><td><strong>{work.client}</strong><small>{work.address}</small></td><td>{localDate(work.createdAt)}</td><td>{work.total === null ? `Deviz ${work.estimateStatus}` : money(work.total)}</td></tr>)}
         {!report.works.length && <tr><td colSpan={5}>Nicio lucrare finalizată în această perioadă.</td></tr>}
       </tbody></table></div>
-      {report.undated.length > 0 && <details><summary>{report.undated.length} lucrări finalizate fără fotografii ale tehnicianului — neincluse</summary><p>Verifică tehnicianul alocat și fotografiile lucrării, apoi generează din nou raportul.</p>{report.undated.map(work => <button key={work.id} className="secondary-button" onClick={() => onEditWork(work.id)}>{work.id} · {work.client}</button>)}</details>}
+      {report.undated.length > 0 && <details><summary>{report.undated.length} lucrări finalizate fără dată de creare — neincluse</summary><p>Verifică datele lucrării, apoi generează din nou raportul.</p>{report.undated.map(work => <button key={work.id} className="secondary-button" onClick={() => onEditWork(work.id)}>{work.id} · {work.client}</button>)}</details>}
     </div>}
   </section>;
 }
