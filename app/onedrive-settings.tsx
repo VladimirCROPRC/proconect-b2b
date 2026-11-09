@@ -51,8 +51,8 @@ export function OneDriveSettings() {
       <div className="card-heading"><div><h2>OneDrive și destinații de salvare</h2><p>Contul Microsoft este conectat doar de administrator. Conturile tehnicienilor nu se schimbă.</p></div></div>
       {error && <p className="drive-inline-error" role="alert">{error}</p>}
       {!status ? <p>Se verifică integrarea…</p> : <div className="drive-config-form">
-        <p><strong>{status.connected ? `Conectat: ${status.account}` : status.configured ? "OneDrive necesită conectare" : "OneDrive necesită configurarea variabilelor și secretelor în Cloudflare"}</strong></p>
-        <p>Cloudflare păstrează datele originale. Alegerea de mai jos controlează copiile automate; nu șterge arhivele existente.</p>
+        <p><strong>{status.connected ? `Conectat: ${status.account}` : status.configured ? "OneDrive necesită conectare" : "OneDrive necesită configurarea variabilelor și secretelor aplicației"}</strong></p>
+        <p>Fișierele originale rămân în stocarea aplicației. Alegerea de mai jos controlează copiile automate; nu șterge arhivele existente.</p>
         <label><span>Destinație pentru copiile automate</span><select value={status.mode} disabled={busy || !status.connected || processing} onChange={e => void action("mode", e.target.value)}>
           <option value="google">Google Drive</option><option value="onedrive">OneDrive</option><option value="both">Google Drive + OneDrive</option>
         </select></label>

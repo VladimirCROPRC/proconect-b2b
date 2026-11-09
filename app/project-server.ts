@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 import { getRawDb } from "../db";
 import { requiredInterventionCablePhotos, type InterventionDocumentationSummary, type InterventionExecutionActivity, type InterventionExecutionSummary, type InterventionJunction, type ProjectFieldDocumentation } from "./field-documentation";
 import { initialCpeCatalog, initialFieldDocumentation, initialProjects, type CpeCatalogItem, type ProjectActivityType, type ProjectRecord } from "./project-data";
-import type { AuthenticatedAccount } from "./server-auth";
+import { accessMode, type AuthenticatedAccount } from "./server-auth";
 
 type ProjectRow = {
   id: string;
@@ -132,6 +132,7 @@ function insertProjectStatement(project: ProjectRecord, technicianUsername: stri
 }
 
 export async function ensureProjectData() {
+  if (accessMode()) return;
   const [existingProjects, existingEquipment] = await Promise.all([
     getRawDb().prepare("SELECT COUNT(*) AS count FROM projects").first<{ count: number }>(),
     getRawDb().prepare("SELECT COUNT(*) AS count FROM cpe_catalog").first<{ count: number }>(),

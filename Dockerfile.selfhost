@@ -1,0 +1,19 @@
+FROM node:24-bookworm-slim AS build
+WORKDIR /app
+ENV NEXT_TELEMETRY_DISABLED=1
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY . .
+RUN npm run build:selfhost
+
+FROM node:24-bookworm-slim AS runtime
+WORKDIR /app
+ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PROCONECT_SELF_HOSTED=1 PROCONECT_DATA_DIR=/data HOSTNAME=0.0.0.0 PORT=3000
+COPY --from=build --chown=node:node /app/.next-selfhost/standalone ./
+COPY --from=build --chown=node:node /app/.next-selfhost/static ./.next-selfhost/static
+COPY --from=build --chown=node:node /app/public ./public
+COPY --from=build --chown=node:node /app/server/selfhost ./server/selfhost
+COPY --from=build --chown=node:node /app/drizzle ./drizzle
+USER node
+EXPOSE 3000
+CMD ["sh", "-c", "node server/selfhost/check-config.mjs && node server/selfhost/migrate.mjs && exec node server.js"]

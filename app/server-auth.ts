@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { accessConfiguration, accessIdentity, normalizedAccessEmail } from "./access-auth";
 
 export type AppRole = "Admin" | "Manager" | "Coordonator" | "Tehnician";
 
@@ -8,11 +9,16 @@ export type AuthenticatedAccount = {
   role: AppRole;
   active: boolean;
   jobs: number;
+  email?: string;
   passwordResetRequired: boolean;
 };
 
 type AuthEnvironment = {
   DB: D1Database;
+  PROCONECT_AUTH_MODE?: string;
+  PROCONECT_APP_URL?: string;
+  CF_ACCESS_TEAM_DOMAIN?: string;
+  CF_ACCESS_AUD?: string;
   PROCONECT_ADMIN_PASSWORD?: string;
   PROCONECT_TECHNICIAN_PASSWORD?: string;
 };
@@ -33,6 +39,7 @@ type StoredUser = {
 };
 
 const authEnvironment = env as unknown as AuthEnvironment;
+export const accessMode = () => authEnvironment.PROCONECT_AUTH_MODE === "cloudflare-access";
 const SESSION_COOKIE_NAME = "proconect_session";
 const SESSION_DURATION_SECONDS = 60 * 60 * 12;
 // Cloudflare Workers currently rejects PBKDF2 requests above 100,000 iterations.
@@ -145,6 +152,7 @@ function insertUserStatement(user: Awaited<ReturnType<typeof makeUserRow>>) {
 }
 
 export async function ensureInitialAccounts() {
+  if (accessMode()) return;
   const existing = await database()
     .prepare("SELECT username FROM app_users WHERE username IN (?, ?)")
     .bind("vladimir.carlan", "vlad")
@@ -183,6 +191,7 @@ export async function ensureInitialAccounts() {
 
 export function sameOrigin(request: Request) {
   const origin = request.headers.get("origin");
+  if (accessMode()) return Boolean(authEnvironment.PROCONECT_APP_URL && origin === authEnvironment.PROCONECT_APP_URL);
   return !origin || origin === new URL(request.url).origin;
 }
 
@@ -193,6 +202,13 @@ function sessionTokenFromRequest(request: Request) {
 }
 
 export async function currentSession(request: Request) {
+  if (accessMode()) {
+    const identity = await accessIdentity(request, accessConfiguration(authEnvironment.CF_ACCESS_TEAM_DOMAIN, authEnvironment.CF_ACCESS_AUD));
+    if (!identity) return null;
+    const row = await database().prepare("SELECT u.* FROM app_users u JOIN app_user_access a ON a.user_id = u.id WHERE a.email = ? AND u.active = 1 LIMIT 1").bind(identity.email).first<StoredUser>();
+    if (!row || !["Admin", "Manager", "Coordonator", "Tehnician"].includes(row.role)) return null;
+    return { account: { ...toPublicAccount(row), email: identity.email, passwordResetRequired: false }, sessionId: `access:${identity.subject}`, userId: row.id };
+  }
   const token = sessionTokenFromRequest(request);
   if (!token || !/^[a-f0-9]{64}$/.test(token)) return null;
 
@@ -217,6 +233,7 @@ export function expiredSessionCookie() {
 }
 
 export async function signIn(username: string, password: string) {
+  if (accessMode()) return { error: "Autentificarea se face prin codul Cloudflare Access.", status: 405 as const };
   const normalizedUsername = username.trim().toLowerCase();
   const user = await database()
     .prepare("SELECT * FROM app_users WHERE username = ? AND active = 1 LIMIT 1")
@@ -257,11 +274,13 @@ export async function signIn(username: string, password: string) {
 }
 
 export async function signOut(request: Request) {
+  if (accessMode()) return;
   const session = await currentSession(request);
   if (session) await database().prepare("DELETE FROM app_sessions WHERE id = ?").bind(session.sessionId).run();
 }
 
 export async function updatePassword(request: Request, password: string) {
+  if (accessMode()) return { error: "Autentificarea prin email nu folosește parole.", status: 405 as const };
   const session = await currentSession(request);
   if (!session) return { error: "Sesiunea a expirat. Autentifică-te din nou.", status: 401 as const };
   if (password.length < 8) return { error: "Parola nouă trebuie să conțină minimum 8 caractere.", status: 400 as const };
@@ -279,6 +298,10 @@ export async function updatePassword(request: Request, password: string) {
 }
 
 export async function listAccounts() {
+  if (accessMode()) {
+    const rows = await database().prepare("SELECT u.username, u.name, u.role, u.active, u.jobs, a.email FROM app_users u LEFT JOIN app_user_access a ON a.user_id = u.id ORDER BY u.name, u.username").all<{ username: string; name: string; role: AppRole; active: number; jobs: number; email: string | null }>();
+    return (rows.results ?? []).map(row => ({ ...row, email: row.email ?? "", active: Boolean(row.active), passwordResetRequired: false }));
+  }
   const result = await database()
     .prepare("SELECT username, name, role, active, jobs, password_reset_required FROM app_users ORDER BY CASE WHEN role = 'Admin' THEN 0 ELSE 1 END, name")
     .all<Pick<StoredUser, "username" | "name" | "role" | "active" | "jobs" | "password_reset_required">>();
@@ -293,13 +316,13 @@ export async function listAccounts() {
   }));
 }
 
-export async function addAccount(input: { username: string; name: string; role: AppRole; password: string }) {
+export async function addAccount(input: { username: string; name: string; role: AppRole; password: string; email?: string }) {
   const username = input.username.trim().toLowerCase();
   if (!/^[a-z0-9][a-z0-9._-]{1,63}$/.test(username)) {
     return { error: "Username-ul trebuie să conțină între 2 și 64 de litere, cifre, punct, liniuță sau underscore.", status: 400 as const };
   }
   if (input.name.trim().length < 2) return { error: "Numele utilizatorului este obligatoriu.", status: 400 as const };
-  if (input.password.length < 8) return { error: "Parola temporară trebuie să aibă minimum 8 caractere.", status: 400 as const };
+  if (!accessMode() && input.password.length < 8) return { error: "Parola temporară trebuie să aibă minimum 8 caractere.", status: 400 as const };
   if (!["Admin", "Manager", "Coordonator", "Tehnician"].includes(input.role)) {
     return { error: "Rolul selectat nu este valid.", status: 400 as const };
   }
@@ -307,8 +330,12 @@ export async function addAccount(input: { username: string; name: string; role: 
   const existing = await database().prepare("SELECT id FROM app_users WHERE username = ? LIMIT 1").bind(username).first();
   if (existing) return { error: "Username-ul este deja folosit.", status: 409 as const };
 
-  const user = await makeUserRow({ ...input, username, passwordResetRequired: true });
-  await insertUserStatement(user).run();
+  const email = normalizedAccessEmail(input.email);
+  if (accessMode() && !email) return { error: "Introdu o adresă de email validă.", status: 400 as const };
+  if (accessMode() && await database().prepare("SELECT user_id FROM app_user_access WHERE email = ?").bind(email).first()) return { error: "Emailul este deja asociat unui cont.", status: 409 as const };
+  const user = await makeUserRow({ ...input, password: accessMode() ? randomHex(32) : input.password, username, passwordResetRequired: !accessMode() });
+  if (accessMode()) await database().batch([insertUserStatement(user), database().prepare("INSERT INTO app_user_access (user_id, email) VALUES (?, ?)").bind(user.id, email)]);
+  else await insertUserStatement(user).run();
   return {
     account: {
       username: user.username,
@@ -316,7 +343,20 @@ export async function addAccount(input: { username: string; name: string; role: 
       role: user.role,
       active: true,
       jobs: user.jobs,
-      passwordResetRequired: true,
+      passwordResetRequired: !accessMode(),
+      ...(accessMode() ? { email: email! } : {}),
     },
   };
+}
+
+export async function setAccessEmail(username: string, value: unknown) {
+  if (!accessMode()) return { error: "Opțiune disponibilă pentru Cloudflare Access.", status: 405 as const };
+  const email = normalizedAccessEmail(value);
+  if (!email) return { error: "Introdu un email valid.", status: 400 as const };
+  const user = await database().prepare("SELECT id FROM app_users WHERE username = ?").bind(username).first<{ id: string }>();
+  if (!user) return { error: "Cont indisponibil.", status: 404 as const };
+  const other = await database().prepare("SELECT user_id FROM app_user_access WHERE email = ? AND user_id != ?").bind(email, user.id).first();
+  if (other) return { error: "Emailul este deja asociat altui cont.", status: 409 as const };
+  await database().prepare("INSERT INTO app_user_access (user_id, email) VALUES (?, ?) ON CONFLICT(user_id) DO UPDATE SET email = excluded.email").bind(user.id, email).run();
+  return { email };
 }

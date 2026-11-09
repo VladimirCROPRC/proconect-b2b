@@ -41,3 +41,12 @@ next-env.d.ts
 /outputs/
 /work/
 /tsconfig.tsbuildinfo
+
+# Ubuntu copy
+.next-selfhost/
+.secrets/
+data/
+imports/
+exports/
+*.log
+
