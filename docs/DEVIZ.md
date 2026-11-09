@@ -49,7 +49,7 @@ execuția intervențiilor. Acțiunile „Nu s-a intervenit” nu generează rân
 Toate acțiunile din teren rămân vizibile. Pozițiile fără tarif confirmat sau cu
 cantitate zero blochează salvarea și exportul. Se pot adăuga manual și alte poziții
 din întregul catalog. Cantitățile și alegerea rândului pot fi corectate de management.
-Prețurile și unitățile sunt recalculare pe server din catalog, nu din cererea clientului.
+Prețurile și unitățile sunt recalculate pe server din catalog, nu din cererea clientului.
 
 ## Salvare și export
 
@@ -59,14 +59,39 @@ acțiuni eliminate din sursă înlăturate, poziții manuale păstrate. O schimb
 documentației între deschiderea și salvarea devizului produce răspuns 409.
 Devizul se salvează din nou după verificarea actualizărilor.
 
-Exportul CSV UTF-8 cu separator `;` include rândul BoQ, cantitatea, tariful,
-valoarea, documentarea și observațiile. Este un export pentru Excel, nu o
-completare a fișierului XLSX original. Valorile pe rând se rotunjesc la doi
+Butonul `Salvează și descarcă Excel (.xlsx)` salvează întâi devizul pe server,
+apoi descarcă un fișier Excel OOXML real cu rândul BoQ, cantitatea, tariful,
+valoarea, documentarea și observațiile. Nu completează fișierul XLSX original.
+Cantitățile și tarifele sunt numerice; valorile și totalul au formule Excel și
+rezultate memorate. Valorile pe rând se rotunjesc la două
 zecimale, iar totalul însumează aceste valori. Devizul nu este sincronizat automat
 cu fișierul de raport din Google Drive / OneDrive.
+
+## Realizări per tehnician
+
+În secțiunea **Echipă**, raportul **Realizări per tehnician** permite selectarea
+tehnicianului și perioadei, după **data finalizării**. Sunt incluse numai lucrările
+cu statusul `Finalizat`, alocate username-ului selectat. Limitele perioadei includ
+ambele zile în fusul `Europe/Bucharest`, inclusiv schimbările de oră.
+
+Fiecare rând prezintă lucrarea, tipul, clientul, data finalizării și totalul
+devizului salvat, fără TVA. Nu se recalculează în tăcere tarifele devizelor istorice.
+Lucrările fără deviz valid au valoare goală și sunt semnalate; nu se raportează ca
+lucrări de zero EUR. Raportul se poate descărca în format `.xlsx`, cu total.
+
+Data finalizării este salvată la închiderea lucrării și păstrată la editările
+obișnuite. Redeschiderea lucrării elimină data. Managementul poate introduce sau
+corecta data din formularul de editare; nu se acceptă date viitoare.
+
+Pentru intervențiile istorice, migrarea recuperează data validării documentației,
+atunci când există. Alte lucrări vechi fără dată sunt listate separat în raport și
+nu sunt încadrate arbitrar într-o perioadă. Completează data reală din editarea
+lucrării și generează din nou raportul. Migrarea `0007_project_completion.sql`
+trebuie aplicată înaintea publicării. Endpointul de raportare este accesibil doar
+rolurilor de management, inclusiv pentru tehnicieni inactivi sau istorici.
 
 Migrarea `0006_project_estimates.sql` trebuie aplicată înaintea publicării, prin
 comanda D1 de deploy existentă. Accesul este rezervat rolurilor de management.
 
-Validare: `node --test tests/project-budget.test.mjs`, `python3 scripts/test-migrations.py`,
+Validare: `node --test tests/project-budget.test.mjs tests/excel-reports.test.mjs`, `python3 scripts/test-migrations.py`,
 `npx wrangler types && npx tsc --noEmit`, `npm run lint`, `npm run build`.
