@@ -59,6 +59,7 @@ export const projects = sqliteTable("projects", {
   updatedAt: integer("updated_at").notNull(),
 }, (table) => [
   index("projects_technician_username_idx").on(table.technicianUsername),
+  index("projects_technician_created_idx").on(table.technicianUsername, table.status, table.createdAt),
   index("projects_technician_completed_idx").on(table.technicianUsername, table.status, table.completedAt),
 ]);
 

@@ -60,42 +60,31 @@ documentației între deschiderea și salvarea devizului produce răspuns 409.
 Devizul se salvează din nou după verificarea actualizărilor.
 
 Butonul `Salvează și descarcă Excel (.xlsx)` salvează întâi devizul pe server,
-apoi descarcă un fișier Excel OOXML real cu rândul BoQ, cantitatea, tariful,
-valoarea, documentarea și observațiile. Nu completează fișierul XLSX original.
-Cantitățile și tarifele sunt numerice; valorile și totalul au formule Excel și
-rezultate memorate. Valorile pe rând se rotunjesc la două
-zecimale, iar totalul însumează aceste valori. Devizul nu este sincronizat automat
-cu fișierul de raport din Google Drive / OneDrive.
+apoi completează direct modelul original `BoQ_VBTS FO_PRC.xlsx`. Se păstrează
+cele două foi, formatarea, dimensiunile, protecția, validările, formulele și
+setările de tipărire. Se completează data emiterii, compania Proconect, clientul,
+RID-ul și cantitățile în celulele existente. Pozițiile aceleiași linii BoQ sunt
+cumulate; lucrările incluse în alte tarife nu produc o facturare separată.
+
+Formulele originale se păstrează, inclusiv `SUBTOTAL(9,H8:H208)`. Totalul din
+aplicație și raport însumează valorile nerotunjite pe poziții și rotunjește doar
+valoarea finală afișată, în acord cu modelul. Tarifele nu sunt schimbate.
+Fișierul nu este sincronizat automat în Drive/OneDrive.
 
 ## Realizări per tehnician
 
 În secțiunea **Echipă**, raportul **Realizări per tehnician** permite selectarea
-tehnicianului și perioadei, după **data finalizării**. Sunt incluse numai lucrările
-cu statusul `Finalizat`, alocate username-ului selectat. Limitele perioadei includ
-ambele zile în fusul `Europe/Bucharest`, inclusiv schimbările de oră.
+tehnicianului și perioadei, după **data creării proiectului** (`projects.created_at`),
+conform alegerii utilizatorului. Sunt incluse numai lucrările cu statusul
+`Finalizat`, alocate username-ului selectat. Ambele zile ale perioadei sunt incluse
+în fusul `Europe/Bucharest`, inclusiv schimbările de oră. Fotografiile, data
+închiderii, editările și data devizului nu schimbă încadrarea proiectului.
 
-Fiecare rând prezintă lucrarea, tipul, clientul, data finalizării și totalul
-devizului salvat, fără TVA. Nu se recalculează în tăcere tarifele devizelor istorice.
-Lucrările fără deviz valid au valoare goală și sunt semnalate; nu se raportează ca
-lucrări de zero EUR. Raportul se poate descărca în format `.xlsx`, cu total.
-
-Data finalizării este **momentul încărcării ultimei fotografii de către tehnicianul
-alocat lucrării**: maximul `project_files.created_at` pentru imagini (`image/%`)
-încărcate de `projects.technician_username`. Nu se folosește momentul capturării
-imaginii, data schimbării statusului, data devizului, data validării intervenției
-sau o dată introdusă manual. Imaginile încărcate de management și documentele PDF
-nu influențează data. Se includ numai lucrările cu statusul `Finalizat`.
-
-Data se calculează la fiecare generare a raportului, inclusiv pentru lucrările
-istorice. O fotografie nouă încărcată de tehnician mută lucrarea în perioada
-noii încărcări. Lucrările fără fotografii ale tehnicianului sunt afișate separat,
-fără încadrare arbitrară într-o perioadă. Verifică alocarea tehnicianului și
-fotografiile lucrării. Nu mai există un câmp de dată manuală în formular.
-
-Migrarea `0008_technician_photo_report.sql` adaugă indexul pentru fotografii.
-Coloana istorică `projects.completed_at` din migrarea 0007 este păstrată pentru
-compatibilitate, dar nu este sursa raportului. Endpointul este accesibil numai
-managementului, inclusiv pentru tehnicieni inactivi sau istorici.
+Fiecare rând prezintă lucrarea, tipul, clientul, data creării și totalul devizului
+salvat, fără TVA. Lucrările fără deviz valid sunt semnalate, cu valoare goală, nu
+zero. Raportul se poate descărca în `.xlsx`, cu totalul perioadei. Migrarea
+`0009_technician_created_report.sql` adaugă indexul pentru această filtrare.
+Coloanele și indexurile istorice sunt păstrate pentru compatibilitate.
 
 Migrarea `0006_project_estimates.sql` trebuie aplicată înaintea publicării, prin
 comanda D1 de deploy existentă. Accesul este rezervat rolurilor de management.

@@ -1,3 +1,4 @@
+import { estimateTotal } from "./estimate-values";
 export const reportTimezone = "Europe/Bucharest";
 export function localDate(timestamp: number) {
   const parts = new Intl.DateTimeFormat("en-CA", { timeZone: reportTimezone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(timestamp);
@@ -30,16 +31,17 @@ export function savedEstimateTotal(content: string | null): number | null {
   try {
     const rows = JSON.parse(content);
     if (!Array.isArray(rows) || !rows.length) return null;
-    let cents = 0;
+
     const ids = new Set();
     for (const row of rows) {
       if (!row || typeof row.id !== "string" || ids.has(row.id)
         || typeof row.quantity !== "number" || !Number.isFinite(row.quantity) || row.quantity <= 0
         || typeof row.unitPrice !== "number" || !Number.isFinite(row.unitPrice) || row.unitPrice < 0) return null;
       ids.add(row.id);
-      if (row.selected !== false) cents += Math.round(row.quantity * row.unitPrice * 100);
+
     }
-    return Number.isSafeInteger(cents) ? cents / 100 : null;
+    const total = estimateTotal(rows);
+    return Number.isSafeInteger(Math.round(total * 100)) ? total : null;
   } catch { return null; }
 }
 
@@ -47,7 +49,7 @@ export type TechnicianReport = {
   technician: { username: string; name: string };
   from: string;
   to: string;
-  works: Array<{ id: string; client: string; address: string; activityType: string; completedAt: number; total: number | null; estimateStatus: "salvat" | "lipsă" | "invalid" }>;
+  works: Array<{ id: string; client: string; address: string; activityType: string; createdAt: number; total: number | null; estimateStatus: "salvat" | "lipsă" | "invalid" }>;
   total: number;
   missingEstimates: number;
   undated: Array<{ id: string; client: string }>;

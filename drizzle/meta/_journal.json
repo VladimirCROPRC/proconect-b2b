@@ -64,6 +64,13 @@
       "when": 1794229200000,
       "tag": "0008_technician_photo_report",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1794232800000,
+      "tag": "0009_technician_created_report",
+      "breakpoints": true
     }
   ]
 }
