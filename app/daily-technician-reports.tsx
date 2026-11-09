@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { localDate } from "./technician-report";
 import type { DailyReport } from "./daily-technician-report";
-import { dailyReportSheet } from "./daily-report-workbook";
+import { dailyReportSheets } from "./daily-report-workbook";
 import { downloadExcel } from "./excel-export";
 
 const money = (value: number) => value.toLocaleString("ro-RO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " EUR";
@@ -27,7 +27,7 @@ export function DailyTechnicianReports({ technicians, onEditWork }: { technician
     finally { setLoading(false); }
   }
   return <section className="technician-reports project-card">
-    <div className="card-heading"><div><h2>Raport zilnic per tehnician</h2><p>Manopere din teren: data ultimei fotografii a fiecărei manopere încărcate de tehnician. Orange/OROC: data execuției din tichet. Date Europe/Bucharest.</p><p>Traseul FO, clientul și site-ul au fotografii comune pe secțiune. Materialele nu sunt incluse. Valorile sunt fără TVA, din devizul salvat sau tariful Orange/OROC (SP2 FOA: 300 EUR).</p></div></div>
+    <div className="card-heading"><div><h2>Raport zilnic per tehnician</h2><p>Manopere din teren: data ultimei fotografii a fiecărei manopere încărcate de tehnician. Orange/OROC: data execuției din tichet. Date Europe/Bucharest.</p><p>Traseul FO, clientul și site-ul au fotografii comune pe secțiune. Exportul Excel are două foi (teren și Orange/OROC), cu o linie per lucrare și total general în foaia principală. Materialele nu sunt incluse. Valorile sunt fără TVA, din devizul salvat sau tariful Orange/OROC (SP2 FOA: 300 EUR).</p></div></div>
     <form className="technician-report-filters" onSubmit={generate}>
       <label>Tehnician<select aria-label="Tehnician raport zilnic" required value={technician} disabled={loading} onChange={event => { setTechnician(event.target.value); setReport(null); }}><option value="">Selectează tehnicianul</option>{technicians.map(tech => <option key={tech.username} value={tech.username}>{tech.name} (@{tech.username})</option>)}</select></label>
       <label>De la<input aria-label="Început raport zilnic" type="date" required value={from} max={to} disabled={loading} onChange={event => { setFrom(event.target.value); setReport(null); }} /></label>
@@ -36,7 +36,7 @@ export function DailyTechnicianReports({ technicians, onEditWork }: { technician
     </form>
     {error && <p role="alert" className="technician-report-error">{error}</p>}
     {report && <div className="technician-report-result">
-      <div className="technician-report-summary"><div><strong>{report.technician.name} · {report.days.length} zile cu activitate</strong><p>{report.from} – {report.to}</p></div><strong>{money(report.total)}</strong><button className="secondary-button" onClick={() => downloadExcel(dailyReportSheet(report), `Raport-zilnic-${report.technician.username}-${report.from}-${report.to}.xlsx`)}>Descarcă raport zilnic Excel</button></div>
+      <div className="technician-report-summary"><div><strong>{report.technician.name} · {report.days.length} zile cu activitate</strong><p>{report.from} – {report.to}</p></div><strong>{money(report.total)}</strong><button className="secondary-button" onClick={() => downloadExcel(dailyReportSheets(report), `Raport-zilnic-${report.technician.username}-${report.from}-${report.to}.xlsx`)}>Descarcă raport zilnic Excel</button></div>
       {!report.days.length && <p>Nicio manoperă sau pachet de servicii datat în această perioadă.</p>}
       {report.days.map(day => <section className="daily-report-day" key={day.date}>
         <div className="technician-report-summary"><h3>{day.date}</h3><strong>{money(day.total)}</strong></div>
