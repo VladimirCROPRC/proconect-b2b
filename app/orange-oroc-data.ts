@@ -6,6 +6,8 @@ export type OrangeTicket = {
   ticketNumber: string;
   workDate: string;
   servicePackageCode: string;
+  technicianUsername: string | null;
+  technicianName: string;
   createdAt: number;
   updatedAt: number;
 };
@@ -13,10 +15,10 @@ export type OrangeTicket = {
 export function validateOrangeTicket(value: unknown) {
   if (!value || typeof value !== "object") return null;
   const input = value as Record<string, unknown>;
-  if (typeof input.ticketNumber !== "string" || typeof input.workDate !== "string" || typeof input.servicePackageCode !== "string") return null;
+  if (typeof input.ticketNumber !== "string" || typeof input.workDate !== "string" || typeof input.servicePackageCode !== "string" || typeof input.technicianUsername !== "string" || !input.technicianUsername.trim() || input.technicianUsername.length > 100) return null;
   const ticketNumber = input.ticketNumber.trim().toUpperCase();
   if (!/^[A-Z0-9][A-Z0-9._-]{0,63}$/.test(ticketNumber) || dayStart(input.workDate) === null) return null;
   const servicePackage = orangeServicePackages.find(item => item.code === input.servicePackageCode);
   if (!servicePackage) return null;
-  return { ticketNumber, workDate: input.workDate, servicePackageCode: servicePackage.code };
+  return { ticketNumber, workDate: input.workDate, servicePackageCode: servicePackage.code, technicianUsername: input.technicianUsername.trim() };
 }

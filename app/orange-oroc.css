@@ -1,4 +1,4 @@
-.orange-ticket-form form { display: grid; grid-template-columns: minmax(0, 1fr) 180px minmax(0, 2fr); gap: 18px; padding: 24px; align-items: end; }
+.orange-ticket-form form { display: grid; grid-template-columns: minmax(0, 1fr) 160px minmax(0, 2fr) minmax(0, 1fr); gap: 18px; padding: 24px; align-items: end; }
 .orange-ticket-form label { min-width: 0; display: flex; flex-direction: column; gap: 8px; color: #233b55; font-size: 13px; font-weight: 600; }
 .orange-ticket-form input, .orange-ticket-form select, .orange-search { min-width: 0; min-height: 42px; width: 100%; padding: 10px 12px; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; color: #183c60; }
 .orange-form-actions { display: flex; flex-wrap: wrap; gap: 12px; grid-column: 1/-1; }
@@ -8,7 +8,7 @@
 .orange-ticket-list { margin-top: 24px; }
 .orange-search { max-width: 350px; }
 .orange-load-error { padding: 16px 24px; color: #a82334; }
-@media (max-width: 850px) { .orange-ticket-form form { grid-template-columns: 1fr 1fr; } .orange-package-select { grid-column: 1/-1; } }
+@media (max-width: 850px) { .orange-ticket-form form { grid-template-columns: 1fr 1fr; } .orange-package-select, .orange-tech-select { grid-column: 1/-1; } }
 @media (max-width: 550px) { .orange-ticket-form form { grid-template-columns: 1fr; } .orange-ticket-list .card-heading { flex-wrap: wrap; gap: 12px; } .orange-search { max-width: none; } }
 
 @media (max-width: 550px) { .mobile-section-tabs .orange-nav-button { padding-inline: 4px; font-size: 12px; } }

@@ -1001,7 +1001,7 @@ export default function Home() {
   }
 
   function goTo(next: View) {
-    if ((next === "orange-oroc" || next === "documents" || next === "intervention-documentation" || next === "team" || next === "cpe" || next === "drive") && !canManageDocuments) {
+    if ((next === "documents" || next === "intervention-documentation" || next === "team" || next === "cpe" || next === "drive") && !canManageDocuments) {
       showToast("Nu ai permisiunea de a accesa această secțiune administrativă.");
       return;
     }
@@ -1117,7 +1117,7 @@ export default function Home() {
           <button className={view === "surveys" || view === "survey-workspace" ? "active" : ""} onClick={() => goTo("surveys")}>
             <span className="nav-symbol">SV</span> Survey
           </button>
-          {canManageDocuments && <button className={view === "orange-oroc" ? "active" : ""} onClick={() => goTo("orange-oroc")}><span className="nav-symbol">OR</span> Orange/OROC</button>}
+          <button className={view === "orange-oroc" ? "active" : ""} onClick={() => goTo("orange-oroc")}><span className="nav-symbol">OR</span> Orange/OROC</button>
           {canManageDocuments && <p>MANAGEMENT</p>}
           {canManageDocuments && <button className={view === "team" ? "active" : ""} onClick={() => goTo("team")}>
             <span className="nav-symbol">E</span> Echipă
@@ -1180,7 +1180,7 @@ export default function Home() {
             <button className={view === "projects" ? "active" : ""} onClick={() => goTo("projects")}>Instalări</button>
             <button className={view === "interventions" ? "active" : ""} onClick={() => goTo("interventions")}>Intervenții</button>
             <button className={view === "surveys" ? "active" : ""} onClick={() => goTo("surveys")}>Survey</button>
-            {canManageDocuments && <button className={`orange-nav-button ${view === "orange-oroc" ? "active" : ""}`} onClick={() => goTo("orange-oroc")}>Orange/OROC</button>}
+            <button className={`orange-nav-button ${view === "orange-oroc" ? "active" : ""}`} onClick={() => goTo("orange-oroc")}>Orange/OROC</button>
             {canManageDocuments && <button className={view === "team" ? "active" : ""} onClick={() => goTo("team")}>Echipă</button>}
             {canManageDocuments && <button className={view === "cpe" ? "active" : ""} onClick={() => goTo("cpe")}>CPE</button>}
             {canManageDocuments && <button className={view === "drive" ? "active" : ""} onClick={() => goTo("drive")}>Drive</button>}
@@ -1272,7 +1272,7 @@ export default function Home() {
           </div>
         )}
 
-        {view === "orange-oroc" && canManageDocuments && <OrangeOrocSection onNotify={showToast} />}
+        {view === "orange-oroc" && <OrangeOrocSection onNotify={showToast} canManage={canManageDocuments} />}
 
         {view === "team" && canManageDocuments && (
           <div className="page-wrap inner-page">
