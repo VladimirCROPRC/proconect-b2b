@@ -18,12 +18,12 @@ export async function GET(request: Request) {
     const from = url.searchParams.get("from") ?? "", to = url.searchParams.get("to") ?? "";
     const range = reportRange(from, to);
     if (!technician || !range) return Response.json({ error: "Selectează un tehnician și o perioadă validă." }, { status: 400 });
-    const rows = await db.prepare("SELECT p.id, p.client, p.address, p.activity_type, p.created_at AS report_date, e.content_json AS estimate_json FROM projects p LEFT JOIN project_estimates e ON e.project_id = p.id WHERE p.technician_username = ? AND p.status = 'Finalizat' AND p.created_at >= ? AND p.created_at < ? ORDER BY p.created_at, p.id")
-      .bind(username, range.start, range.end).all<{ id: string; client: string; address: string; activity_type: string; report_date: number; estimate_json: string | null }>();
-    const undated = await db.prepare("SELECT id, client FROM projects WHERE technician_username = ? AND status = 'Finalizat' AND (created_at IS NULL OR created_at <= 0) ORDER BY id").bind(username).all<{ id: string; client: string }>();
+    const rows = await db.prepare("SELECT p.id, p.client, p.address, p.activity_type, p.status, p.created_at AS report_date, e.content_json AS estimate_json FROM projects p LEFT JOIN project_estimates e ON e.project_id = p.id WHERE p.technician_username = ? AND p.created_at >= ? AND p.created_at < ? ORDER BY p.created_at, p.id")
+      .bind(username, range.start, range.end).all<{ id: string; client: string; address: string; activity_type: string; status: string; report_date: number; estimate_json: string | null }>();
+    const undated = await db.prepare("SELECT id, client FROM projects WHERE technician_username = ? AND (created_at IS NULL OR created_at <= 0) ORDER BY id").bind(username).all<{ id: string; client: string }>();
     const works: TechnicianReport["works"] = (rows.results ?? []).map(row => {
       const total = savedEstimateTotal(row.estimate_json);
-      return { id: row.id, client: row.client, address: row.address, activityType: row.activity_type, createdAt: row.report_date, total, estimateStatus: row.estimate_json === null ? "lipsă" : total === null ? "invalid" : "salvat" };
+      return { id: row.id, client: row.client, address: row.address, activityType: row.activity_type, status: row.status, createdAt: row.report_date, total, estimateStatus: row.estimate_json === null ? "lipsă" : total === null ? "invalid" : "salvat" };
     });
     const report: TechnicianReport = { technician, from, to, works, total: works.reduce((sum, work) => sum + Math.round((work.total ?? 0) * 100), 0) / 100,
       missingEstimates: works.filter(work => work.total === null).length, undated: undated.results ?? [] };
