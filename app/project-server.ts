@@ -438,12 +438,12 @@ export async function saveFieldDocumentation(projectId: string, section: string,
       if (noGroundingSystem && (!project.cpe_requires_grounding || fieldContent.noIntervention === true)) {
         return { error: "Declarația privind lipsa împământării este disponibilă numai când echipamentul necesită împământare și a fost instalat.", status: 400 as const };
       }
-      const requiredCategories = [
+      const requiredCategories = fieldContent.noIntervention === true ? [] : [
         "report",
         ...(service === "Internet" || service === "Internet+OL" ? ["speed"] : []),
         ...(service === "OL" || service === "Internet+OL" ? ["olTest"] : []),
-        ...(fieldContent.noIntervention === true ? [] : ["overview", "detail", "labels"]),
-        ...(project.cpe_requires_grounding && fieldContent.noIntervention !== true && !noGroundingSystem ? ["grounding"] : []),
+        "overview", "detail", "labels",
+        ...(project.cpe_requires_grounding && !noGroundingSystem ? ["grounding"] : []),
       ];
       const photoRows = await getRawDb()
         .prepare("SELECT DISTINCT category FROM project_files WHERE project_id = ? AND section = 'client'")

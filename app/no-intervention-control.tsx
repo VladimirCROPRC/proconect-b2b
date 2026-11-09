@@ -20,7 +20,7 @@ export function NoInterventionControl({ sectionLabel, noIntervention, reason, on
           <span>✓</span><p><strong>S-a intervenit</strong><small>Completează execuția și fotografiile obligatorii</small></p>
         </button>
         <button type="button" className={noIntervention ? "active no-work" : ""} role="radio" aria-checked={noIntervention} onClick={() => onSelectionChange(true)}>
-          <span>—</span><p><strong>Nu s-a intervenit</strong><small>Înregistrează motivul fără fotografii de execuție</small></p>
+          <span>—</span><p><strong>Nu s-a intervenit</strong><small>Înregistrează motivul fără fotografii obligatorii</small></p>
         </button>
       </div>
       {noIntervention && (

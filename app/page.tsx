@@ -366,15 +366,15 @@ export default function Home() {
   const displayedAccountRole = currentAccount.role;
   const activeFieldDocumentation = fieldDocumentation[activeProject.id] ?? {};
   const selectedSafetyComplete = canManageDocuments || Boolean(selected && safetyChecks[selected.id]?.completed);
-  const requiredClientPhotoKeys: ClientPhotoKey[] = [
+  const requiredClientPhotoKeys: ClientPhotoKey[] = clientNoIntervention ? [] : [
     "report",
     ...(clientService === "Internet" || clientService === "Internet+OL" ? (["speed"] as ClientPhotoKey[]) : []),
     ...(clientService === "OL" || clientService === "Internet+OL" ? (["olTest"] as ClientPhotoKey[]) : []),
-    ...(!clientNoIntervention ? (["overview", "detail", "labels"] as ClientPhotoKey[]) : []),
-    ...(activeProject.cpeRequiresGrounding && !clientNoIntervention && !clientHasNoGroundingSystem ? (["grounding"] as ClientPhotoKey[]) : []),
+    "overview", "detail", "labels",
+    ...(activeProject.cpeRequiresGrounding && !clientHasNoGroundingSystem ? (["grounding"] as ClientPhotoKey[]) : []),
   ];
   const completedClientPhotos = requiredClientPhotoKeys.filter((key) => (clientPhotos[key]?.length ?? 0) > 0).length;
-  const clientProgress = Math.round((completedClientPhotos / requiredClientPhotoKeys.length) * 100);
+  const clientProgress = clientNoIntervention ? (clientNoInterventionReason.trim() ? 100 : 0) : Math.round((completedClientPhotos / requiredClientPhotoKeys.length) * 100);
   const filteredProjects = useMemo(() => {
     const query = search.trim().toLowerCase();
     return currentActivityProjects.filter((project) => {
@@ -1389,7 +1389,7 @@ export default function Home() {
                 <section className="client-card">
                   <div className="client-card-head">
                     <span className="step-number">3</span>
-                    <div><h2>Documentare foto</h2><p>{clientNoIntervention ? "Procesul-verbal și testele aplicabile rămân obligatorii." : "Fotografiile sunt asociate cu ora și locația curentă."}</p></div>
+                    <div><h2>Documentare foto</h2><p>{clientNoIntervention ? "Nu sunt necesare fotografii când nu s-a intervenit." : "Fotografiile sunt asociate cu ora și locația curentă."}</p></div>
                     <span className="photo-progress">{completedClientPhotos}/{requiredClientPhotoKeys.length} încărcate</span>
                   </div>
                   <div className="client-card-body">
