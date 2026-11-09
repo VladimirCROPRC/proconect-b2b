@@ -15,7 +15,7 @@ export type BudgetSuggestion = {
 };
 
 export function catalogSuggestion(id: string, row: number | undefined, quantity: number, evidence: string, pendingName = "Alege poziția BoQ"): BudgetSuggestion {
-  if (id === "site-patch" || row === 108 || row === 109) return nonBillablePatch(id, quantity, evidence);
+  if (id === "site-patch" || row === 108 || row === 109) return patchcordSuggestion(id, quantity, evidence);
   const item = boqCatalog.find(item => item.row === row);
   return {
     id, category: item?.category ?? "Manoperă", catalogPosition: item ? String(item.row) : "",
@@ -24,9 +24,15 @@ export function catalogSuggestion(id: string, row: number | undefined, quantity:
   };
 }
 
-function nonBillablePatch(id: string, quantity: number, evidence: string): BudgetSuggestion {
-  return { id, category: "Manoperă", catalogPosition: "included", name: "Instalare patchcord — nefacturabilă",
-    unit: "buc", unitPrice: 0, quantity, evidence, selected: true, note: "Instalarea patchcordului nu se facturează." };
+function patchcordSuggestion(id: string, quantity: number, evidence: string): BudgetSuggestion {
+  const item = boqCatalog.find(item => item.row === 108)!;
+  return { id, category: item.category, catalogPosition: "108", name: item.name,
+    unit: item.unit, unitPrice: item.unitPrice, quantity, evidence, selected: true, note: "Instalare patchcord până la 5 metri." };
+}
+
+function isPatchcordRow(row: { id: string; catalogPosition: string; note?: string }) {
+  return row.id === "site-patch" || ["108", "109"].includes(row.catalogPosition)
+    || row.note === "Instalarea patchcordului nu se facturează.";
 }
 
 // Default approved by the user: cable diameter <= 10 mm (10 mm for duct bands).
@@ -103,8 +109,8 @@ export function buildBudgetSuggestions(data: ProjectFieldDocumentation): BudgetS
     if (boxes.length) add("client-terminal-box", 110, boxes.length,
       "Terminal Box instalat la client; include până la 12 suduri/modul. Verifică să nu fie facturate și la aceeași joncțiune.");
   }
-  if (site) rows.push(nonBillablePatch("site-patch", 1,
-    `Conexiune ODF ${site.odf}/${site.odfPort} → eTN ${site.etn}/${site.etnPort}. Instalarea patchcordului nu se facturează.`));
+  if (site) rows.push(patchcordSuggestion("site-patch", 1,
+    `Conexiune ODF ${site.odf}/${site.odfPort} → eTN ${site.etn}/${site.etnPort}. Instalare patchcord până la 5 metri, rândul 108.`));
 
   const seenActivities = new Set<string>();
   for (const activity of data.intervention?.execution?.activities ?? []) {
@@ -133,7 +139,7 @@ export function budgetReady(rows: BudgetSuggestion[]) {
 export function applyBudgetRules(rows: BudgetSuggestion[], generated: BudgetSuggestion[]) {
   const source = new Map(generated.map(row => [row.id, row]));
   return rows.map(row => {
-    if (row.id === "site-patch" || ["108", "109"].includes(row.catalogPosition)) return nonBillablePatch(row.id, row.quantity, row.evidence);
+    if (isPatchcordRow(row)) return patchcordSuggestion(row.id, row.quantity, row.evidence);
     const expected = source.get(row.id);
     if (expected?.id.startsWith("closure-") && ["102", "103"].includes(expected.catalogPosition) && row.catalogPosition !== "included") {
       return { ...catalogSuggestion(row.id, Number(expected.catalogPosition), row.quantity, expected.evidence), note: row.note };
@@ -149,14 +155,14 @@ export function reconcileBudget(generated: BudgetSuggestion[], saved: BudgetSugg
     // Refresh source quantities/evidence. Preserve tariff choices; unknown quantities
     // (diagnostics, legacy repairs) retain the administrator's explicit input.
     if (!old) return row;
-    if (row.id === "site-patch") return row;
+    if (row.id === "site-patch") return patchcordSuggestion(row.id, old.quantity, row.evidence);
     // Apply corrected 102/103 defaults to existing estimates as well.
     if (row.id.startsWith("closure-") && ["102", "103"].includes(row.catalogPosition) && old.catalogPosition !== "included") return { ...row, note: old.note };
     const chosen = boqCatalog.find(item => String(item.row) === old.catalogPosition);
     const quantity = old.evidence === row.evidence ? old.quantity : row.quantity || old.quantity;
     if (old.catalogPosition === "included") return { ...row, catalogPosition: "included", unit: "buc", quantity, unitPrice: 0, note: old.note };
     return chosen ? { ...catalogSuggestion(row.id, chosen.row, quantity, row.evidence), note: old.note } : row;
-  }), ...saved.filter(row => row.id.startsWith("manual-")).map(row => ["108", "109"].includes(row.catalogPosition) ? nonBillablePatch(row.id, row.quantity, row.evidence) : row)];
+  }), ...saved.filter(row => row.id.startsWith("manual-")).map(row => isPatchcordRow(row) ? patchcordSuggestion(row.id, row.quantity, row.evidence) : row)];
 }
 
 export function normalizeBudget(value: unknown): BudgetSuggestion[] | null {
@@ -171,8 +177,8 @@ export function normalizeBudget(value: unknown): BudgetSuggestion[] | null {
     const item = boqCatalog.find(item => String(item.row) === row.catalogPosition);
     if (!item && !(row.catalogPosition === "included" && row.note?.trim())) return null;
     ids.add(row.id);
-    if (row.id === "site-patch" || ["108", "109"].includes(row.catalogPosition)) {
-      rows.push(nonBillablePatch(row.id, row.quantity, row.evidence));
+    if (isPatchcordRow(row)) {
+      rows.push(patchcordSuggestion(row.id, row.quantity, row.evidence));
       continue;
     }
     rows.push(item ? { ...catalogSuggestion(row.id, item.row, row.quantity, row.evidence), note: row.note } : {

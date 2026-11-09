@@ -34,9 +34,10 @@ execuția intervențiilor. Acțiunile „Nu s-a intervenit” nu generează rân
   Rândul 100 rămâne pentru instalarea unei joncțiuni noi.
 - Pentru cutii noi, confirmă furnizarea și modelul (142–146). Dacă sunt furnizate
   de beneficiar, alege „Inclus / beneficiar” și introdu o justificare.
-- Instalarea patchcordului nu se facturează. Conectarea ODF/eTN rămâne vizibilă
-  în deviz, cu 0 EUR și justificare automată. Rândurile 108/109 nu pot fi adăugate
-  ca poziții facturabile. Regula se aplică și la reîncărcarea devizelor vechi.
+- Instalarea patchcordului se facturează la rândul 108, până la 5 metri,
+  cu tariful de 3,5823 EUR/patchcord din BoQ. Conectarea ODF/eTN generează această
+  poziție automat. Regula corectează și pozițiile de patchcord salvate anterior
+  la 0 EUR sau la rândul 109; modificările se persistă prin salvarea devizului.
 - Pentru instalările FO din intervenții, confirmă montajul. Lungimea vine din teren.
 - Pentru diagnostic OTDR, completează numărul de fibre și distribuie între 111
   (primele patru) și 112 (suplimentare). Fotografiile nu sunt număr de fibre.

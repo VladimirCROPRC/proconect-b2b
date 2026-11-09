@@ -37,12 +37,12 @@ test('no-intervention excludes stale route, splice, site and client execution da
   assert.deepEqual(rows, []);
 });
 
-test('client and site actions are represented and patchcord installation is not billed', () => {
+test('client and site actions are represented and patchcord installation is billed up to 5 meters', () => {
   const rows = budget.buildBudgetSuggestions({ client: { service: 'Internet', equipment: ['CPE', 'SFP optic', 'Media Converter', 'Terminal Box'] }, site: { odf: 'A', odfPort: '1', etn: 'B', etnPort: '2' } });
   assert.deepEqual(rows.map(row => row.id), ['client-cpe', 'client-optics', 'client-terminal-box', 'site-patch']);
   assert.equal(rows[1].quantity, 2);
-  assert.equal(rows[3].catalogPosition, 'included');
-  assert.equal(rows[3].unitPrice, 0);
+  assert.equal(rows[3].catalogPosition, '108');
+  assert.equal(rows[3].unitPrice, 3.5823);
   assert.equal(budget.budgetReady(rows), true);
   assert.deepEqual(budget.buildBudgetSuggestions({}), []);
 });
@@ -82,22 +82,30 @@ test('102 is used without new client cable, 103 only at the source junction of a
   assert.equal(routeOnly.find(row => row.id === 'closure-B').catalogPosition, '103');
 });
 
-test('saved access tariffs are refreshed, and patchcord is free even in legacy/manual estimates', () => {
+test('saved access tariffs are refreshed, and patchcord uses row 108 in legacy/manual estimates', () => {
   const records = [{ id: 's', junction: { id: 'J', code: 'J' }, junctionKind: 'existing' }];
   const generated = budget.buildBudgetSuggestions({ splices: { count: 1, records }, site: { odf: 'A', etn: 'B' } });
   const saved = generated.map(row => ({ ...row, catalogPosition: row.id === 'site-patch' ? '109' : '103', unitPrice: 999 }));
   const restored = budget.reconcileBudget(generated, saved);
   assert.equal(restored.find(row => row.id === 'closure-J').catalogPosition, '102');
-  assert.equal(restored.find(row => row.id === 'site-patch').unitPrice, 0);
+  assert.equal(restored.find(row => row.id === 'site-patch').unitPrice, 3.5823);
   for (const position of [108, 109]) {
     const manual = budget.catalogSuggestion('manual-patch', position, 3, 'Patchcord');
-    assert.equal(manual.unitPrice, 0);
+    assert.equal(manual.unitPrice, 3.5823);
     const normalized = budget.normalizeBudget([{ ...manual, catalogPosition: String(position), unitPrice: 999 }]);
-    assert.equal(normalized[0].unitPrice, 0);
+    assert.equal(normalized[0].unitPrice, 3.5823);
   }
   const corrected = budget.applyBudgetRules(saved, generated);
   assert.equal(corrected.find(row => row.id === 'closure-J').catalogPosition, '102');
-  assert.equal(corrected.find(row => row.id === 'site-patch').unitPrice, 0);
+  assert.equal(corrected.find(row => row.id === 'site-patch').unitPrice, 3.5823);
+  for (const id of ['site-patch', 'manual-legacy-patch']) {
+    const legacy = { ...budget.catalogSuggestion(id, 108, 3, 'Conexiune site'), catalogPosition: 'included', unitPrice: 0, note: 'Instalarea patchcordului nu se facturează.' };
+    const normalized = budget.normalizeBudget([legacy]);
+    assert.equal(normalized[0].catalogPosition, '108');
+    assert.equal(normalized[0].unitPrice, 3.5823);
+    assert.equal(normalized[0].quantity, 3);
+    assert.equal(normalized[0].note, 'Instalare patchcord până la 5 metri.');
+  }
 });
 
 test('a new junction declared in route appears once, including when also recorded in splices', () => {
