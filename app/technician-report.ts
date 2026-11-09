@@ -49,7 +49,7 @@ export type TechnicianReport = {
   technician: { username: string; name: string };
   from: string;
   to: string;
-  works: Array<{ source?: "project" | "orange-oroc"; servicePackage?: string; id: string; client: string; address: string; activityType: string; status: string; createdAt: number; total: number | null; estimateStatus: "salvat" | "lipsă" | "invalid" | "fără valori" }>;
+  works: Array<{ source?: "project" | "orange-oroc"; servicePackage?: string; workDate?: string; id: string; client: string; address: string; activityType: string; status: string; createdAt: number; total: number | null; estimateStatus: "salvat" | "lipsă" | "invalid" | "fără valori" | "tarif pachet" }>;
   total: number;
   missingEstimates: number;
   undated: Array<{ id: string; client: string }>;

@@ -54,7 +54,9 @@ Verificări: `node --test tests/orange-oroc.test.mjs`, `python3 scripts/test-mig
 `npx tsc --noEmit`, lint și build de producție.
 
 Tichetele alocate apar și în raportul pe tehnician și în exportul Excel,
-filtrate după data creării tichetului (nu data intervenției).
-Raportul afișează numărul tichetului și pachetul de servicii. Orange/OROC
-apare «Fără valori», cu celula valorii goală în Excel; nu intră în totalul
-devizelor și nici în avertizarea privind devizele lipsă ale proiectelor.
+filtrate după data execuției introdusă în tichet (`work_date`), inclusiv pentru
+tichete create ulterior. Proiectele folosesc în continuare data creării.
+Raportul afișează numărul tichetului și pachetul de servicii.
+SP2 FOA are tarif de 300 EUR/tichet, inclus în total și în Excel.
+Celelalte pachete apar «Fără valori», cu celula valorii goală; nu intră în
+avertizarea privind devizele lipsă ale proiectelor.
