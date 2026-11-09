@@ -12,10 +12,11 @@ import { fetchProjectFiles, formatCapturedAt, uploadProjectFile } from "./client
 import { initialCpeCatalog, type CpeCatalogItem, type ProjectActivityType, type ProjectRecord } from "./project-data";
 import type { ClientFieldSummary, InterventionFieldSummary, ProjectFieldDocumentation, RouteFieldSummary, SiteFieldSummary, SpliceFieldSummary } from "./field-documentation";
 import { TechnicianProjectSafety, type ProjectSafetyStatus } from "./technician-project-safety";
+import { OrangeOrocSection } from "./orange-oroc";
 import { NoInterventionControl } from "./no-intervention-control";
 import { TechnicianReports } from "./technician-reports";
 
-type View = "projects" | "interventions" | "surveys" | "intervention-workspace" | "intervention-execution" | "intervention-documentation" | "survey-workspace" | "team" | "cpe" | "drive" | "documents" | "client" | "route" | "splices" | "site";
+type View = "orange-oroc" | "projects" | "interventions" | "surveys" | "intervention-workspace" | "intervention-execution" | "intervention-documentation" | "survey-workspace" | "team" | "cpe" | "drive" | "documents" | "client" | "route" | "splices" | "site";
 type ActivityListView = "projects" | "interventions" | "surveys";
 type Modal = "project" | "edit-project" | "delete-project" | "account" | "cpe" | "edit-cpe" | null;
 type ServiceType = "Internet" | "VPN" | "Internet+OL" | "OL";
@@ -1000,7 +1001,7 @@ export default function Home() {
   }
 
   function goTo(next: View) {
-    if ((next === "documents" || next === "intervention-documentation" || next === "team" || next === "cpe" || next === "drive") && !canManageDocuments) {
+    if ((next === "orange-oroc" || next === "documents" || next === "intervention-documentation" || next === "team" || next === "cpe" || next === "drive") && !canManageDocuments) {
       showToast("Nu ai permisiunea de a accesa această secțiune administrativă.");
       return;
     }
@@ -1116,6 +1117,7 @@ export default function Home() {
           <button className={view === "surveys" || view === "survey-workspace" ? "active" : ""} onClick={() => goTo("surveys")}>
             <span className="nav-symbol">SV</span> Survey
           </button>
+          {canManageDocuments && <button className={view === "orange-oroc" ? "active" : ""} onClick={() => goTo("orange-oroc")}><span className="nav-symbol">OR</span> Orange/OROC</button>}
           {canManageDocuments && <p>MANAGEMENT</p>}
           {canManageDocuments && <button className={view === "team" ? "active" : ""} onClick={() => goTo("team")}>
             <span className="nav-symbol">E</span> Echipă
@@ -1164,7 +1166,7 @@ export default function Home() {
             <img className="proconect-logo mobile-proconect-logo" src={proconectLogoUrl} alt="PRO CONECT" />
             <strong>B2B</strong>
           </button>
-          <div className="breadcrumb"><span>{isProjectView ? `${activitySections[listViewForActivity(activeProject.activityType)].title} · ${activeProject.id}` : "Management"}</span><b>/</b><strong>{view === "projects" ? "Instalări" : view === "interventions" ? "Intervenții" : view === "surveys" ? "Survey" : view === "intervention-workspace" ? "Constatare" : view === "intervention-execution" ? "Execuție" : view === "intervention-documentation" ? "Documentare" : view === "survey-workspace" ? "Fișa survey" : view === "team" ? "Echipă" : view === "cpe" ? "Echipamente CPE" : view === "drive" ? "Google Drive" : view === "client" ? "Client" : view === "route" ? "Traseu FO" : view === "splices" ? "Suduri FO" : view === "documents" ? "Documente" : "Operațiuni site"}</strong></div>
+          <div className="breadcrumb"><span>{view === "orange-oroc" ? "Activități" : isProjectView ? `${activitySections[listViewForActivity(activeProject.activityType)].title} · ${activeProject.id}` : "Management"}</span><b>/</b><strong>{view === "orange-oroc" ? "Orange/OROC" : view === "projects" ? "Instalări" : view === "interventions" ? "Intervenții" : view === "surveys" ? "Survey" : view === "intervention-workspace" ? "Constatare" : view === "intervention-execution" ? "Execuție" : view === "intervention-documentation" ? "Documentare" : view === "survey-workspace" ? "Fișa survey" : view === "team" ? "Echipă" : view === "cpe" ? "Echipamente CPE" : view === "drive" ? "Google Drive" : view === "client" ? "Client" : view === "route" ? "Traseu FO" : view === "splices" ? "Suduri FO" : view === "documents" ? "Documente" : "Operațiuni site"}</strong></div>
           <div className="top-actions">
             <button className="help-button" aria-label="Ajutor">?</button>
             <button className="bell" aria-label="Notificări">●<span>3</span></button>
@@ -1178,6 +1180,7 @@ export default function Home() {
             <button className={view === "projects" ? "active" : ""} onClick={() => goTo("projects")}>Instalări</button>
             <button className={view === "interventions" ? "active" : ""} onClick={() => goTo("interventions")}>Intervenții</button>
             <button className={view === "surveys" ? "active" : ""} onClick={() => goTo("surveys")}>Survey</button>
+            {canManageDocuments && <button className={`orange-nav-button ${view === "orange-oroc" ? "active" : ""}`} onClick={() => goTo("orange-oroc")}>Orange/OROC</button>}
             {canManageDocuments && <button className={view === "team" ? "active" : ""} onClick={() => goTo("team")}>Echipă</button>}
             {canManageDocuments && <button className={view === "cpe" ? "active" : ""} onClick={() => goTo("cpe")}>CPE</button>}
             {canManageDocuments && <button className={view === "drive" ? "active" : ""} onClick={() => goTo("drive")}>Drive</button>}
@@ -1268,6 +1271,8 @@ export default function Home() {
             </section>
           </div>
         )}
+
+        {view === "orange-oroc" && canManageDocuments && <OrangeOrocSection onNotify={showToast} />}
 
         {view === "team" && canManageDocuments && (
           <div className="page-wrap inner-page">
