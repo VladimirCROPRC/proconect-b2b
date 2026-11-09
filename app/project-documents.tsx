@@ -185,7 +185,7 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
   function catalogOptions(row: BudgetSuggestion) {
     const expected = generatedBudget.find(item => item.id === row.id);
     const fixedAccess = expected?.id.startsWith("closure-") && ["102", "103"].includes(expected.catalogPosition);
-    return boqCatalog.filter(item => ![108, 109].includes(item.row) && (!fixedAccess || String(item.row) === expected?.catalogPosition));
+    return boqCatalog.filter(item => item.row !== 109 && (!fixedAccess || String(item.row) === expected?.catalogPosition));
   }
 
   function selectCatalog(id: string, value: string) {
