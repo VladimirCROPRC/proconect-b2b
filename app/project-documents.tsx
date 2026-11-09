@@ -7,6 +7,8 @@ import { buildBudgetSuggestions, catalogSuggestion, budgetReady, reconcileBudget
 import "./project-budget.css";
 import { downloadEstimateTemplate } from "./estimate-template";
 import { estimateTotal as calculateEstimateTotal } from "./estimate-values";
+import { materialFieldSheet, spliceFieldSheet } from "./project-field-sheets";
+import { ProjectFieldSheetPreview } from "./project-field-sheet-preview";
 
 type DocumentProject = {
   id: string;
@@ -17,6 +19,7 @@ type DocumentProject = {
   mc: boolean;
   terminalBox: boolean;
   activityType?: string;
+  splice?: string;
 };
 
 type ReportDraft = {
@@ -100,7 +103,7 @@ function buildReport(project: DocumentProject, fieldData: ProjectFieldDocumentat
 }
 
 export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props) {
-  const [tab, setTab] = useState<"report" | "estimate">(project.activityType === "Intervenție" ? "estimate" : "report");
+  const [tab, setTab] = useState<"report" | "estimate" | "splices" | "materials">(project.activityType === "Intervenție" ? "estimate" : "report");
   const [report, setReport] = useState(() => buildReport(project, fieldData));
   const [suggestions, setSuggestions] = useState(() => buildBudgetSuggestions(fieldData));
   const generatedBudget = useMemo(() => buildBudgetSuggestions(fieldData), [fieldData]);
@@ -146,6 +149,9 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
       active = false;
     };
   }, [project, fieldData]);
+
+  const spliceSheet = spliceFieldSheet(project, fieldData);
+  const materialSheet = materialFieldSheet(project, fieldData);
 
   const selectedSuggestions = suggestions.filter((item) => item.selected);
   const estimateTotal = useMemo(
@@ -233,8 +239,13 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
 
       <div className="documents-tabs" role="tablist" aria-label="Subsecțiuni documente">
         {project.activityType !== "Intervenție" && <button className={tab === "report" ? "active" : ""} onClick={() => setTab("report")}><span>DOC</span><div><strong>Raport de acceptanță</strong><small>Previzualizare și editare</small></div></button>}
+        <button className={tab === "splices" ? "active" : ""} onClick={() => setTab("splices")}><span>FO</span><div><strong>Fișă de suduri</strong><small>Corespondență fibre</small></div><b>{spliceSheet.rows.length}</b></button>
+        <button className={tab === "materials" ? "active" : ""} onClick={() => setTab("materials")}><span>MAT</span><div><strong>Fișă de materiale</strong><small>Vodafone și Proconect</small></div><b>{materialSheet.rows.length}</b></button>
         <button className={tab === "estimate" ? "active" : ""} onClick={() => setTab("estimate")}><span>EUR</span><div><strong>Deviz</strong><small>Toate acțiunile documentate</small></div><b>{suggestions.length}</b></button>
       </div>
+
+      {tab === "splices" && <ProjectFieldSheetPreview sheet={spliceSheet} onNotify={onNotify} />}
+      {tab === "materials" && <ProjectFieldSheetPreview sheet={materialSheet} onNotify={onNotify} />}
 
       {tab === "report" && (
         <div className="report-workspace">
