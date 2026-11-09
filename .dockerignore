@@ -12,3 +12,5 @@ exports
 upload
 *.log
 *.tsbuildinfo
+
+worker-configuration.d.ts

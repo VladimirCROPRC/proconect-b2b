@@ -13,7 +13,7 @@
     "test": "npm run build && node --test tests/rendered-html.test.mjs",
     "lint": "bash scripts/sites-env.sh -- eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "bash scripts/sites-env.sh -- drizzle-kit generate",
-    "build:selfhost": "PROCONECT_SELF_HOSTED=1 NEXT_PUBLIC_AUTH_MODE=cloudflare-access next build --webpack",
+    "build:selfhost": "wrangler types && PROCONECT_SELF_HOSTED=1 NEXT_PUBLIC_AUTH_MODE=cloudflare-access next build --webpack",
     "start:selfhost": "PROCONECT_SELF_HOSTED=1 node .next-selfhost/standalone/server.js"
   },
   "dependencies": {

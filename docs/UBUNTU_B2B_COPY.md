@@ -32,7 +32,9 @@ chmod 600 .env.selfhost
 ```
 
 Nu porni încă `app`: mai întâi se importă datele, ca să nu se inițializeze
-din greșeală o bază goală. Buildul poate fi făcut acum:
+din greșeală o bază goală. Comanda de build generează automat tipurile de bază de date cu Wrangler, apoi
+compilează serverul Node. Nu depinde de fișiere generate pe calculatorul
+dezvoltatorului. Buildul poate fi făcut acum:
 
 ```bash
 docker compose -f compose.selfhost.yml build app
