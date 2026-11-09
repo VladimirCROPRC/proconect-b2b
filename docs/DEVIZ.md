@@ -27,11 +27,16 @@ execuția intervențiilor. Acțiunile „Nu s-a intervenit” nu generează rân
 
 ## Confirmări necesare
 
-- Pentru accesul la joncțiuni existente, alege 102 sau 103 după pregătirea cablurilor.
+- Accesul la joncțiuni existente folosește implicit 102, fără instalare de cablu nou.
+  Rândul 103 se folosește doar la joncțiunea B din care se instalează cablul către
+  client, identificată prin capătul traseului și o lungime instalată pozitivă.
   Pachetul include maximum patru suduri. Sudurile peste acest prag apar la 101.
+  Rândul 100 rămâne pentru instalarea unei joncțiuni noi.
 - Pentru cutii noi, confirmă furnizarea și modelul (142–146). Dacă sunt furnizate
   de beneficiar, alege „Inclus / beneficiar” și introdu o justificare.
-- Pentru site, confirmă lungimea patchcordului: 108 până la 5 m, 109 peste 5 m.
+- Instalarea patchcordului nu se facturează. Conectarea ODF/eTN rămâne vizibilă
+  în deviz, cu 0 EUR și justificare automată. Rândurile 108/109 nu pot fi adăugate
+  ca poziții facturabile. Regula se aplică și la reîncărcarea devizelor vechi.
 - Pentru instalările FO din intervenții, confirmă montajul. Lungimea vine din teren.
 - Pentru diagnostic OTDR, completează numărul de fibre și distribuie între 111
   (primele patru) și 112 (suplimentare). Fotografiile nu sunt număr de fibre.
