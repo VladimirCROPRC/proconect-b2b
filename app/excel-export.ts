@@ -41,7 +41,7 @@ function cell(value: ExcelCell, address: string, style: number) {
 function sheetXml(sheet: ExcelSheet) {
   const data = [
     `<row r="1" ht="28" customHeight="1">${cell(sheet.title, "A1", 1)}</row>`,
-    `<row r="2" ht="30" customHeight="1">${cell(sheet.subtitle, "A2", 0)}</row>`,
+    `<row r="2" ht="30" customHeight="1">${cell(null, "A2", 0)}</row>`,
     `<row r="4" ht="32" customHeight="1">${sheet.headers.map((title, i) => cell(title, `${column(i)}4`, 2)).join("")}</row>`,
     ...sheet.rows.map((row, index) => {
       const lines = Math.max(1, ...row.map((value, i) => typeof value === "string" ? value.split("\n").reduce((sum, part) => sum + Math.max(1, Math.ceil(part.length / (sheet.widths[i] || 20))), 0) : 1));

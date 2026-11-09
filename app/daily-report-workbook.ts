@@ -43,9 +43,9 @@ export function dailyReportSheets(report: DailyReport): ExcelSheet[] {
   orangeRows.push(summary("TOTAL ORANGE/OROC", sumFormula(orangeRows.length), orangeTotal));
   const subtitle = `${report.from} – ${report.to} · Europe/Bucharest. O linie/lucrare în perioada selectată. Datele și manoperele sunt păstrate în celule. Fără dată: exclus din total. Materiale excluse.`;
   const common = { subtitle, headers: ["Date execuție", "Tehnician", "Lucrare / Tichet", "Client", "Manopere / Pachet", "Cantități / UM", "Valoare EUR fără TVA", "Observații"], widths: [22, 25, 25, 30, 85, 40, 26, 75], moneyColumns: [6] };
-  const warningText = report.warnings.length ? ` Verificări: ${report.warnings.join("; ")}` : "";
+  if (report.warnings.length) fieldRows[fieldRows.length - 1][7] = `Verificări: ${report.warnings.join("; ")}`;
   return [
-    { ...common, name: "Raport zilnic", title: `Lucrări teren · ${report.technician.name}`, subtitle: subtitle + warningText, rows: fieldRows, dataRowCount: fieldCount },
+    { ...common, name: "Raport zilnic", title: `Lucrări teren · ${report.technician.name}`, rows: fieldRows, dataRowCount: fieldCount },
     { ...common, name: "Orange OROC", title: `Orange/OROC · ${report.technician.name}`, rows: orangeRows, dataRowCount: orangeCount },
   ];
 }

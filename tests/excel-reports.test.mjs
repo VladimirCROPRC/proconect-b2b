@@ -51,7 +51,8 @@ assert cells['G7'].find('s:f',ns).text=='SUM(G5:G6)'
 assert cells['G7'].find('s:v',ns).text=='24.84'
 assert w.find('s:autoFilter',ns).attrib['ref']=='A4:I6'
 assert w.find('.//s:pane',ns).attrib['state']=='frozen'
-assert 'București <Centru>' in ''.join(w.itertext())
+assert cells['A2'].find('s:is',ns) is None
+assert 'Șantier & client' in ''.join(w.itertext())
 try:
  import openpyxl
  workbook=openpyxl.load_workbook(io.BytesIO(z.fp.getvalue()),data_only=False)
