@@ -15,12 +15,18 @@ export type BudgetSuggestion = {
 };
 
 export function catalogSuggestion(id: string, row: number | undefined, quantity: number, evidence: string, pendingName = "Alege poziția BoQ"): BudgetSuggestion {
+  if (id === "site-patch" || row === 108 || row === 109) return nonBillablePatch(id, quantity, evidence);
   const item = boqCatalog.find(item => item.row === row);
   return {
     id, category: item?.category ?? "Manoperă", catalogPosition: item ? String(item.row) : "",
     name: item?.name ?? pendingName, unit: item?.unit ?? "", unitPrice: item?.unitPrice ?? 0,
     quantity, evidence, selected: true,
   };
+}
+
+function nonBillablePatch(id: string, quantity: number, evidence: string): BudgetSuggestion {
+  return { id, category: "Manoperă", catalogPosition: "included", name: "Instalare patchcord — nefacturabilă",
+    unit: "buc", unitPrice: 0, quantity, evidence, selected: true, note: "Instalarea patchcordului nu se facturează." };
 }
 
 // Default approved by the user: cable diameter <= 10 mm (10 mm for duct bands).
@@ -45,7 +51,7 @@ export function buildBudgetSuggestions(data: ProjectFieldDocumentation): BudgetS
   }
 
   // One closure operation per junction. Included splices are not charged again.
-  const groups = new Map<string, { label: string; kind: string; count: number }>();
+  const groups = new Map<string, { label: string; kind: string; count: number; clientCable?: boolean }>();
   if (splices?.records?.length) {
     const seenRecords = new Set<string>();
     for (const record of splices.records) {
@@ -61,20 +67,23 @@ export function buildBudgetSuggestions(data: ProjectFieldDocumentation): BudgetS
     add("legacy-splices", undefined, splices.count,
       `${splices.count} suduri salvate; distribuția pe joncțiuni trebuie verificată pentru a scădea sudurile incluse.`, "Suduri FO — verifică pachetul BoQ");
   }
-  if (route?.junction?.kind === "new") {
+  if (route?.junction) {
     const endpoint = route.endpoints?.b;
     const key = endpoint?.id || "route-new-junction";
-    const matching = groups.get(key) ?? [...groups.values()].find(group => group.label === endpoint?.code || group.label === route.junction.label);
-    if (matching) matching.kind = "new";
+    const matching = groups.get(key) ?? [...groups.values()].find(group => group.label === endpoint?.code || group.label === route.junction.label || group.label === route.junction.label.split(" · ")[0]);
+    const clientCable = route.segments.some(segment => segment.lengthMeters > 0);
+    if (matching) {
+      if (route.junction.kind === "new") matching.kind = "new";
+      matching.clientCable = clientCable;
+    }
     else {
-      groups.set(key, { label: endpoint?.code || route.junction.label, kind: "new", count: 0 });
+      groups.set(key, { label: endpoint?.code || route.junction.label, kind: route.junction.kind, count: 0, clientCable });
     }
   }
   for (const [key, group] of groups) {
     const isNew = group.kind === "new";
-    add(`closure-${key}`, isNew ? 100 : undefined, 1,
-      `${group.label}: ${group.count} suduri. ${isNew ? "Pachetul include până la 12 suduri." : "Alege rândul 102 sau 103 după pregătirea cablurilor; pachetul include până la 4 suduri."}`,
-      `Acces joncțiune ${group.label} — alege cu/fără cabluri noi`);
+    add(`closure-${key}`, isNew ? 100 : group.clientCable ? 103 : 102, 1,
+      `${group.label}: ${group.count} suduri. ${isNew ? "Pachetul include până la 12 suduri." : group.clientCable ? "Din această joncțiune se instalează cablu către client; rândul 103 include până la 4 suduri." : "Fără instalare de cablu nou către client din această joncțiune; rândul 102 include până la 4 suduri."}`);
     const additional = Math.max(0, group.count - (isNew ? 12 : 4));
     if (additional) add(`additional-splices-${key}`, 101, additional, `${group.label}: numai sudurile care depășesc pachetul inclus.`);
   }
@@ -94,8 +103,8 @@ export function buildBudgetSuggestions(data: ProjectFieldDocumentation): BudgetS
     if (boxes.length) add("client-terminal-box", 110, boxes.length,
       "Terminal Box instalat la client; include până la 12 suduri/modul. Verifică să nu fie facturate și la aceeași joncțiune.");
   }
-  if (site) add("site-patch", undefined, 1,
-    `Conexiune ODF ${site.odf}/${site.odfPort} → eTN ${site.etn}/${site.etnPort}. Alege rândul 108 (≤5 m) sau 109 (>5 m).`, "Conectare site — confirmă lungimea patchcordului");
+  if (site) rows.push(nonBillablePatch("site-patch", 1,
+    `Conexiune ODF ${site.odf}/${site.odfPort} → eTN ${site.etn}/${site.etnPort}. Instalarea patchcordului nu se facturează.`));
 
   const seenActivities = new Set<string>();
   for (const activity of data.intervention?.execution?.activities ?? []) {
@@ -121,6 +130,18 @@ export function budgetReady(rows: BudgetSuggestion[]) {
     && Number.isFinite(row.quantity) && row.quantity > 0);
 }
 
+export function applyBudgetRules(rows: BudgetSuggestion[], generated: BudgetSuggestion[]) {
+  const source = new Map(generated.map(row => [row.id, row]));
+  return rows.map(row => {
+    if (row.id === "site-patch" || ["108", "109"].includes(row.catalogPosition)) return nonBillablePatch(row.id, row.quantity, row.evidence);
+    const expected = source.get(row.id);
+    if (expected?.id.startsWith("closure-") && ["102", "103"].includes(expected.catalogPosition) && row.catalogPosition !== "included") {
+      return { ...catalogSuggestion(row.id, Number(expected.catalogPosition), row.quantity, expected.evidence), note: row.note };
+    }
+    return row;
+  });
+}
+
 export function reconcileBudget(generated: BudgetSuggestion[], saved: BudgetSuggestion[]) {
   const previous = new Map(saved.map(row => [row.id, row]));
   return [...generated.map(row => {
@@ -128,11 +149,14 @@ export function reconcileBudget(generated: BudgetSuggestion[], saved: BudgetSugg
     // Refresh source quantities/evidence. Preserve tariff choices; unknown quantities
     // (diagnostics, legacy repairs) retain the administrator's explicit input.
     if (!old) return row;
+    if (row.id === "site-patch") return row;
+    // Apply corrected 102/103 defaults to existing estimates as well.
+    if (row.id.startsWith("closure-") && ["102", "103"].includes(row.catalogPosition) && old.catalogPosition !== "included") return { ...row, note: old.note };
     const chosen = boqCatalog.find(item => String(item.row) === old.catalogPosition);
     const quantity = old.evidence === row.evidence ? old.quantity : row.quantity || old.quantity;
     if (old.catalogPosition === "included") return { ...row, catalogPosition: "included", unit: "buc", quantity, unitPrice: 0, note: old.note };
     return chosen ? { ...catalogSuggestion(row.id, chosen.row, quantity, row.evidence), note: old.note } : row;
-  }), ...saved.filter(row => row.id.startsWith("manual-"))];
+  }), ...saved.filter(row => row.id.startsWith("manual-")).map(row => ["108", "109"].includes(row.catalogPosition) ? nonBillablePatch(row.id, row.quantity, row.evidence) : row)];
 }
 
 export function normalizeBudget(value: unknown): BudgetSuggestion[] | null {
@@ -147,6 +171,10 @@ export function normalizeBudget(value: unknown): BudgetSuggestion[] | null {
     const item = boqCatalog.find(item => String(item.row) === row.catalogPosition);
     if (!item && !(row.catalogPosition === "included" && row.note?.trim())) return null;
     ids.add(row.id);
+    if (row.id === "site-patch" || ["108", "109"].includes(row.catalogPosition)) {
+      rows.push(nonBillablePatch(row.id, row.quantity, row.evidence));
+      continue;
+    }
     rows.push(item ? { ...catalogSuggestion(row.id, item.row, row.quantity, row.evidence), note: row.note } : {
       id: row.id, category: "Manoperă", catalogPosition: "included", name: "Inclus în altă poziție / furnizat de beneficiar",
       unit: "buc", unitPrice: 0, quantity: row.quantity, evidence: row.evidence, selected: true, note: row.note,

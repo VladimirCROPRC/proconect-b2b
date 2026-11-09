@@ -37,13 +37,12 @@ test('no-intervention excludes stale route, splice, site and client execution da
   assert.deepEqual(rows, []);
 });
 
-test('client and site actions are represented, unknown patchcord length blocks final saving', () => {
+test('client and site actions are represented and patchcord installation is not billed', () => {
   const rows = budget.buildBudgetSuggestions({ client: { service: 'Internet', equipment: ['CPE', 'SFP optic', 'Media Converter', 'Terminal Box'] }, site: { odf: 'A', odfPort: '1', etn: 'B', etnPort: '2' } });
   assert.deepEqual(rows.map(row => row.id), ['client-cpe', 'client-optics', 'client-terminal-box', 'site-patch']);
   assert.equal(rows[1].quantity, 2);
-  assert.equal(rows[3].catalogPosition, '');
-  assert.equal(budget.budgetReady(rows), false);
-  rows[3] = budget.catalogSuggestion(rows[3].id, 108, 1, rows[3].evidence);
+  assert.equal(rows[3].catalogPosition, 'included');
+  assert.equal(rows[3].unitPrice, 0);
   assert.equal(budget.budgetReady(rows), true);
   assert.deepEqual(budget.buildBudgetSuggestions({}), []);
 });
@@ -56,7 +55,7 @@ test('splice bundles count each junction once and bill only splices above the in
   assert.equal(rows.find(row => row.id === 'closure-A').catalogPosition, '100');
   assert.equal(rows.find(row => row.id === 'additional-splices-A').quantity, 2);
   assert.equal(rows.find(row => row.id === 'additional-splices-B').quantity, 1);
-  assert.equal(rows.find(row => row.id === 'closure-B').catalogPosition, '');
+  assert.equal(rows.find(row => row.id === 'closure-B').catalogPosition, '102');
   assert.equal(rows.filter(row => row.id.startsWith('box-')).length, 1);
   assert.equal(budget.budgetReady(rows), false);
 });
@@ -65,6 +64,40 @@ test('legacy splice distribution stays visible for verification rather than inve
   const rows = budget.buildBudgetSuggestions({ splices: { count: 10, junctions: [] } });
   assert.equal(rows[0].quantity, 10);
   assert.equal(rows[0].catalogPosition, '');
+});
+
+test('102 is used without new client cable, 103 only at the source junction of a documented client cable', () => {
+  const records = ['A', 'B'].map(id => ({ id: 'splice-' + id, junction: { id, code: id }, junctionKind: 'existing' }));
+  const splices = { count: 2, records };
+  const clientRoute = { ...route, junction: { kind: 'documented', label: 'B · Junction B' }, endpoints: { b: { id: 'B', code: 'B' } } };
+  const rows = budget.buildBudgetSuggestions({ route: clientRoute, splices });
+  assert.equal(rows.find(row => row.id === 'closure-A').catalogPosition, '102');
+  assert.equal(rows.find(row => row.id === 'closure-B').catalogPosition, '103');
+  assert.equal(rows.filter(row => row.id === 'closure-B').length, 1);
+  for (const routeData of [undefined, { ...clientRoute, segments: [] }, { ...clientRoute, noIntervention: true }]) {
+    const noCableRows = budget.buildBudgetSuggestions({ route: routeData, splices });
+    assert.equal(noCableRows.find(row => row.id === 'closure-B').catalogPosition, '102');
+  }
+  const routeOnly = budget.buildBudgetSuggestions({ route: clientRoute });
+  assert.equal(routeOnly.find(row => row.id === 'closure-B').catalogPosition, '103');
+});
+
+test('saved access tariffs are refreshed, and patchcord is free even in legacy/manual estimates', () => {
+  const records = [{ id: 's', junction: { id: 'J', code: 'J' }, junctionKind: 'existing' }];
+  const generated = budget.buildBudgetSuggestions({ splices: { count: 1, records }, site: { odf: 'A', etn: 'B' } });
+  const saved = generated.map(row => ({ ...row, catalogPosition: row.id === 'site-patch' ? '109' : '103', unitPrice: 999 }));
+  const restored = budget.reconcileBudget(generated, saved);
+  assert.equal(restored.find(row => row.id === 'closure-J').catalogPosition, '102');
+  assert.equal(restored.find(row => row.id === 'site-patch').unitPrice, 0);
+  for (const position of [108, 109]) {
+    const manual = budget.catalogSuggestion('manual-patch', position, 3, 'Patchcord');
+    assert.equal(manual.unitPrice, 0);
+    const normalized = budget.normalizeBudget([{ ...manual, catalogPosition: String(position), unitPrice: 999 }]);
+    assert.equal(normalized[0].unitPrice, 0);
+  }
+  const corrected = budget.applyBudgetRules(saved, generated);
+  assert.equal(corrected.find(row => row.id === 'closure-J').catalogPosition, '102');
+  assert.equal(corrected.find(row => row.id === 'site-patch').unitPrice, 0);
 });
 
 test('a new junction declared in route appears once, including when also recorded in splices', () => {
@@ -129,7 +162,7 @@ test('estimate API restricts access, validates source coverage and persists cano
     ...budget,
   };
   const routeSource = (await source('app/api/estimates/route.ts')).replace(/^import .*;$/gm, '');
-  const api = await import(moduleUrl('const { getRawDb, getAuthorizedProject, isManagementRole, buildBudgetSuggestions, normalizeBudget, currentSession, sameOrigin } = globalThis.__budgetApi;\n' + routeSource));
+  const api = await import(moduleUrl('const { getRawDb, getAuthorizedProject, isManagementRole, applyBudgetRules, buildBudgetSuggestions, normalizeBudget, currentSession, sameOrigin } = globalThis.__budgetApi;\n' + routeSource));
   const request = (rows = generated, source = JSON.stringify(generated), origin = 'https://example.test') => new Request('https://example.test/api/estimates', { method: 'PATCH', headers: { Origin: origin, 'Content-Type': 'application/json' }, body: JSON.stringify({ projectId: 'P', rows, source }) });
   const get = () => api.GET(new Request('https://example.test/api/estimates?projectId=P'));
   try {

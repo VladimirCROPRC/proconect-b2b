@@ -1,6 +1,6 @@
 import { getRawDb } from "../../../db";
 import { getAuthorizedProject, isManagementRole } from "../../project-server";
-import { buildBudgetSuggestions, normalizeBudget } from "../../project-budget";
+import { applyBudgetRules, buildBudgetSuggestions, normalizeBudget } from "../../project-budget";
 import { currentSession, sameOrigin } from "../../server-auth";
 
 export const dynamic = "force-dynamic";
@@ -35,10 +35,11 @@ export async function PATCH(request: Request) {
     const expected = buildBudgetSuggestions(documentation);
     if (body.source !== JSON.stringify(expected)) return Response.json({ error: "Datele din teren s-au schimbat. Reîncarcă proiectul înainte de salvarea devizului." }, { status: 409 });
     if (expected.some(row => !rows.some(saved => saved.id === row.id))) return Response.json({ error: "Devizul trebuie să cuprindă toate acțiunile documentate." }, { status: 400 });
+    const correctedRows = applyBudgetRules(rows, expected);
     const now = Date.now();
     await getRawDb().prepare("INSERT INTO project_estimates (project_id, content_json, updated_by, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(project_id) DO UPDATE SET content_json = excluded.content_json, updated_by = excluded.updated_by, updated_at = excluded.updated_at")
-      .bind(body.projectId, JSON.stringify(rows), session.account.username, now).run();
-    return Response.json({ rows, updatedAt: now });
+      .bind(body.projectId, JSON.stringify(correctedRows), session.account.username, now).run();
+    return Response.json({ rows: correctedRows, updatedAt: now });
   } catch {
     return Response.json({ error: "Devizul nu a putut fi salvat." }, { status: 503 });
   }

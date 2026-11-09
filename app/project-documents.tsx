@@ -101,6 +101,7 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
   const [tab, setTab] = useState<"report" | "estimate">(project.activityType === "Intervenție" ? "estimate" : "report");
   const [report, setReport] = useState(() => buildReport(project, fieldData));
   const [suggestions, setSuggestions] = useState(() => buildBudgetSuggestions(fieldData));
+  const generatedBudget = useMemo(() => buildBudgetSuggestions(fieldData), [fieldData]);
   const [savedAt, setSavedAt] = useState("");
   const [estimateState, setEstimateState] = useState("Se încarcă devizul…");
   const [estimateLoaded, setEstimateLoaded] = useState(false);
@@ -181,6 +182,12 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
     setEstimateState("Modificări nesalvate.");
   }
 
+  function catalogOptions(row: BudgetSuggestion) {
+    const expected = generatedBudget.find(item => item.id === row.id);
+    const fixedAccess = expected?.id.startsWith("closure-") && ["102", "103"].includes(expected.catalogPosition);
+    return boqCatalog.filter(item => ![108, 109].includes(item.row) && (!fixedAccess || String(item.row) === expected?.catalogPosition));
+  }
+
   function selectCatalog(id: string, value: string) {
     setSuggestions(current => current.map(item => item.id !== id ? item : value === "included"
       ? { ...item, catalogPosition: value, unitPrice: 0, unit: "buc" }
@@ -196,8 +203,9 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
         method: "PATCH", credentials: "same-origin", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ projectId: project.id, rows: suggestions, source: JSON.stringify(buildBudgetSuggestions(fieldData)) }),
       });
-      const payload = await response.json() as { error?: string };
+      const payload = await response.json() as { rows?: BudgetSuggestion[]; error?: string };
       if (!response.ok) throw new Error(payload.error || "Devizul nu a putut fi salvat.");
+      if (payload.rows) setSuggestions(payload.rows);
       setEstimateState("Deviz salvat permanent.");
       onNotify(`Devizul pentru ${project.id} a fost salvat.`);
     } catch (error) {
@@ -278,8 +286,8 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
                 <tbody>{suggestions.map((item) => (
                   <tr className={item.selected ? "selected" : ""} key={item.id}>
                     <td>{item.id.startsWith("manual-") ? <button disabled={!estimateLoaded || savingEstimate} onClick={() => { setSuggestions(current => current.filter(row => row.id !== item.id)); setEstimateState("Modificări nesalvate."); }} aria-label={`Șterge poziția manuală ${item.name}`}>Șterge</button> : "Din teren"}</td>
-                    <td><select aria-label={`Poziție BoQ: ${item.name}`} disabled={!estimateLoaded || savingEstimate} value={item.catalogPosition} onChange={event => selectCatalog(item.id, event.target.value)}><option value="">Alege poziția</option><option value="included">Inclus / beneficiar (0 EUR)</option>{boqCatalog.map(entry => <option key={entry.row} value={entry.row}>{entry.row} · {entry.name}</option>)}</select></td>
-                    <td><strong>{item.catalogPosition === "included" ? "Inclus / furnizat de beneficiar" : item.name}</strong><small>{item.evidence}</small><input aria-label={`Observații: ${item.name}`} placeholder={item.catalogPosition === "included" ? "Justificare obligatorie / poziția care include lucrarea" : "Observații"} maxLength={2000} value={item.note ?? ""} disabled={!estimateLoaded || savingEstimate} onChange={event => updateSuggestion(item.id, { note: event.target.value })} /></td>
+                    <td><select aria-label={`Poziție BoQ: ${item.name}`} disabled={!estimateLoaded || savingEstimate || item.id === "site-patch"} value={item.catalogPosition} onChange={event => selectCatalog(item.id, event.target.value)}><option value="">Alege poziția</option><option value="included">Inclus / beneficiar (0 EUR)</option>{catalogOptions(item).map(entry => <option key={entry.row} value={entry.row}>{entry.row} · {entry.name}</option>)}</select></td>
+                    <td><strong>{item.id === "site-patch" ? item.name : item.catalogPosition === "included" ? "Inclus / furnizat de beneficiar" : item.name}</strong><small>{item.evidence}</small><input aria-label={`Observații: ${item.name}`} placeholder={item.catalogPosition === "included" ? "Justificare obligatorie / poziția care include lucrarea" : "Observații"} maxLength={2000} value={item.note ?? ""} disabled={!estimateLoaded || savingEstimate} onChange={event => updateSuggestion(item.id, { note: event.target.value })} /></td>
                     <td>{item.unit}</td>
                     <td>{item.unitPrice.toLocaleString("ro-RO", { maximumFractionDigits: 5 })}</td>
                     <td><input aria-label={`Cantitate: ${item.name}`} disabled={!estimateLoaded || savingEstimate} type="number" min="0.001" step="0.001" value={item.quantity} onChange={(event) => updateSuggestion(item.id, { quantity: Number(event.target.value) })} /></td>
