@@ -24,7 +24,6 @@ export type ProjectRecord = {
   terminalBox: boolean;
   status: "Planificat" | "În desfășurare" | "De verificat" | "Finalizat";
   date: string;
-  completedAt?: number | null;
   ipwo: string;
   splice: string;
 };

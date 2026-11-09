@@ -1,12 +1,4 @@
 export const reportTimezone = "Europe/Bucharest";
-export function completionTimestamp(currentStatus: string, currentAt: number | null, nextStatus: string, provided: unknown, now: number): number | null {
-  if (nextStatus !== "Finalizat") return null;
-  if (provided !== undefined && provided !== null) {
-    if (typeof provided !== "number" || !Number.isSafeInteger(provided) || provided <= 0 || provided > now) throw new Error("Data finalizării nu este validă.");
-    return provided;
-  }
-  return currentStatus === "Finalizat" ? currentAt : now;
-}
 export function localDate(timestamp: number) {
   const parts = new Intl.DateTimeFormat("en-CA", { timeZone: reportTimezone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(timestamp);
   const part = (type: string) => parts.find(value => value.type === type)?.value;

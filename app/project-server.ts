@@ -3,7 +3,6 @@ import { getRawDb } from "../db";
 import { requiredInterventionCablePhotos, type InterventionDocumentationSummary, type InterventionExecutionActivity, type InterventionExecutionSummary, type InterventionJunction, type ProjectFieldDocumentation } from "./field-documentation";
 import { initialCpeCatalog, initialFieldDocumentation, initialProjects, type CpeCatalogItem, type ProjectActivityType, type ProjectRecord } from "./project-data";
 import type { AuthenticatedAccount } from "./server-auth";
-import { completionTimestamp } from "./technician-report";
 
 type ProjectRow = {
   id: string;
@@ -22,7 +21,6 @@ type ProjectRow = {
   mc: number;
   terminal_box: number;
   status: ProjectRecord["status"];
-  completed_at: number | null;
   scheduled_label: string;
   ipwo: string;
   splice: string;
@@ -96,7 +94,6 @@ function projectRowToRecord(row: ProjectRow): ProjectRecord {
     mc: Boolean(row.mc),
     terminalBox: Boolean(row.terminal_box),
     status: row.status,
-    completedAt: row.completed_at ?? null,
     date: row.scheduled_label,
     ipwo: row.ipwo,
     splice: row.splice,
@@ -274,7 +271,6 @@ export async function createProject(input: ProjectRecord, createdBy: Authenticat
     cpe: catalogItem?.name ?? "",
     cpeRequiresGrounding: Boolean(catalogItem?.requires_grounding),
     status: "Planificat",
-    completedAt: null,
     date: input.date || "Astăzi",
     ipwo: input.ipwo || "Fișier neîncărcat",
     splice: input.splice || "Fișier neîncărcat",
@@ -302,8 +298,6 @@ export async function updateProject(input: ProjectRecord) {
   const existing = await getRawDb().prepare("SELECT * FROM projects WHERE id = ? LIMIT 1").bind(input.id.toUpperCase()).first<ProjectRow>();
   if (!existing) return { error: "Proiectul selectat nu există.", status: 404 as const };
 
-  // Historical completion dates can be corrected without reassigning an
-  // inactive technician or resolving a display name to a different username.
   const technician = input.technician.trim() === existing.technician
     ? { username: existing.technician_username, name: existing.technician }
     : await getRawDb()
@@ -320,17 +314,9 @@ export async function updateProject(input: ProjectRecord) {
     return { error: "Selectează un echipament disponibil în catalogul CPE.", status: 400 as const };
   }
 
-  const now = Date.now();
-  let completedAt: number | null;
-  try {
-    completedAt = completionTimestamp(existing.status, existing.completed_at ?? null, input.status, input.completedAt, now);
-  } catch {
-    return { error: "Data finalizării nu este validă sau este în viitor.", status: 400 as const };
-  }
   const project: ProjectRecord = {
     ...input,
     id: existing.id,
-    completedAt,
     activityType: ["Instalare", "Intervenție", "Survey"].includes(input.activityType) ? input.activityType : existing.activity_type,
     client: input.client.trim(),
     address: input.address.trim(),
@@ -348,9 +334,10 @@ export async function updateProject(input: ProjectRecord) {
     ipwo: typeof input.ipwo === "string" && input.ipwo.trim() ? input.ipwo.trim() : existing.ipwo,
     splice: typeof input.splice === "string" && input.splice.trim() ? input.splice.trim() : existing.splice,
   };
+  const now = Date.now();
   const statements = [
     getRawDb().prepare(
-      "UPDATE projects SET activity_type = ?, client = ?, address = ?, contact = ?, phone = ?, email = ?, requirements = ?, technician = ?, technician_username = ?, cpe = ?, cpe_requires_grounding = ?, sfp = ?, mc = ?, terminal_box = ?, status = ?, scheduled_label = ?, ipwo = ?, splice = ?, completed_at = ?, updated_at = ? WHERE id = ?",
+      "UPDATE projects SET activity_type = ?, client = ?, address = ?, contact = ?, phone = ?, email = ?, requirements = ?, technician = ?, technician_username = ?, cpe = ?, cpe_requires_grounding = ?, sfp = ?, mc = ?, terminal_box = ?, status = ?, scheduled_label = ?, ipwo = ?, splice = ?, updated_at = ? WHERE id = ?",
     ).bind(
       project.activityType,
       project.client,
@@ -370,7 +357,6 @@ export async function updateProject(input: ProjectRecord) {
       project.date,
       project.ipwo,
       project.splice,
-      completedAt,
       now,
       project.id,
     ),
@@ -577,7 +563,7 @@ export async function saveFieldDocumentation(projectId: string, section: string,
           validatedBy: account.name,
         } satisfies InterventionDocumentationSummary,
       };
-      finalizedProject = { ...projectRowToRecord(project), status: "Finalizat", completedAt: Date.now() };
+      finalizedProject = { ...projectRowToRecord(project), status: "Finalizat" };
     }
   }
 
@@ -608,7 +594,7 @@ export async function saveFieldDocumentation(projectId: string, section: string,
   if (finalizedProject) {
     await getRawDb().batch([
       saveDocumentation,
-      getRawDb().prepare("UPDATE projects SET status = ?, completed_at = ?, updated_at = ? WHERE id = ?").bind("Finalizat", finalizedProject.completedAt, now, projectId),
+      getRawDb().prepare("UPDATE projects SET status = ?, updated_at = ? WHERE id = ?").bind("Finalizat", now, projectId),
     ]);
     return { documentation: next, project: finalizedProject };
   }
@@ -751,4 +737,3 @@ export async function writeReport(projectId: string, content: Record<string, str
     .run();
   return { report: content, updatedAt: now };
 }
-
