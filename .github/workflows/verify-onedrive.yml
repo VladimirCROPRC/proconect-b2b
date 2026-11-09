@@ -21,7 +21,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: OneDrive unit and mocked integration tests
-        run: node --test tests/onedrive.test.mjs tests/no-intervention.test.mjs tests/project-budget.test.mjs tests/excel-reports.test.mjs tests/estimate-template.test.mjs tests/orange-oroc.test.mjs tests/daily-reports.test.mjs
+        run: node --test tests/onedrive.test.mjs tests/no-intervention.test.mjs tests/project-budget.test.mjs tests/excel-reports.test.mjs tests/estimate-template.test.mjs tests/orange-oroc.test.mjs tests/daily-reports.test.mjs tests/project-field-sheets.test.mjs
       - name: Validate all SQLite migrations
         run: python3 scripts/test-migrations.py
       - name: TypeScript
