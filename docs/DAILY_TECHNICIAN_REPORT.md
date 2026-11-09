@@ -39,6 +39,16 @@ SP2 FOA are 300 EUR/tichet; celelalte pachete nu au tarif configurat.
 Pozițiile incluse în alt pachet au valoare zero, fără dublă facturare.
 Totalurile se adună din valorile rotunjite pe poziție, fără TVA.
 
-Exportul Excel are date și numere tipizate, detalii pe zile, subtotaluri
-zilnice și total de perioadă care adună numai subtotalurile. Operațiunile
-fără dată sunt separate și excluse din total.
+Exportul Excel are două foi: `Raport zilnic` pentru teren și `Orange OROC`
+pentru tichete. Fiecare lucrare/tichet apare o singură dată pe foaia sa, inclusiv
+când perioada conține manopere din mai multe zile. Datele, manoperele și
+cantitățile sunt păstrate în celule pe linii separate. O dată unică este
+exportată ca dată Excel; datele multiple sunt enumerate.
+
+Foaia principală conține total teren, total Orange/OROC (formulă care referă
+a doua foaie) și total general. Valorile neconfigurate rămân goale, iar
+lucrările cu valori incomplete sunt marcate. Manoperele fără dată sunt
+menționate pe aceeași linie a lucrării și excluse din valoare. O lucrare
+numai cu manopere nedatate are valoarea goală. Totalurile nu includ de
+două ori detaliile și rămân valide când una dintre foi nu are lucrări.
+Interfața păstrează sumarul pe zile și detaliile pe manopere.

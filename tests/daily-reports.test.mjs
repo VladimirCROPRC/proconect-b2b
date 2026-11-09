@@ -14,7 +14,7 @@ const reportUrl = moduleUrl((await source('app/technician-report.ts')).replace('
 const dates = await import(reportUrl);
 const dailyUrl = moduleUrl((await source('app/daily-technician-report.ts')).replace('"./project-budget"', JSON.stringify(budgetUrl)).replace('"./technician-report"', JSON.stringify(reportUrl)));
 const { buildDailyReport } = await import(dailyUrl);
-const { dailyReportSheet } = await import(moduleUrl(await source('app/daily-report-workbook.ts')));
+const { dailyReportSheets } = await import(moduleUrl(await source('app/daily-report-workbook.ts')));
 const { createExcelWorkbook } = await import(moduleUrl(await source('app/excel-export.ts')));
 const technician = { username: 'tech', name: 'Technician' };
 const at = date => dates.dayStart(date) + 3600000;
@@ -62,23 +62,60 @@ test('Orange daily totals use work dates, configured tariffs and per-package tic
   assert.equal(report.days[0].lines.find(line => line.code === 'SP1 FO').total, null);
 });
 
-test('daily XLSX contains typed dates, per-day totals, a non-duplicating period total and undated exclusions', () => {
-  const report = build({ projects: [project([row('site-patch'), row('manual-extra')])], photos: [photo('site', '2026-11-09')], tickets: [{ id: '1', ticketNumber: 'FITT', workDate: '2026-11-10', packageCode: 'SP2 FOA', technicianUsername: 'tech' }] });
-  const sheet = dailyReportSheet(report);
-  assert.deepEqual(sheet.rows[0][0], { date: '2026-11-09' });
-  const total = sheet.rows.find(row => row[0] === 'TOTAL PERIOADĂ');
-  assert.deepEqual(total[10], { formula: 'K6+K8', value: 320 });
-  assert.equal(sheet.rows.at(-1)[10], null);
+test('daily export groups each work once across days, separates Orange and preserves unknown and undated amounts', () => {
+  const report = build({ projects: [project([row('site-patch'), row('route-0-aerial'), row('manual-extra')])], photos: [photo('site', '2026-11-09'), photo('route', '2026-11-10')], tickets: [{ id: '1', ticketNumber: 'RID', workDate: '2026-11-10', packageCode: 'SP2 FOA', technicianUsername: 'tech' }, { id: '2', ticketNumber: 'FITT', workDate: '2026-11-10', packageCode: 'SP1 FO', technicianUsername: 'tech' }] });
+  const [main, orange] = dailyReportSheets(report);
+  assert.equal(main.rows.filter(row => row[2] === 'RID').length, 1);
+  assert.equal(orange.rows.filter(row => row[2] === 'RID').length, 1);
+  assert.equal(main.rows[0][6], 40);
+  assert.equal(main.dataRowCount,1); assert.equal(orange.dataRowCount,2);
+  assert.equal(main.rows[0][0], '2026-11-09\n2026-11-10');
+  assert.match(main.rows[0][4], /site-patch/); assert.match(main.rows[0][4], /route-0-aerial/);
+  assert.match(main.rows[0][7], /1 manopere fără dată/);
+  assert.equal(orange.rows.find(row => row[2] === 'FITT')[6], null);
+  assert.deepEqual(main.rows[2][6], { formula: "'Orange OROC'!G7", value: 300 });
+  assert.deepEqual(main.rows[3][6], { formula: 'SUM(G6:G7)', value: 340 });
+  const undated = dailyReportSheets(build({ projects: [project([row('manual-extra')])] }));
+  assert.equal(undated[0].rows[0][6], null);
+  assert.equal(undated[0].rows.at(-1)[6].value, 0);
+});
+
+test('two-sheet XLSX opens independently with cross-sheet formulas, cached totals and typed dates', () => {
+  const report = build({ projects: [project([row('site-patch')])], photos: [photo('site', '2026-11-09')], tickets: [{ id: '1', ticketNumber: 'FITT', workDate: '2026-11-10', packageCode: 'SP2 FOA', technicianUsername: 'tech' }] });
+  const sheets = dailyReportSheets(report);
   const result = spawnSync('python3', ['-c', `import io,sys,zipfile,xml.etree.ElementTree as E
-z=zipfile.ZipFile(io.BytesIO(sys.stdin.buffer.read())); assert z.testzip() is None
+raw=sys.stdin.buffer.read(); z=zipfile.ZipFile(io.BytesIO(raw)); assert z.testzip() is None
 for n in z.namelist(): E.fromstring(z.read(n))
+ns={'s':'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
+wb=E.fromstring(z.read('xl/workbook.xml')); assert [s.attrib['name'] for s in wb.find('s:sheets',ns)]==['Raport zilnic','Orange OROC']
+w=E.fromstring(z.read('xl/worksheets/sheet1.xml')); cells={c.attrib['r']:c for c in w.findall('.//s:c',ns)}
+assert cells['G7'].find('s:f',ns).text=="'Orange OROC'!G6"
+assert cells['G8'].find('s:v',ns).text=='320'
+assert w.find('s:autoFilter',ns).attrib['ref']=='A4:H5'
 try:
  import openpyxl,datetime
- w=openpyxl.load_workbook(io.BytesIO(z.fp.getvalue()),data_only=True)
- assert w.active['A5'].value==datetime.datetime(2026,11,9)
- assert w.active['K9'].value==320
-except ImportError: pass`], { input: createExcelWorkbook(sheet) });
+ w=openpyxl.load_workbook(io.BytesIO(raw),data_only=True)
+ assert w.sheetnames==['Raport zilnic','Orange OROC']
+ assert w.worksheets[0]['A5'].value==datetime.datetime(2026,11,9)
+ assert w.worksheets[0]['G8'].value==320
+ assert w.worksheets[1]['G5'].value==300
+ f=openpyxl.load_workbook(io.BytesIO(raw),data_only=False)
+ assert f.worksheets[0]['G7'].value=="='Orange OROC'!G6"
+except ImportError: pass`], { input: createExcelWorkbook(sheets) });
   assert.equal(result.status, 0, result.stderr.toString());
+});
+
+test('two-sheet export keeps valid zero totals for empty sides without circular references', () => {
+  const [main, orange] = dailyReportSheets(build({}));
+  assert.equal(main.rows.length, 3); assert.equal(orange.rows.length, 1);
+  assert.deepEqual(main.rows[0][6], { formula: '0', value: 0 });
+  assert.deepEqual(main.rows[1][6], { formula: "'Orange OROC'!G5", value: 0 });
+  assert.deepEqual(main.rows[2][6], { formula: 'SUM(G5:G6)', value: 0 });
+  assert.deepEqual(orange.rows[0][6], { formula: '0', value: 0 });
+  const base = { ...main, rows: [] };
+  assert.throws(() => createExcelWorkbook([]));
+  assert.throws(() => createExcelWorkbook([base, base]));
+  assert.throws(() => createExcelWorkbook({ ...base, name: 'Orange/OROC' }));
 });
 
 test('daily API enforces management access, joins real operations and excludes non-images and foreign photos', async () => {
