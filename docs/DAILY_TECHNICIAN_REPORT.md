@@ -52,3 +52,10 @@ menționate pe aceeași linie a lucrării și excluse din valoare. O lucrare
 numai cu manopere nedatate are valoarea goală. Totalurile nu includ de
 două ori detaliile și rămân valide când una dintre foi nu are lucrări.
 Interfața păstrează sumarul pe zile și detaliile pe manopere.
+
+
+Celula A2 rămâne goală în toate rapoartele Excel; nu este exportat text
+introductiv. Eventualele verificări ale raportului zilnic rămân în observațiile
+totalului general. Secțiunea extensibilă cu manopere fără fotografie asociată
+nu mai apare în interfața raportului zilnic; aceste manopere nu primesc o dată
+arbitrară și rămân excluse din total.
