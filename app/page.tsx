@@ -993,10 +993,6 @@ export default function Home() {
       showToast("Secțiunea Documente este disponibilă numai administratorilor, managerilor și coordonatorilor.");
       return;
     }
-    if (project.activityType !== "Instalare") {
-      showToast("Documentele de acceptanță sunt disponibile doar pentru instalări.");
-      return;
-    }
     setActiveProjectId(project.id);
     setSelected(null);
     setView("documents");
@@ -1008,7 +1004,7 @@ export default function Home() {
       return;
     }
     let destinationProject = activeProject;
-    if (next === "client" || next === "route" || next === "splices" || next === "site" || next === "documents") {
+    if (next === "client" || next === "route" || next === "splices" || next === "site") {
       const installation = activeProject.activityType === "Instalare"
         ? activeProject
         : projects.find((project) => project.activityType === "Instalare");
@@ -1494,7 +1490,7 @@ export default function Home() {
         {view === "route" && <FoRouteSection project={activeProject} initialSummary={activeFieldDocumentation.route} onNotify={showToast} onSaved={saveRouteSummary} />}
         {view === "splices" && <FoSplicesSection project={activeProject} initialSummary={activeFieldDocumentation.splices} onNotify={showToast} onSaved={saveSpliceSummary} />}
         {view === "site" && <SiteOperationsSection project={activeProject} initialSummary={activeFieldDocumentation.site} onNotify={showToast} onSaved={saveSiteSummary} />}
-        {view === "documents" && canManageDocuments && <ProjectDocumentsSection project={activeProject} fieldData={activeFieldDocumentation} onNotify={showToast} />}
+        {view === "documents" && canManageDocuments && <ProjectDocumentsSection key={activeProject.id} project={activeProject} fieldData={activeFieldDocumentation} onNotify={showToast} />}
       </section>
 
       {modal && <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && closeModal()}>
@@ -1579,7 +1575,7 @@ export default function Home() {
         <div className="drawer-project-actions">
           <button className="primary-button" onClick={() => openProject(selected)}>{selectedSafetyComplete ? selected.activityType === "Intervenție" ? "Deschide intervenția" : "Deschide proiectul" : "Completează Pretask și EIP"} <span>→</span></button>
           {canManageDocuments && <button className="secondary-button" onClick={() => openProjectEditor(selected)}>{selected.activityType === "Intervenție" ? "Editează intervenția" : "Editează proiectul"}</button>}
-          {canManageDocuments && selected.activityType === "Instalare" && <button className="secondary-button" onClick={() => openProjectDocuments(selected)}>Documente administrative</button>}
+          {canManageDocuments && selected.activityType !== "Survey" && <button className="secondary-button" onClick={() => openProjectDocuments(selected)}>Documente administrative</button>}
           {canManageDocuments && <button className="secondary-button" style={{ color: "#b42336", borderColor: "#ecc8cc" }} onClick={() => openProjectDeletion(selected)}>{selected.activityType === "Intervenție" ? "Șterge intervenția" : "Șterge proiectul"}</button>}
           <small>{selected.activityType === "Instalare" ? "Client, traseu, suduri, operațiuni site și închiderea proiectului" : selected.activityType === "Intervenție" ? "Constatare, execuție și documentarea intervenției" : "Fișă și obiective dedicate survey-ului"}</small>
         </div>
@@ -1597,3 +1593,4 @@ export default function Home() {
     </main>
   );
 }
+

@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { ProjectFieldDocumentation, RouteMethod } from "./field-documentation";
+import type { ProjectFieldDocumentation } from "./field-documentation";
+import { boqCatalog } from "./boq-catalog";
+import { buildBudgetSuggestions, catalogSuggestion, budgetReady, reconcileBudget, normalizeBudget, type BudgetSuggestion } from "./project-budget";
+import "./project-budget.css";
 
 type DocumentProject = {
   id: string;
@@ -11,6 +14,7 @@ type DocumentProject = {
   sfp: boolean;
   mc: boolean;
   terminalBox: boolean;
+  activityType?: string;
 };
 
 type ReportDraft = {
@@ -21,35 +25,10 @@ type ReportDraft = {
   client: string;
 };
 
-type BudgetSuggestion = {
-  id: string;
-  category: "Manoperă" | "Material";
-  catalogPosition: string;
-  name: string;
-  unit: string;
-  unitPrice: number;
-  quantity: number;
-  evidence: string;
-  selected: boolean;
-};
-
 type Props = {
   project: DocumentProject;
   fieldData: ProjectFieldDocumentation;
   onNotify: (message: string) => void;
-};
-
-const routeCatalog: Record<Exclude<RouteMethod, "aerial">, { position: string; name: string; unit: string; price: number }> = {
-  duct: { position: "22", name: "Instalare cablu FO în monotub sau canalizație existentă", unit: "km", price: 323 },
-  tray: { position: "15", name: "Instalare cablu comunicații prin pat de cablu", unit: "km", price: 480 },
-  facade: { position: "10", name: "Pozat FO ADSS pe fațade de clădiri", unit: "km", price: 430 },
-};
-
-const materialCatalog = {
-  boat: { position: "M2", name: "Accesoriu instalare cablu FO ADSS «Bărcuță»", price: 0.53 },
-  stainlessClamp: { position: "M3", name: "Accesoriu instalare cablu FO ADSS «Colier tablă inox»", price: 0.39 },
-  hook: { position: "M4", name: "Accesoriu instalare cablu FO ADSS «Cârlig»", price: 0.31 },
-  armorod: { position: "M5", name: "Accesoriu instalare cablu FO ADSS «Armorod»", price: 5.69 },
 };
 
 function formatNumber(value: number) {
@@ -64,14 +43,6 @@ function inferSiteLabel(project: DocumentProject, fieldData: ProjectFieldDocumen
   const source = `${fieldData.site?.odf ?? ""} ${fieldData.site?.etn ?? ""}`;
   const siteCode = source.match(/(?:^|[-_\s])([a-z]\d{3,})(?:$|[-_\s])/i)?.[1];
   return siteCode ? `Site ${siteCode.toUpperCase()}` : `Site ${project.id}`;
-}
-
-function getRouteCatalogItem(method: RouteMethod, cableType: string) {
-  if (method !== "aerial") return routeCatalog[method];
-  const fiberCount = Number(cableType.match(/(\d+)\s*(?:fire|fibre)/i)?.[1] ?? 0);
-  if (fiberCount >= 144) return { position: "13", name: "Instalare FO ADSS 144 fire pe stâlpi", unit: "km", price: 380 };
-  if (fiberCount >= 24) return { position: "12", name: "Instalare FO ADSS 24, 48 sau 96 fire pe stâlpi", unit: "km", price: 380 };
-  return { position: "11", name: "Instalare FO ADSS 2, 4, 8 sau 12 fire pe stâlpi", unit: "km", price: 380 };
 }
 
 function buildReport(project: DocumentProject, fieldData: ProjectFieldDocumentation): ReportDraft {
@@ -126,94 +97,14 @@ function buildReport(project: DocumentProject, fieldData: ProjectFieldDocumentat
   };
 }
 
-function buildBudgetSuggestions(fieldData: ProjectFieldDocumentation): BudgetSuggestion[] {
-  const suggestions: BudgetSuggestion[] = [];
-
-  for (const segment of fieldData.route?.segments ?? []) {
-    const item = getRouteCatalogItem(segment.method, segment.cableType);
-    suggestions.push({
-      id: `route-${segment.method}`,
-      category: "Manoperă",
-      catalogPosition: item.position,
-      name: item.name,
-      unit: item.unit,
-      unitPrice: item.price,
-      quantity: Number((segment.lengthMeters / 1000).toFixed(3)),
-      evidence: `${segment.label} · ${segment.lengthMeters.toLocaleString("ro-RO")} m documentați`,
-      selected: true,
-    });
-  }
-
-  if (fieldData.splices?.count) {
-    suggestions.push({
-      id: "splice-work",
-      category: "Manoperă",
-      catalogPosition: "7",
-      name: "Sudură fibră optică",
-      unit: "buc",
-      unitPrice: 4,
-      quantity: fieldData.splices.count,
-      evidence: `${fieldData.splices.count} ${fieldData.splices.count === 1 ? "sudură salvată" : "suduri salvate"} în secțiunea Suduri FO`,
-      selected: true,
-    });
-    suggestions.push({
-      id: "junction-open-close",
-      category: "Manoperă",
-      catalogPosition: "8",
-      name: "Închidere/deschidere cutie de joncțiune/ODF",
-      unit: "luc",
-      unitPrice: 11.9,
-      quantity: Math.max(1, new Set(fieldData.splices.junctions.map((junction) => junction.label)).size),
-      evidence: "Joncțiuni deschise, închise și fotografiate în teren",
-      selected: true,
-    });
-  }
-
-  const materials = fieldData.route?.aerialMaterials;
-  if (materials) {
-    for (const key of Object.keys(materialCatalog) as Array<keyof typeof materialCatalog>) {
-      if (!materials[key]) continue;
-      const item = materialCatalog[key];
-      suggestions.push({
-        id: `material-${key}`,
-        category: "Material",
-        catalogPosition: item.position,
-        name: item.name,
-        unit: "buc",
-        unitPrice: item.price,
-        quantity: materials[key],
-        evidence: `${materials[key]} buc. declarate la instalarea aeriană`,
-        selected: true,
-      });
-    }
-  }
-
-  const newJunctions = Math.max(
-    fieldData.route?.junction.kind === "new" ? 1 : 0,
-    fieldData.splices?.junctions.filter((junction) => junction.kind === "new").length ?? 0
-  );
-  if (newJunctions) {
-    suggestions.push({
-      id: "new-junction-box",
-      category: "Material",
-      catalogPosition: "M6",
-      name: "Furnizare cutie de joncțiune FO ADSS, 12 joncțiuni",
-      unit: "buc",
-      unitPrice: 63,
-      quantity: newJunctions,
-      evidence: `${newJunctions} ${newJunctions === 1 ? "joncțiune nou instalată" : "joncțiuni nou instalate"}`,
-      selected: true,
-    });
-  }
-
-  return suggestions;
-}
-
 export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props) {
-  const [tab, setTab] = useState<"report" | "estimate">("report");
+  const [tab, setTab] = useState<"report" | "estimate">(project.activityType === "Intervenție" ? "estimate" : "report");
   const [report, setReport] = useState(() => buildReport(project, fieldData));
   const [suggestions, setSuggestions] = useState(() => buildBudgetSuggestions(fieldData));
   const [savedAt, setSavedAt] = useState("");
+  const [estimateState, setEstimateState] = useState("Se încarcă devizul…");
+  const [estimateLoaded, setEstimateLoaded] = useState(false);
+  const [savingEstimate, setSavingEstimate] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -222,7 +113,21 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
       setReport(buildReport(project, fieldData));
       setSuggestions(buildBudgetSuggestions(fieldData));
       setSavedAt("");
+      setEstimateLoaded(false);
+      setEstimateState("Se încarcă devizul…");
     });
+    fetch(`/api/estimates?${new URLSearchParams({ projectId: project.id })}`, { credentials: "same-origin", cache: "no-store" })
+      .then(async response => {
+        const payload = await response.json() as { saved?: { rows: BudgetSuggestion[] }; error?: string };
+        if (!response.ok) throw new Error(payload.error || "Devizul nu a putut fi încărcat.");
+        if (!active) return;
+        const saved = payload.saved ? normalizeBudget(payload.saved.rows) : [];
+        if (!saved) throw new Error("Devizul salvat necesită verificare.");
+        setSuggestions(reconcileBudget(buildBudgetSuggestions(fieldData), saved));
+        setEstimateLoaded(true);
+        setEstimateState(payload.saved ? "Deviz încărcat; verifică acțiunile și salvează actualizările." : "Deviz generat din teren, nesalvat.");
+      })
+      .catch(error => { if (active) setEstimateState(error instanceof Error ? error.message : "Deviz indisponibil."); });
     fetch(`/api/reports?${new URLSearchParams({ projectId: project.id }).toString()}`, { credentials: "same-origin", cache: "no-store" })
       .then(async (response) => {
         const payload = (await response.json()) as { saved?: { report: ReportDraft; updatedAt: number } | null; error?: string };
@@ -237,11 +142,11 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
     return () => {
       active = false;
     };
-  }, [project.id, fieldData]);
+  }, [project, fieldData]);
 
   const selectedSuggestions = suggestions.filter((item) => item.selected);
   const estimateTotal = useMemo(
-    () => selectedSuggestions.reduce((total, item) => total + item.quantity * item.unitPrice, 0),
+    () => selectedSuggestions.reduce((total, item) => total + Math.round(item.quantity * item.unitPrice * 100), 0) / 100,
     [selectedSuggestions]
   );
 
@@ -273,6 +178,47 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
 
   function updateSuggestion(id: string, patch: Partial<BudgetSuggestion>) {
     setSuggestions((current) => current.map((item) => item.id === id ? { ...item, ...patch } : item));
+    setEstimateState("Modificări nesalvate.");
+  }
+
+  function selectCatalog(id: string, value: string) {
+    setSuggestions(current => current.map(item => item.id !== id ? item : value === "included"
+      ? { ...item, catalogPosition: value, unitPrice: 0, unit: "buc" }
+      : { ...catalogSuggestion(id, Number(value), item.quantity, item.evidence, item.name), note: item.note }));
+    setEstimateState("Modificări nesalvate.");
+  }
+
+  async function saveEstimate() {
+    if (!estimateLoaded || savingEstimate || !budgetReady(suggestions)) return;
+    setSavingEstimate(true);
+    try {
+      const response = await fetch("/api/estimates", {
+        method: "PATCH", credentials: "same-origin", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId: project.id, rows: suggestions, source: JSON.stringify(buildBudgetSuggestions(fieldData)) }),
+      });
+      const payload = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(payload.error || "Devizul nu a putut fi salvat.");
+      setEstimateState("Deviz salvat permanent.");
+      onNotify(`Devizul pentru ${project.id} a fost salvat.`);
+    } catch (error) {
+      onNotify(error instanceof Error ? error.message : "Devizul nu a putut fi salvat.");
+    } finally { setSavingEstimate(false); }
+  }
+
+  function exportEstimate() {
+    if (!budgetReady(suggestions)) return;
+    // Escape formula-leading text before opening the UTF-8 CSV in Excel.
+    const cell = (value: string | number) => {
+      const text = String(value);
+      return '"' + (typeof value === "string" && /^[=+@\-\t\r\n]/.test(text) ? "'" : "") + text.replaceAll('"', '""') + '"';
+    };
+    const lines = [["RID", "Rând BoQ", "Lucrare / material", "UM", "Cantitate", "Preț EUR", "Total EUR fără TVA", "Documentare", "Observații"],
+      ...suggestions.map(item => [project.id, item.catalogPosition, item.name, item.unit, item.quantity, item.unitPrice, Math.round(item.quantity * item.unitPrice * 100) / 100, item.evidence, item.note ?? ""]),
+      [project.id, "", "TOTAL EUR FĂRĂ TVA", "", "", "", estimateTotal, "", ""]];
+    const url = URL.createObjectURL(new Blob(["\uFEFF" + lines.map(row => row.map(cell).join(";")).join("\r\n")], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url; link.download = `Deviz-${project.id.replace(/[^a-z0-9_-]/gi, "_")}.csv`; link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   return (
@@ -283,8 +229,8 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
       </section>
 
       <div className="documents-tabs" role="tablist" aria-label="Subsecțiuni documente">
-        <button className={tab === "report" ? "active" : ""} onClick={() => setTab("report")}><span>DOC</span><div><strong>Raport de acceptanță</strong><small>Previzualizare și editare</small></div></button>
-        <button className={tab === "estimate" ? "active" : ""} onClick={() => setTab("estimate")}><span>EUR</span><div><strong>Sugestii deviz</strong><small>Operațiuni și materiale</small></div><b>{suggestions.length}</b></button>
+        {project.activityType !== "Intervenție" && <button className={tab === "report" ? "active" : ""} onClick={() => setTab("report")}><span>DOC</span><div><strong>Raport de acceptanță</strong><small>Previzualizare și editare</small></div></button>}
+        <button className={tab === "estimate" ? "active" : ""} onClick={() => setTab("estimate")}><span>EUR</span><div><strong>Deviz</strong><small>Toate acțiunile documentate</small></div><b>{suggestions.length}</b></button>
       </div>
 
       {tab === "report" && (
@@ -324,19 +270,19 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
 
       {tab === "estimate" && (
         <section className="estimate-card">
-          <div className="estimate-head"><div><span>Σ</span><p><small>MODEL DEVIZ</small><strong>Deviz final · sugestii automate</strong><em>Prețurile sunt preluate din fișierul atașat; cantitățile provin din teren.</em></p></div><div><small>TOTAL SELECTAT, FĂRĂ TVA</small><strong>{formatNumber(estimateTotal)} EUR</strong></div></div>
+          <div className="estimate-head"><div><span>Σ</span><p><small>BoQ VBTS FO PRC</small><strong>Deviz din acțiunile executate</strong><em>Diametru implicit cablu ≤10 mm. Pozițiile sunt rândurile din foaia VBTS Fibre Build.</em><em role="status">{estimateState} {!budgetReady(suggestions) && "Completează pozițiile și cantitățile lipsă."}</em></p></div><div><small>{budgetReady(suggestions) ? "TOTAL FĂRĂ TVA" : "TOTAL PARȚIAL, FĂRĂ TVA"}</small><strong>{formatNumber(estimateTotal)} EUR</strong></div></div>
           {suggestions.length ? (
             <div className="estimate-table-wrap">
               <table className="estimate-table">
-                <thead><tr><th>INCLUDE</th><th>POZ.</th><th>LUCRARE / MATERIAL</th><th>UM</th><th>PREȚ EUR</th><th>CANTITATE</th><th>TOTAL EUR</th></tr></thead>
+                <thead><tr><th>ACȚIUNE</th><th>RÂND BoQ</th><th>LUCRARE / MATERIAL</th><th>UM</th><th>PREȚ EUR</th><th>CANTITATE</th><th>TOTAL EUR</th></tr></thead>
                 <tbody>{suggestions.map((item) => (
                   <tr className={item.selected ? "selected" : ""} key={item.id}>
-                    <td><input type="checkbox" checked={item.selected} onChange={(event) => updateSuggestion(item.id, { selected: event.target.checked })} aria-label={`Include ${item.name}`} /></td>
-                    <td><span className={item.category === "Material" ? "estimate-position material" : "estimate-position"}>{item.catalogPosition}</span></td>
-                    <td><strong>{item.name}</strong><small>{item.evidence}</small></td>
+                    <td>{item.id.startsWith("manual-") ? <button disabled={!estimateLoaded || savingEstimate} onClick={() => { setSuggestions(current => current.filter(row => row.id !== item.id)); setEstimateState("Modificări nesalvate."); }} aria-label={`Șterge poziția manuală ${item.name}`}>Șterge</button> : "Din teren"}</td>
+                    <td><select aria-label={`Poziție BoQ: ${item.name}`} disabled={!estimateLoaded || savingEstimate} value={item.catalogPosition} onChange={event => selectCatalog(item.id, event.target.value)}><option value="">Alege poziția</option><option value="included">Inclus / beneficiar (0 EUR)</option>{boqCatalog.map(entry => <option key={entry.row} value={entry.row}>{entry.row} · {entry.name}</option>)}</select></td>
+                    <td><strong>{item.catalogPosition === "included" ? "Inclus / furnizat de beneficiar" : item.name}</strong><small>{item.evidence}</small><input aria-label={`Observații: ${item.name}`} placeholder={item.catalogPosition === "included" ? "Justificare obligatorie / poziția care include lucrarea" : "Observații"} maxLength={2000} value={item.note ?? ""} disabled={!estimateLoaded || savingEstimate} onChange={event => updateSuggestion(item.id, { note: event.target.value })} /></td>
                     <td>{item.unit}</td>
-                    <td>{formatNumber(item.unitPrice)}</td>
-                    <td><input type="number" min="0" step="0.001" value={item.quantity} onChange={(event) => updateSuggestion(item.id, { quantity: Number(event.target.value) })} /></td>
+                    <td>{item.unitPrice.toLocaleString("ro-RO", { maximumFractionDigits: 5 })}</td>
+                    <td><input aria-label={`Cantitate: ${item.name}`} disabled={!estimateLoaded || savingEstimate} type="number" min="0.001" step="0.001" value={item.quantity} onChange={(event) => updateSuggestion(item.id, { quantity: Number(event.target.value) })} /></td>
                     <td><strong>{formatNumber(item.quantity * item.unitPrice)}</strong></td>
                   </tr>
                 ))}</tbody>
@@ -345,9 +291,10 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
           ) : (
             <div className="estimate-empty"><span>○</span><h2>Nicio sugestie disponibilă</h2><p>Salvează traseul, sudurile sau materialele utilizate pentru a genera pozițiile de deviz.</p></div>
           )}
-          <div className="estimate-footer"><p><span>i</span><strong>Verificare administrator</strong> Sugestiile nu modifică devizul până la confirmare.</p><div><button className="secondary-button" onClick={() => onNotify("Modelul Deviz final RID1750308.xls este disponibil pentru consultare.")}>Vezi modelul</button><button className="primary-button" disabled={!selectedSuggestions.length} onClick={() => onNotify(`${selectedSuggestions.length} poziții au fost pregătite pentru devizul ${project.id}.`)}>Aplică în deviz <span>→</span></button></div></div>
+          <div className="estimate-footer"><p><span>i</span><strong>Verificare administrator</strong> Acțiunile din teren se păstrează. Lucrările incluse în alt tarif sau furnizate de beneficiar se justifică la 0 EUR.</p><div><button className="secondary-button" disabled={!estimateLoaded || savingEstimate} onClick={() => { setSuggestions(current => [...current, catalogSuggestion(`manual-${crypto.randomUUID()}`, undefined, 1, "Poziție adăugată de administrator; descrie lucrarea în observații.")]); setEstimateState("Modificări nesalvate."); }}>Adaugă poziție BoQ</button><button className="secondary-button" disabled={!estimateLoaded || savingEstimate || !budgetReady(suggestions)} onClick={exportEstimate}>Exportă CSV (Excel)</button><button className="primary-button" disabled={!estimateLoaded || savingEstimate || !budgetReady(suggestions)} onClick={saveEstimate}>{savingEstimate ? "Se salvează…" : "Salvează devizul"}</button></div></div>
         </section>
       )}
     </div>
   );
 }
+
