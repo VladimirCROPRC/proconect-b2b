@@ -17,6 +17,6 @@ export function technicianReportSheet(report: TechnicianReport): ExcelSheet {
     work.estimateStatus === "salvat" ? "Deviz salvat" : `Deviz ${work.estimateStatus}`]);
   rows.push(["TOTAL FĂRĂ TVA", "", "", "", "", { formula: report.works.length ? `SUM(F5:F${report.works.length + 4})` : "0", value: report.total }, ""]);
   return { name: "Realizări tehnician", title: `Realizări · ${report.technician.name}`,
-    subtitle: `${report.from} – ${report.to} · Data finalizării, Europe/Bucharest. ${report.missingEstimates} lucrări fără deviz valid; ${report.undated.length} lucrări fără dată, neincluse.`,
-    headers: ["Lucrare", "Tip", "Client", "Adresă", "Data finalizării", "Valoare deviz EUR fără TVA", "Situație deviz"], widths: [20, 18, 30, 45, 20, 24, 22], rows, moneyColumns: [5] };
+    subtitle: `${report.from} – ${report.to} · Finalizare = ultima fotografie încărcată de tehnician, Europe/Bucharest. ${report.missingEstimates} lucrări fără deviz valid; ${report.undated.length} lucrări fără fotografii ale tehnicianului, neincluse.`,
+    headers: ["Lucrare", "Tip", "Client", "Adresă", "Ultima fotografie / finalizare", "Valoare deviz EUR fără TVA", "Situație deviz"], widths: [20, 18, 30, 45, 20, 24, 22], rows, moneyColumns: [5] };
 }

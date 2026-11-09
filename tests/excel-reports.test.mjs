@@ -12,41 +12,6 @@ const reports = await import(reportUrl);
 const excel = await import(moduleUrl(await source('app/excel-export.ts')));
 const models = await import(moduleUrl((await source('app/workbook-models.ts')).replace('"./technician-report"', JSON.stringify(reportUrl))));
 
-test('completion timestamps are stable, editable and cleared on reopening', () => {
-  const { completionTimestamp } = reports;
-  assert.equal(completionTimestamp('Planificat', null, 'Finalizat', undefined, 2000), 2000);
-  assert.equal(completionTimestamp('Finalizat', 1000, 'Finalizat', undefined, 2000), 1000);
-  assert.equal(completionTimestamp('Finalizat', null, 'Finalizat', undefined, 2000), null);
-  assert.equal(completionTimestamp('Finalizat', null, 'Finalizat', 1000, 2000), 1000);
-  assert.equal(completionTimestamp('Finalizat', 1000, 'În desfășurare', undefined, 2000), null);
-  for (const invalid of [0, -1, 3000, '1000', NaN, 1.2]) assert.throws(() => completionTimestamp('Planificat', null, 'Finalizat', invalid, 2000));
-});
-
-test('project updates persist completion dates without changing them on ordinary edits', async () => {
-  const db = new DatabaseSync(':memory:');
-  db.exec("CREATE TABLE app_users(username TEXT,name TEXT,role TEXT,active INTEGER); INSERT INTO app_users VALUES ('tech','Tech','Tehnician',1); CREATE TABLE projects(id TEXT PRIMARY KEY,activity_type TEXT,client TEXT,address TEXT,contact TEXT,phone TEXT,email TEXT,requirements TEXT,technician TEXT,technician_username TEXT,cpe TEXT,cpe_requires_grounding INTEGER,sfp INTEGER,mc INTEGER,terminal_box INTEGER,status TEXT,scheduled_label TEXT,ipwo TEXT,splice TEXT,completed_at INTEGER,updated_at INTEGER); INSERT INTO projects(id,cpe,technician,technician_username,status) VALUES ('RID1','CPE','Tech','tech','Planificat');");
-  const adapter = { prepare(sql) { let args=[]; return { bind(...values) { args=values; return this; }, async first() { return db.prepare(sql).get(...args) ?? null; }, async run() { return db.prepare(sql).run(...args); } }; }, async batch(statements) { for (const statement of statements) await statement.run(); } };
-  const server = await source('app/project-server.ts');
-  const body = server.slice(server.indexOf('export async function updateProject('), server.indexOf('export async function deleteProject('));
-  const code = stripTypeScriptTypes(body, { mode: 'transform', disableExperimentalWarning: true });
-  const update = new Function('getRawDb','validWorkIdentifier','completionTimestamp',code.replace('export async function','async function')+'; return updateProject;')(() => adapter, () => true, reports.completionTimestamp);
-  const input={id:'RID1',activityType:'Instalare',client:'Client',address:'Address',contact:'Contact',phone:'123',email:'',requirements:'Work',technician:'Tech',cpe:'CPE',status:'Finalizat',date:'Astăzi',ipwo:'file',splice:'file'};
-  try {
-    const result=await update(input);
-    assert.ok(result.project?.completedAt > 0);
-    const completedAt=result.project.completedAt;
-    assert.equal(db.prepare("SELECT completed_at FROM projects WHERE id='RID1'").get().completed_at,completedAt);
-    const edited=await update({...input,client:'Client edited'});
-    assert.equal(edited.project.completedAt,completedAt);
-    await update({...input,status:'În desfășurare'});
-    assert.equal(db.prepare("SELECT completed_at FROM projects WHERE id='RID1'").get().completed_at,null);
-    db.exec("UPDATE app_users SET active=0");
-    const manual=await update({...input,completedAt:1700000000000});
-    assert.equal(manual.project.completedAt,1700000000000);
-    assert.equal((await update({...input,completedAt:Date.now()+86400000})).status,400);
-  } finally { db.close(); }
-});
-
 test('report periods include the entire local day and handle Romanian DST boundaries', () => {
   assert.equal(reports.dayStart('2026-11-09'), Date.parse('2026-11-08T22:00:00Z'));
   assert.equal(reports.reportRange('2026-03-29', '2026-03-29').end - reports.dayStart('2026-03-29'), 23 * 3600000);
@@ -136,10 +101,15 @@ test('completion migration backfills only actual intervention validation dates',
 
 test('report API enforces access and filters by username, final status and inclusive local dates', async () => {
   const db = new DatabaseSync(':memory:');
-  db.exec('CREATE TABLE app_users(username TEXT, name TEXT, role TEXT); CREATE TABLE projects(id TEXT,client TEXT,address TEXT,activity_type TEXT,technician_username TEXT,technician TEXT,status TEXT,completed_at INTEGER); CREATE TABLE project_estimates(project_id TEXT,content_json TEXT);');
+  db.exec('CREATE TABLE app_users(username TEXT, name TEXT, role TEXT); CREATE TABLE projects(id TEXT,client TEXT,address TEXT,activity_type TEXT,technician_username TEXT,technician TEXT,status TEXT,completed_at INTEGER); CREATE TABLE project_estimates(project_id TEXT,content_json TEXT); CREATE TABLE project_files(project_id TEXT, uploaded_by TEXT, content_type TEXT, created_at INTEGER, captured_at INTEGER);');
   db.exec("INSERT INTO app_users VALUES ('a','Same Name','Tehnician'),('b','Same Name','Tehnician');");
   const { start, end } = reports.reportRange('2026-11-09', '2026-11-09');
   for (const [id, user, status, at] of [['start','a','Finalizat',start],['late','a','Finalizat',end-1],['end','a','Finalizat',end],['other','b','Finalizat',start],['open','a','În desfășurare',start],['undated','a','Finalizat',null]]) db.prepare('INSERT INTO projects VALUES (?,?,?,?,?,?,?,?)').run(id,'Client','Address','Instalare',user,'Same Name',status,at);
+  db.exec("UPDATE projects SET completed_at = 1");
+  for (const [id, user, status, at] of [["start","a","Finalizat",start],["late","a","Finalizat",end-1],["end","a","Finalizat",end],["other","b","Finalizat",start],["open","a","În desfășurare",start]]) {
+    void status; db.prepare("INSERT INTO project_files VALUES (?,?,?,?,?)").run(id,user,"image/jpeg",at,1);
+  }
+  for (const [id,user,type,at] of [["start","a","image/jpeg",start-1000],["late","admin","image/jpeg",end+1],["late","a","application/pdf",end+1],["undated","admin","image/jpeg",start]]) db.prepare("INSERT INTO project_files VALUES (?,?,?,?,?)").run(id,user,type,at,at);
   db.prepare('INSERT INTO project_estimates VALUES (?,?)').run('start',JSON.stringify([{id:'patch',quantity:3,unitPrice:3.5823}]));
   let session = null;
   globalThis.__techReports = { ...reports, currentSession: async () => session, isManagementRole: account => ['Admin','Manager','Coordonator'].includes(account.role),
@@ -161,6 +131,13 @@ test('report API enforces access and filters by username, final status and inclu
     assert.equal(report.total,10.75); assert.equal(report.missingEstimates,1);
     assert.equal(report.works[1].total,null); assert.equal(report.works[1].estimateStatus,'lipsă');
     assert.equal(report.undated[0].id,'undated');
+    assert.equal(report.works[0].completedAt,start);
+    assert.equal(report.works[1].completedAt,end-1);
+    // A newly uploaded technician photo immediately moves the work to its
+    // actual latest upload date, without editing status or a manual date.
+    db.prepare('INSERT INTO project_files VALUES (?,?,?,?,?)').run('start','a','image/png',end+1000,1);
+    const refreshed=await (await api.GET(request('technician=a&from=2026-11-09&to=2026-11-09'))).json();
+    assert.deepEqual(refreshed.report.works.map(work=>work.id),['late']);
     session.account.passwordResetRequired=true; assert.equal((await api.GET(request())).status,401);
   } finally { delete globalThis.__techReports; db.close(); }
 });

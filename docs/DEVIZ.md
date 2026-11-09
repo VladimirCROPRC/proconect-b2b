@@ -79,16 +79,23 @@ devizului salvat, fără TVA. Nu se recalculează în tăcere tarifele devizelor
 Lucrările fără deviz valid au valoare goală și sunt semnalate; nu se raportează ca
 lucrări de zero EUR. Raportul se poate descărca în format `.xlsx`, cu total.
 
-Data finalizării este salvată la închiderea lucrării și păstrată la editările
-obișnuite. Redeschiderea lucrării elimină data. Managementul poate introduce sau
-corecta data din formularul de editare; nu se acceptă date viitoare.
+Data finalizării este **momentul încărcării ultimei fotografii de către tehnicianul
+alocat lucrării**: maximul `project_files.created_at` pentru imagini (`image/%`)
+încărcate de `projects.technician_username`. Nu se folosește momentul capturării
+imaginii, data schimbării statusului, data devizului, data validării intervenției
+sau o dată introdusă manual. Imaginile încărcate de management și documentele PDF
+nu influențează data. Se includ numai lucrările cu statusul `Finalizat`.
 
-Pentru intervențiile istorice, migrarea recuperează data validării documentației,
-atunci când există. Alte lucrări vechi fără dată sunt listate separat în raport și
-nu sunt încadrate arbitrar într-o perioadă. Completează data reală din editarea
-lucrării și generează din nou raportul. Migrarea `0007_project_completion.sql`
-trebuie aplicată înaintea publicării. Endpointul de raportare este accesibil doar
-rolurilor de management, inclusiv pentru tehnicieni inactivi sau istorici.
+Data se calculează la fiecare generare a raportului, inclusiv pentru lucrările
+istorice. O fotografie nouă încărcată de tehnician mută lucrarea în perioada
+noii încărcări. Lucrările fără fotografii ale tehnicianului sunt afișate separat,
+fără încadrare arbitrară într-o perioadă. Verifică alocarea tehnicianului și
+fotografiile lucrării. Nu mai există un câmp de dată manuală în formular.
+
+Migrarea `0008_technician_photo_report.sql` adaugă indexul pentru fotografii.
+Coloana istorică `projects.completed_at` din migrarea 0007 este păstrată pentru
+compatibilitate, dar nu este sursa raportului. Endpointul este accesibil numai
+managementului, inclusiv pentru tehnicieni inactivi sau istorici.
 
 Migrarea `0006_project_estimates.sql` trebuie aplicată înaintea publicării, prin
 comanda D1 de deploy existentă. Accesul este rezervat rolurilor de management.

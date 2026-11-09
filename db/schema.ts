@@ -84,6 +84,7 @@ export const projectFiles = sqliteTable("project_files", {
   createdAt: integer("created_at").notNull(),
 }, (table) => [
   index("project_files_project_section_idx").on(table.projectId, table.section),
+  index("project_files_uploader_project_date_idx").on(table.uploadedBy, table.projectId, table.createdAt),
   uniqueIndex("project_files_storage_key_idx").on(table.storageKey),
 ]);
 
