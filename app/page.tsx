@@ -13,6 +13,8 @@ import { initialCpeCatalog, type CpeCatalogItem, type ProjectActivityType, type 
 import type { ClientFieldSummary, InterventionFieldSummary, ProjectFieldDocumentation, RouteFieldSummary, SiteFieldSummary, SpliceFieldSummary } from "./field-documentation";
 import { TechnicianProjectSafety, type ProjectSafetyStatus } from "./technician-project-safety";
 import { NoInterventionControl } from "./no-intervention-control";
+import { TechnicianReports } from "./technician-reports";
+import { dayStart, localDate } from "./technician-report";
 
 type View = "projects" | "interventions" | "surveys" | "intervention-workspace" | "intervention-execution" | "intervention-documentation" | "survey-workspace" | "team" | "cpe" | "drive" | "documents" | "client" | "route" | "splices" | "site";
 type ActivityListView = "projects" | "interventions" | "surveys";
@@ -159,6 +161,7 @@ export default function Home() {
   const [view, setView] = useState<View>("projects");
   const [modal, setModal] = useState<Modal>(null);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [projectFormStatus, setProjectFormStatus] = useState<Project["status"]>("Planificat");
   const [deletingProject, setDeletingProject] = useState<Project | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [projectDeleting, setProjectDeleting] = useState(false);
@@ -525,6 +528,7 @@ export default function Home() {
   function openProjectEditor(project: Project) {
     setSelected(null);
     setEditingProject(project);
+    setProjectFormStatus(project.status);
     setIpwoName(project.ipwo === "Fișier neîncărcat" ? "" : project.ipwo);
     setSpliceName(project.splice === "Fișier neîncărcat" ? "" : project.splice);
     setIpwoFile(null);
@@ -622,6 +626,7 @@ export default function Home() {
       mc: form.get("mc") === "on",
       terminalBox: form.get("terminalBox") === "on",
       status: String(form.get("status") || editingProject.status) as Project["status"],
+      completedAt: form.get("completedDate") ? (editingProject.completedAt && localDate(editingProject.completedAt) === String(form.get("completedDate")) ? editingProject.completedAt : dayStart(String(form.get("completedDate")))) : undefined,
       date: String(form.get("date") || editingProject.date),
       ipwo: ipwoFile ? ipwoName : editingProject.ipwo,
       splice: spliceFile ? spliceName : editingProject.splice,
@@ -1279,6 +1284,7 @@ export default function Home() {
               <article><small>TEHNICIENI</small><strong>{technicians.length}</strong></article>
               <article><small>ADMINISTRATORI</small><strong>{accounts.filter((a) => a.role === "Admin").length}</strong></article>
             </section>
+            <TechnicianReports onEditWork={id => { const work = projects.find(project => project.id === id); if (work) openProjectEditor(work); else showToast("Reîncarcă lista lucrărilor pentru a edita acest proiect."); }} />
             <section className="project-card team-card">
               <div className="card-heading"><div><h2>Utilizatori</h2><p>Parolele sunt protejate și nu sunt afișate după creare.</p></div></div>
               <div className="account-grid">
@@ -1513,9 +1519,10 @@ export default function Home() {
                 <label className="wide work-requirements"><span>{formActivityType === "Intervenție" ? "Cerințele intervenției" : formActivityType === "Survey" ? "Obiectivele survey-ului" : "Cerințele lucrării"} *</span><textarea name="requirements" required defaultValue={editingProject?.requirements} rows={5} placeholder={formActivityType === "Intervenție" ? "Descrie problema semnalată, simptomele, verificările cerute și informațiile utile tehnicianului..." : formActivityType === "Survey" ? "Descrie locația, obiectivele vizitei și informațiile care trebuie verificate în teren..." : "Descrie lucrările solicitate, condițiile de instalare, echipamentele sau configurațiile speciale și orice alte informații utile tehnicianului..."} /></label>
               </div></div>
               <div className="form-section"><h3><span>2</span> {isInstallationForm ? "Alocare și echipamente" : "Alocare tehnician"}</h3><div className="form-grid">
-                <label><span>Tehnician alocat *</span><select name="technician" required defaultValue={editingProject?.technician || ""}><option value="" disabled>Selectează tehnicianul</option>{technicians.map((tech) => <option key={tech.username}>{tech.name}</option>)}</select></label>
+                <label><span>Tehnician alocat *</span><select name="technician" required defaultValue={editingProject?.technician || ""}><option value="" disabled>Selectează tehnicianul</option>{editingProject && !technicians.some(tech => tech.name === editingProject.technician) && <option value={editingProject.technician}>{editingProject.technician} (tehnician istoric)</option>}{technicians.map((tech) => <option key={tech.username}>{tech.name}</option>)}</select></label>
                 {isInstallationForm && <label><span>Tip CPE *</span><select name="cpe" required defaultValue={editingProject?.cpe || ""}><option value="" disabled>{cpeList.length ? "Selectează echipamentul" : "Catalogul CPE este gol"}</option>{editingProject?.cpe && !cpeList.some((cpe) => cpe.name === editingProject.cpe) && <option value={editingProject.cpe}>{editingProject.cpe} (echipament istoric)</option>}{cpeList.map((cpe) => <option key={cpe.name} value={cpe.name}>{cpe.name}{cpe.requiresGrounding ? " · necesită împământare" : ""}</option>)}</select><small>Adaugă și configurează echipamentele din secțiunea CPE.</small></label>}
-                {editingProject && <><label><span>Status proiect *</span><select name="status" required defaultValue={editingProject.status}><option>Planificat</option><option>În desfășurare</option><option>De verificat</option><option>Finalizat</option></select></label><label><span>Programare *</span><input name="date" required defaultValue={editingProject.date} placeholder="ex. 26 aug, 09:30" /></label></>}
+                {editingProject && <><label><span>Status proiect *</span><select name="status" required value={projectFormStatus} onChange={event => setProjectFormStatus(event.target.value as Project["status"])}><option>Planificat</option><option>În desfășurare</option><option>De verificat</option><option>Finalizat</option></select></label><label><span>Programare *</span><input name="date" required defaultValue={editingProject.date} placeholder="ex. 26 aug, 09:30" /></label></>}
+                {editingProject && projectFormStatus === "Finalizat" && <label><span>Data finalizării *</span><input name="completedDate" type="date" required max={localDate(Date.now())} defaultValue={editingProject.completedAt ? localDate(editingProject.completedAt) : editingProject.status === "Finalizat" ? "" : localDate(Date.now())} /><small>Folosită în raportul de realizări per tehnician.</small></label>}
                 {isInstallationForm && <div className="wide"><span className="field-label">Echipamente suplimentare</span><div className="switch-row">
                   <label className="switch-card"><span><b>SFP</b><small>Modul optic</small></span><input type="checkbox" name="sfp" defaultChecked={editingProject ? editingProject.sfp : true} /><i /></label>
                   <label className="switch-card"><span><b>MC</b><small>Media converter</small></span><input type="checkbox" name="mc" defaultChecked={editingProject?.mc} /><i /></label>

@@ -1,0 +1,10 @@
+.technician-reports { margin-top: 24px; }
+.technician-report-filters { display: flex; gap: 16px; align-items: end; padding: 20px; flex-wrap: wrap; }
+.technician-report-filters label { display: flex; flex-direction: column; gap: 8px; color: #24364b; font-size: 13px; }
+.technician-report-filters input, .technician-report-filters select { padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 6px; background: white; color: #143454; min-height: 42px; }
+.technician-report-result { padding: 20px; border-top: 1px solid #e2e8f0; }
+.technician-report-summary { display: flex; gap: 20px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-bottom: 16px; }
+.technician-report-summary p, .technician-report-result > p { font-size: 13px; color: #52647a; }
+.technician-report-result details { padding-top: 20px; }
+.technician-report-result details button { margin: 8px 8px 0 0; }
+.technician-report-error { color: #a21b2d; padding: 0 20px 20px; }

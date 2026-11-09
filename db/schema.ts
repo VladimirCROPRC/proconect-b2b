@@ -51,12 +51,16 @@ export const projects = sqliteTable("projects", {
   terminalBox: integer("terminal_box", { mode: "boolean" }).notNull().default(false),
   status: text("status").notNull(),
   scheduledLabel: text("scheduled_label").notNull(),
+  completedAt: integer("completed_at"),
   ipwo: text("ipwo").notNull(),
   splice: text("splice").notNull(),
   createdBy: text("created_by").notNull(),
   createdAt: integer("created_at").notNull(),
   updatedAt: integer("updated_at").notNull(),
-}, (table) => [index("projects_technician_username_idx").on(table.technicianUsername)]);
+}, (table) => [
+  index("projects_technician_username_idx").on(table.technicianUsername),
+  index("projects_technician_completed_idx").on(table.technicianUsername, table.status, table.completedAt),
+]);
 
 export const projectFieldDocumentation = sqliteTable("project_field_documentation", {
   projectId: text("project_id").primaryKey().references(() => projects.id, { onDelete: "cascade" }),

@@ -5,6 +5,8 @@ import type { ProjectFieldDocumentation } from "./field-documentation";
 import { boqCatalog } from "./boq-catalog";
 import { buildBudgetSuggestions, catalogSuggestion, budgetReady, reconcileBudget, normalizeBudget, type BudgetSuggestion } from "./project-budget";
 import "./project-budget.css";
+import { downloadExcel } from "./excel-export";
+import { estimateSheet } from "./workbook-models";
 
 type DocumentProject = {
   id: string;
@@ -195,8 +197,8 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
     setEstimateState("Modificări nesalvate.");
   }
 
-  async function saveEstimate() {
-    if (!estimateLoaded || savingEstimate || !budgetReady(suggestions)) return;
+  async function saveEstimate(): Promise<BudgetSuggestion[] | null> {
+    if (!estimateLoaded || savingEstimate || !budgetReady(suggestions)) return null;
     setSavingEstimate(true);
     try {
       const response = await fetch("/api/estimates", {
@@ -208,25 +210,18 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
       if (payload.rows) setSuggestions(payload.rows);
       setEstimateState("Deviz salvat permanent.");
       onNotify(`Devizul pentru ${project.id} a fost salvat.`);
+      return payload.rows ?? suggestions;
     } catch (error) {
       onNotify(error instanceof Error ? error.message : "Devizul nu a putut fi salvat.");
+      return null;
     } finally { setSavingEstimate(false); }
   }
 
-  function exportEstimate() {
-    if (!budgetReady(suggestions)) return;
-    // Escape formula-leading text before opening the UTF-8 CSV in Excel.
-    const cell = (value: string | number) => {
-      const text = String(value);
-      return '"' + (typeof value === "string" && /^[=+@\-\t\r\n]/.test(text) ? "'" : "") + text.replaceAll('"', '""') + '"';
-    };
-    const lines = [["RID", "Rând BoQ", "Lucrare / material", "UM", "Cantitate", "Preț EUR", "Total EUR fără TVA", "Documentare", "Observații"],
-      ...suggestions.map(item => [project.id, item.catalogPosition, item.name, item.unit, item.quantity, item.unitPrice, Math.round(item.quantity * item.unitPrice * 100) / 100, item.evidence, item.note ?? ""]),
-      [project.id, "", "TOTAL EUR FĂRĂ TVA", "", "", "", estimateTotal, "", ""]];
-    const url = URL.createObjectURL(new Blob(["\uFEFF" + lines.map(row => row.map(cell).join(";")).join("\r\n")], { type: "text/csv;charset=utf-8" }));
-    const link = document.createElement("a");
-    link.href = url; link.download = `Deviz-${project.id.replace(/[^a-z0-9_-]/gi, "_")}.csv`; link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  async function exportEstimate() {
+    const rows = await saveEstimate();
+    if (!rows) return;
+    try { downloadExcel(estimateSheet(project, rows), `Deviz-${project.id}.xlsx`); }
+    catch { onNotify("Devizul este salvat, dar fișierul Excel nu a putut fi generat. Reîncearcă descărcarea."); }
   }
 
   return (
@@ -299,7 +294,7 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
           ) : (
             <div className="estimate-empty"><span>○</span><h2>Nicio sugestie disponibilă</h2><p>Salvează traseul, sudurile sau materialele utilizate pentru a genera pozițiile de deviz.</p></div>
           )}
-          <div className="estimate-footer"><p><span>i</span><strong>Verificare administrator</strong> Acțiunile din teren se păstrează. Lucrările incluse în alt tarif sau furnizate de beneficiar se justifică la 0 EUR.</p><div><button className="secondary-button" disabled={!estimateLoaded || savingEstimate} onClick={() => { setSuggestions(current => [...current, catalogSuggestion(`manual-${crypto.randomUUID()}`, undefined, 1, "Poziție adăugată de administrator; descrie lucrarea în observații.")]); setEstimateState("Modificări nesalvate."); }}>Adaugă poziție BoQ</button><button className="secondary-button" disabled={!estimateLoaded || savingEstimate || !budgetReady(suggestions)} onClick={exportEstimate}>Exportă CSV (Excel)</button><button className="primary-button" disabled={!estimateLoaded || savingEstimate || !budgetReady(suggestions)} onClick={saveEstimate}>{savingEstimate ? "Se salvează…" : "Salvează devizul"}</button></div></div>
+          <div className="estimate-footer"><p><span>i</span><strong>Verificare administrator</strong> Acțiunile din teren se păstrează. Lucrările incluse în alt tarif sau furnizate de beneficiar se justifică la 0 EUR.</p><div><button className="secondary-button" disabled={!estimateLoaded || savingEstimate} onClick={() => { setSuggestions(current => [...current, catalogSuggestion(`manual-${crypto.randomUUID()}`, undefined, 1, "Poziție adăugată de administrator; descrie lucrarea în observații.")]); setEstimateState("Modificări nesalvate."); }}>Adaugă poziție BoQ</button><button className="secondary-button" disabled={!estimateLoaded || savingEstimate || !budgetReady(suggestions)} onClick={exportEstimate}>Salvează și descarcă Excel (.xlsx)</button><button className="primary-button" disabled={!estimateLoaded || savingEstimate || !budgetReady(suggestions)} onClick={saveEstimate}>{savingEstimate ? "Se salvează…" : "Salvează devizul"}</button></div></div>
         </section>
       )}
     </div>
