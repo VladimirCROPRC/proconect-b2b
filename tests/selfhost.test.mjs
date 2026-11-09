@@ -22,7 +22,7 @@ const resolver = createLocalJWKSet({ keys: [jwk] });
 const token = (overrides = {}) => new SignJWT({ email: 'tech@example.com', type: 'app', ...overrides }).setProtectedHeader({ alg: 'RS256', kid: 'test' }).setIssuer(issuer).setAudience(audience).setSubject('subject').setIssuedAt().setExpirationTime('10m').sign(keys.privateKey);
 const request = jwt => new Request('https://b2b.proconect.online/api/projects', { headers: jwt ? { 'Cf-Access-Jwt-Assertion': jwt } : {} });
 
-import { fixtureSql } from './selfhost-fixtures.mjs';
+import { fixtureSql, d1StyleFixtureSql } from './selfhost-fixtures.mjs';
 
 test('Access requires signed app JWT with correct issuer, audience, expiration and verified email; bare email headers are ignored', async () => {
   const config = access.accessConfiguration(issuer, audience);
@@ -94,6 +94,26 @@ test('copy import preserves production users, projects and file checksums while 
     assert.deepEqual(await readdir(missingTarget), []);
     const outside = join(root, 'outside'); await writeFile(outside, 'test'); await symlink(outside, join(objects, 'RID1/client/photo.jpg'));
     await assert.rejects(importCopy(sql, objects, join(root, 'symlink-target')), /nesigură/);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('D1 dump loads child tables before parents and still rejects dangling foreign keys', async () => {
+  const root = await mkdtemp(join(temporaryRoot, 'b2b-d1-order-'));
+  try {
+    const dump = d1StyleFixtureSql(), sql = join(root, 'source.sql'), objects = join(root, 'r2');
+    assert.ok(dump.indexOf('INSERT INTO "app_sessions"') < dump.indexOf('CREATE TABLE `app_users`'));
+    const before = openDatabase(':memory:');
+    try { assert.throws(() => before.exec(dump), /no such table.*app_users/); } finally { before.close(); }
+    await writeFile(sql, dump); await mkdir(join(objects, 'RID1/client'), { recursive: true });
+    await writeFile(join(objects, 'RID1/client/photo.jpg'), 'test');
+    const target = join(root, 'copy');
+    assert.equal((await importCopy(sql, objects, target)).verifiedFiles, 1);
+    const db = openDatabase(join(target, 'app.sqlite'));
+    try { assert.equal(db.prepare('PRAGMA foreign_keys').get().foreign_keys, 1); assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), []); } finally { db.close(); }
+    await writeFile(sql, dump.replace("'old','u1','old-token'", "'old','absent-user','old-token'"));
+    const invalid = join(root, 'invalid');
+    await assert.rejects(importCopy(sql, objects, invalid), /integritate/);
+    assert.equal(existsSync(join(invalid, 'app.sqlite')), false);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 

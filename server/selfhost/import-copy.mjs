@@ -24,7 +24,11 @@ export async function importCopy(sqlPath, sourceObjects, dataRoot) {
   const db = openDatabase(join(stage, 'app.sqlite'));
   let closed = false;
   try {
+    // D1 exports can insert child rows before creating their parent tables.
+    // Load the complete dump first; enforce and check every foreign key below.
+    db.exec('PRAGMA foreign_keys=OFF');
     db.exec(await readFile(sqlPath, 'utf8'));
+    db.exec('PRAGMA foreign_keys=ON');
     if (db.prepare('PRAGMA integrity_check').get().integrity_check !== 'ok' || db.prepare('PRAGMA foreign_key_check').all().length) throw new Error('Exportul bazei de date nu a trecut verificarea de integritate.');
     migrateDatabase(db, { adoptCurrent: true });
     isolateCopy(db);

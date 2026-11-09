@@ -1,4 +1,5 @@
 import { migrationFiles } from '../server/selfhost/migrations.mjs';
+import { DatabaseSync } from 'node:sqlite';
 
 export function fixtureSql() {
   return migrationFiles().map(migration => migration.sql).join('\n') + `
@@ -10,5 +11,21 @@ INSERT INTO onedrive_connection(id) VALUES('onedrive');
 INSERT INTO onedrive_jobs(id,kind,item_id,revision,done_revision,attempts,next_at,last_error) VALUES('job','file','photo',1,0,0,0,'');
 INSERT INTO project_field_documentation(project_id,content_json,updated_by,updated_at) VALUES('RID1','{}','tech',200);
 `;
+}
+
+export function d1StyleFixtureSql() {
+  const db = new DatabaseSync(':memory:');
+  try {
+    db.exec(fixtureSql());
+    const literal = value => value === null ? 'NULL' : typeof value === 'number' ? String(value) : `'${String(value).replaceAll("'", "''")}'`;
+    const tables = db.prepare("SELECT name,sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all();
+    const output = ['PRAGMA defer_foreign_keys=TRUE;'];
+    for (const table of tables) {
+      output.push(table.sql + ';');
+      for (const row of db.prepare(`SELECT * FROM "${table.name}"`).all()) output.push(`INSERT INTO "${table.name}" VALUES(${Object.values(row).map(literal).join(',')});`);
+    }
+    output.push(...db.prepare("SELECT sql FROM sqlite_master WHERE type='index' AND sql IS NOT NULL").all().map(row => row.sql + ';'));
+    return output.join('\n');
+  } finally { db.close(); }
 }
 

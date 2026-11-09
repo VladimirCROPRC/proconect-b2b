@@ -109,8 +109,11 @@ Pe Ubuntu:
 ```bash
 sudo chown -R 1000:1000 imports
 sudo chmod -R go-rwx imports
-docker compose -f compose.selfhost.yml run --rm --no-deps --entrypoint node app server/selfhost/import-copy.mjs /imports/proconect.sql /imports/r2
+docker compose -f compose.selfhost.yml run --rm --no-deps --volume "$PWD/server/selfhost:/app/server/selfhost:ro" --entrypoint node app server/selfhost/import-copy.mjs /imports/proconect.sql /imports/r2
 ```
+
+Importul folosește scriptul din checkout-ul curent și acceptă ordinea tabelelor
+din exportul D1. Relațiile sunt verificate după încărcarea completă a SQL-ului.
 
 Importul:
 
