@@ -1,5 +1,16 @@
 import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
+export const orangeOrocTickets = sqliteTable("orange_oroc_tickets", {
+  id: text("id").primaryKey(),
+  ticketNumber: text("ticket_number").notNull().unique(),
+  workDate: text("work_date").notNull(),
+  servicePackageCode: text("service_package_code").notNull(),
+  createdBy: text("created_by").notNull(),
+  createdAt: integer("created_at").notNull(),
+  updatedBy: text("updated_by").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+}, table => [index("orange_oroc_work_date_idx").on(table.workDate)]);
+
 export const appUsers = sqliteTable(
   "app_users",
   {
