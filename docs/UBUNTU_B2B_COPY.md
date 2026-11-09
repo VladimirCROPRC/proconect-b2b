@@ -68,7 +68,13 @@ Pornește tunelul abia după verificarea aplicației și asocierea emailului de
 administrator. Adaugă numai înregistrarea DNS pentru noul subdomeniu; nu
 schimba ruta Worker sau DNS-ul pentru `proconect.online`.
 
-## 3. Exportul sursei, numai citire
+## 3. Exportul sursei
+
+Exportul păstrează înregistrările sursă, dar D1 poate bloca temporar cererile
+pe durata lui. Planifică-l într-un interval fără lucru în aplicație.
+Cloudflare cere permisiunea D1 Write / Account → D1 → Edit chiar pentru
+export; un token D1 Read nu este suficient. Folosește un token temporar
+limitat la contul sursă, păstrat numai pe calculatorul tău.
 
 Rulează exportul pe un calculator autentificat în contul Cloudflare corect,
 în checkout-ul proiectului care conține configurația Wrangler:
