@@ -1,7 +1,7 @@
 import { getRawDb } from "../../../db";
 import { isManagementRole } from "../../project-server";
 import { currentSession } from "../../server-auth";
-import { reportRange, savedEstimateTotal, type TechnicianReport } from "../../technician-report";
+import { dayStart, reportRange, savedEstimateTotal, type TechnicianReport } from "../../technician-report";
 
 export const dynamic = "force-dynamic";
 
@@ -25,10 +25,10 @@ export async function GET(request: Request) {
       const total = savedEstimateTotal(row.estimate_json);
       return { id: row.id, client: row.client, address: row.address, activityType: row.activity_type, status: row.status, createdAt: row.report_date, total, estimateStatus: row.estimate_json === null ? "lipsă" : total === null ? "invalid" : "salvat" };
     });
-    const orange = await db.prepare("SELECT id, ticket_number, service_package_code, created_at FROM orange_oroc_tickets WHERE technician_username = ? AND created_at >= ? AND created_at < ? ORDER BY created_at, ticket_number")
-      .bind(username, range.start, range.end).all<{ id: string; ticket_number: string; service_package_code: string; created_at: number }>();
-    for (const ticket of orange.results ?? []) works.push({ source: "orange-oroc", id: ticket.ticket_number, client: "Orange/OROC", address: "", activityType: "Orange/OROC", servicePackage: ticket.service_package_code, status: "Alocat", createdAt: ticket.created_at, total: null, estimateStatus: "fără valori" });
-    works.sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id) || (a.source ?? "project").localeCompare(b.source ?? "project"));
+    const orange = await db.prepare("SELECT id, ticket_number, service_package_code, work_date, created_at FROM orange_oroc_tickets WHERE technician_username = ? AND work_date >= ? AND work_date <= ? ORDER BY work_date, ticket_number")
+      .bind(username, from, to).all<{ id: string; ticket_number: string; service_package_code: string; work_date: string; created_at: number }>();
+    for (const ticket of orange.results ?? []) works.push({ source: "orange-oroc", id: ticket.ticket_number, client: "Orange/OROC", address: "", activityType: "Orange/OROC", servicePackage: ticket.service_package_code, status: "Alocat", workDate: ticket.work_date, createdAt: ticket.created_at, total: ticket.service_package_code === "SP2 FOA" ? 300 : null, estimateStatus: ticket.service_package_code === "SP2 FOA" ? "tarif pachet" : "fără valori" });
+    works.sort((a, b) => (a.workDate ? dayStart(a.workDate)! : a.createdAt) - (b.workDate ? dayStart(b.workDate)! : b.createdAt) || a.id.localeCompare(b.id) || (a.source ?? "project").localeCompare(b.source ?? "project"));
     const report: TechnicianReport = { technician, from, to, works, total: works.reduce((sum, work) => sum + Math.round((work.total ?? 0) * 100), 0) / 100,
       missingEstimates: works.filter(work => work.source !== "orange-oroc" && work.total === null).length, undated: undated.results ?? [] };
     return Response.json({ report }, { headers: { "Cache-Control": "no-store" } });
