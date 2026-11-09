@@ -5,6 +5,7 @@ import { downloadExcel } from "./excel-export";
 import { technicianReportSheet } from "./workbook-models";
 import { localDate, type TechnicianReport } from "./technician-report";
 import "./technician-reports.css";
+import { DailyTechnicianReports } from "./daily-technician-reports";
 
 const money = (value: number) => value.toLocaleString("ro-RO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " EUR";
 
@@ -43,7 +44,7 @@ export function TechnicianReports({ onEditWork }: { onEditWork: (id: string) => 
     downloadExcel(technicianReportSheet(report), `Realizari-${report.technician.username}-${report.from}-${report.to}.xlsx`);
   }
 
-  return <section className="technician-reports project-card">
+  return <><section className="technician-reports project-card">
     <div className="card-heading"><div><h2>Realizări per tehnician</h2><p>Toate statusurile. Perioada: data creării proiectului sau data execuției Orange/OROC. Valori fără TVA. SP2 FOA: 300 EUR/tichet; celelalte pachete sunt fără valori.</p></div></div>
     <form className="technician-report-filters" onSubmit={generate}>
       <label>Tehnician<select aria-label="Tehnician pentru raport" required value={technician} disabled={loading} onChange={event => { setTechnician(event.target.value); setReport(null); }}><option value="">Selectează tehnicianul</option>{technicians.map(tech => <option key={tech.username} value={tech.username}>{tech.name} (@{tech.username})</option>)}</select></label>
@@ -61,5 +62,5 @@ export function TechnicianReports({ onEditWork }: { onEditWork: (id: string) => 
       </tbody></table></div>
       {report.undated.length > 0 && <details><summary>{report.undated.length} lucrări fără dată de creare — neincluse</summary><p>Verifică datele lucrării, apoi generează din nou raportul.</p>{report.undated.map(work => <button key={work.id} className="secondary-button" onClick={() => onEditWork(work.id)}>{work.id} · {work.client}</button>)}</details>}
     </div>}
-  </section>;
+  </section><DailyTechnicianReports technicians={technicians} onEditWork={onEditWork} /></>;
 }

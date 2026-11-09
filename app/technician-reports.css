@@ -8,3 +8,7 @@
 .technician-report-result details { padding-top: 20px; }
 .technician-report-result details button { margin: 8px 8px 0 0; }
 .technician-report-error { color: #a21b2d; padding: 0 20px 20px; }
+
+.daily-report-day { border-top: 1px solid #e2e8f0; padding: 20px 0; }
+.daily-report-day h3 { margin: 0; }
+.daily-report-day summary { cursor: pointer; color: #143454; }
