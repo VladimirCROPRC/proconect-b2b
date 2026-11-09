@@ -62,7 +62,7 @@ test('Orange daily totals use work dates, configured tariffs and per-package tic
   assert.equal(report.days[0].lines.find(line => line.code === 'SP1 FO').total, null);
 });
 
-test('daily export groups each work once across days, separates Orange and preserves unknown and undated amounts', () => {
+test('daily export groups each work once across days, separates Orange, preserves unknown amounts and excludes undated operations', () => {
   const report = build({ projects: [project([row('site-patch'), row('route-0-aerial'), row('manual-extra')])], photos: [photo('site', '2026-11-09'), photo('route', '2026-11-10')], tickets: [{ id: '1', ticketNumber: 'RID', workDate: '2026-11-10', packageCode: 'SP2 FOA', technicianUsername: 'tech' }, { id: '2', ticketNumber: 'FITT', workDate: '2026-11-10', packageCode: 'SP1 FO', technicianUsername: 'tech' }] });
   const [main, orange] = dailyReportSheets(report);
   assert.equal(main.rows.filter(row => row[2] === 'RID').length, 1);
@@ -71,12 +71,14 @@ test('daily export groups each work once across days, separates Orange and prese
   assert.equal(main.dataRowCount,1); assert.equal(orange.dataRowCount,2);
   assert.equal(main.rows[0][0], '2026-11-09\n2026-11-10');
   assert.match(main.rows[0][4], /site-patch/); assert.match(main.rows[0][4], /route-0-aerial/);
-  assert.match(main.rows[0][7], /1 manopere fără dată/);
+  assert.doesNotMatch(JSON.stringify(main.rows), /manual-extra|Fără dată|manopere fără dată/);
   assert.equal(orange.rows.find(row => row[2] === 'FITT')[6], null);
   assert.deepEqual(main.rows[2][6], { formula: "'Orange OROC'!G7", value: 300 });
   assert.deepEqual(main.rows[3][6], { formula: 'SUM(G6:G7)', value: 340 });
   const undated = dailyReportSheets(build({ projects: [project([row('manual-extra')])] }));
-  assert.equal(undated[0].rows[0][6], null);
+  assert.equal(undated[0].dataRowCount, 0);
+  assert.equal(undated[0].rows.length, 3);
+  assert.doesNotMatch(JSON.stringify(undated), /manual-extra/);
   assert.equal(undated[0].rows.at(-1)[6].value, 0);
 });
 
