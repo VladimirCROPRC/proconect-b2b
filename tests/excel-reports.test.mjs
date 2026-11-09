@@ -114,6 +114,8 @@ test('report API enforces access and includes all statuses and filters by userna
   }
   for (const [id,user,type,at] of [["start","a","image/jpeg",start-1000],["late","admin","image/jpeg",end+1],["late","a","application/pdf",end+1],["undated","admin","image/jpeg",start]]) db.prepare("INSERT INTO project_files VALUES (?,?,?,?,?)").run(id,user,type,at,at);
   db.prepare('INSERT INTO project_estimates VALUES (?,?)').run('start',JSON.stringify([{id:'patch',quantity:3,unitPrice:3.5823}]));
+  db.exec('CREATE TABLE orange_oroc_tickets(id TEXT,ticket_number TEXT,service_package_code TEXT,technician_username TEXT,technician_name TEXT,created_at INTEGER,work_date TEXT);');
+  for (const [id,user,at] of [['FITT1','a',start+1],['FITT2','b',start],['FITT3','a',end],['FITT4',null,start],['FITT5','retired',start]]) db.prepare('INSERT INTO orange_oroc_tickets VALUES (?,?,?,?,?,?,?)').run(id,id,'SP1 FO',user,'Historical',at,'2020-01-01');
   let session = null;
   globalThis.__techReports = { ...reports, currentSession: async () => session, isManagementRole: account => ['Admin','Manager','Coordonator'].includes(account.role),
     getRawDb: () => ({ prepare(sql) { let args=[]; return { bind(...values) { args=values; return this; }, async all() { return { results: db.prepare(sql).all(...args) }; } }; } }) };
@@ -124,13 +126,18 @@ test('report API enforces access and includes all statuses and filters by userna
     assert.equal((await api.GET(request())).status,401);
     session={account:{role:'Tehnician'}}; assert.equal((await api.GET(request())).status,403);
     session.account.role='Admin';
-    const list = await (await api.GET(request())).json(); assert.equal(list.technicians.length,2);
+    const list = await (await api.GET(request())).json(); assert.equal(list.technicians.length,3);
     assert.equal((await api.GET(request('technician=unknown&from=2026-11-09&to=2026-11-09'))).status,400);
     assert.equal((await api.GET(request('technician=a&from=2026-02-30&to=2026-11-09'))).status,400);
     const response=await api.GET(request('technician=a&from=2026-11-09&to=2026-11-09'));
     assert.equal(response.headers.get('Cache-Control'),'no-store');
     const {report}=await response.json();
-    assert.deepEqual(report.works.map(work=>work.id),['open','planned','start','late']);
+    assert.deepEqual(report.works.map(work=>work.id),['open','planned','start','FITT1','late']);
+    const ticket=report.works.find(work=>work.source==='orange-oroc');
+    assert.equal(ticket.id,'FITT1'); assert.equal(ticket.servicePackage,'SP1 FO');
+    assert.equal(ticket.total,null); assert.equal(ticket.estimateStatus,'fără valori');
+    const orangeRow=models.technicianReportSheet(report).rows.find(row=>row[0]==='FITT1');
+    assert.equal(orangeRow[5],null); assert.equal(orangeRow[6],'Fără valori'); assert.equal(orangeRow[8],'SP1 FO');
     assert.equal(report.total,10.75); assert.equal(report.missingEstimates,3);
     assert.equal(report.works[1].total,null); assert.equal(report.works[1].estimateStatus,'lipsă');
     assert.equal(report.undated[0].id,'undated');
@@ -141,7 +148,7 @@ test('report API enforces access and includes all statuses and filters by userna
     // Uploading another photo does not change the creation-date report period.
     db.prepare('INSERT INTO project_files VALUES (?,?,?,?,?)').run('start','a','image/png',end+1000,1);
     const refreshed=await (await api.GET(request('technician=a&from=2026-11-09&to=2026-11-09'))).json();
-    assert.deepEqual(refreshed.report.works.map(work=>work.id),['open','planned','start','late']);
+    assert.deepEqual(refreshed.report.works.map(work=>work.id),['open','planned','start','FITT1','late']);
     session.account.passwordResetRequired=true; assert.equal((await api.GET(request())).status,401);
   } finally { delete globalThis.__techReports; db.close(); }
 });

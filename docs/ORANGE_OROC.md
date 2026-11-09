@@ -52,3 +52,9 @@ fișierul incidentului atașat nu este publicat în repository.
 
 Verificări: `node --test tests/orange-oroc.test.mjs`, `python3 scripts/test-migrations.py`,
 `npx tsc --noEmit`, lint și build de producție.
+
+Tichetele alocate apar și în raportul pe tehnician și în exportul Excel,
+filtrate după data creării tichetului (nu data intervenției).
+Raportul afișează numărul tichetului și pachetul de servicii. Orange/OROC
+apare «Fără valori», cu celula valorii goală în Excel; nu intră în totalul
+devizelor și nici în avertizarea privind devizele lipsă ale proiectelor.
