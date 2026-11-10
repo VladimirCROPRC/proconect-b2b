@@ -1309,7 +1309,7 @@ export default function Home() {
               <article><small>TEHNICIENI</small><strong>{technicians.length}</strong></article>
               <article><small>ADMINISTRATORI</small><strong>{accounts.filter((a) => a.role === "Admin").length}</strong></article>
             </section>
-            {authenticationMode === "cloudflare-access" && currentAccount.role === "Admin" && <TeamManagement key={accounts.map(account => account.username).join(",")} onNotify={showToast} />}
+            {authenticationMode === "cloudflare-access" && currentAccount.role === "Admin" && <TeamManagement key={accounts.map(account => account.username).join(",")} onNotify={showToast} accounts={accounts} onEditEmail={username => { const account = accounts.find(item => item.username === username); if (account) { setEditingEmailAccount(account); setModal("access-email"); } }} />}
             <TechnicianReports onEditWork={id => { const work = projects.find(project => project.id === id); if (work) openProjectEditor(work); else showToast("Reîncarcă lista lucrărilor pentru a edita acest proiect."); }} />
             <section className="project-card team-card">
               <div className="card-heading"><div><h2>Utilizatori</h2><p>{authenticationMode === "cloudflare-access" ? "Emailurile sunt asociate conturilor existente. Adaugă adresele permise și în politica Cloudflare Access." : "Parolele sunt protejate și nu sunt afișate după creare."}</p></div></div>

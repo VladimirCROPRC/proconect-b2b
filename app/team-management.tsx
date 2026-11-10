@@ -3,7 +3,11 @@ import { useEffect, useState, type FormEvent } from 'react';
 import type { Team, TeamMember } from './server-teams';
 
 type Directory = { teams: Team[]; users: TeamMember[] };
-export function TeamManagement({ onNotify }: { onNotify: (message: string) => void }) {
+export function TeamManagement({ onNotify, accounts, onEditEmail }: {
+  onNotify: (message: string) => void;
+  accounts: { username: string; email?: string }[];
+  onEditEmail: (username: string) => void;
+}) {
   const [data, setData] = useState<Directory>({ teams: [], users: [] });
   const [ready, setReady] = useState(false);
   const [error, setError] = useState('');
@@ -61,6 +65,8 @@ export function TeamManagement({ onNotify }: { onNotify: (message: string) => vo
       <label style={{ display: 'grid', gap: '8px', maxWidth: '320px' }}><span>Filtrează utilizatorii</span><select value={filter} onChange={event => setFilter(event.target.value)}><option value="*">Toți utilizatorii</option><option value="">Fără echipă</option>{data.teams.map(team => <option key={team.id} value={team.id}>{team.name}</option>)}</select></label>
       <div className="account-grid">{users.map(user => <article className="account-card" key={user.username}>
         <div className="account-copy"><strong>{user.name}</strong><small>@{user.username} · {user.role}{!user.active ? ' · Inactiv' : ''}</small>
+          <small>{accounts.find(account => account.username === user.username)?.email || 'Email neasociat'}</small>
+          <button type="button" className="secondary-button" disabled={busy} onClick={() => onEditEmail(user.username)} style={{ marginTop: '12px' }}>Email acces</button>
           <label style={{ display: 'grid', gap: '8px', marginTop: '12px' }}><span>Echipă</span><select aria-label={`Echipa utilizatorului ${user.username}`} value={user.teamId ?? ''} disabled={busy} onChange={event => void change({ action: 'assign', username: user.username, teamId: event.target.value || null }, 'Echipa utilizatorului a fost actualizată.')}>
             <option value="">Fără echipă</option>{data.teams.map(team => <option key={team.id} value={team.id}>{team.name}</option>)}
           </select></label>
