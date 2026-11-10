@@ -145,3 +145,38 @@ test('Access maps email to existing usernames and local roles, refuses unmapped/
     assert.equal(db.prepare('SELECT technician_username FROM projects').get().technician_username, 'tech');
   } finally { delete globalThis.__selfhostAuth; db.close(); }
 });
+
+
+test('teams preserve existing accounts, enforce one team per user and survive repeated migration', async () => {
+  const teams = await import(moduleUrl(await source('app/server-teams.ts')));
+  const db = openDatabase(':memory:');
+  try {
+    db.exec(fixtureSql()); migrateDatabase(db, { adoptCurrent: true });
+    const adapter = d1Adapter(db);
+    assert.equal((await teams.teamDirectory(adapter)).users.length, 2);
+    assert.ok((await teams.teamDirectory(adapter)).users.every(user => user.teamId === null));
+    await teams.changeTeam(adapter, { action: 'create', name: '  Echipa   Nord  ' });
+    await assert.rejects(teams.changeTeam(adapter, { action: 'create', name: 'ECHIPA NORD' }), /deja/);
+    await assert.rejects(teams.changeTeam(adapter, { action: 'create', name: ' ' }), /80/);
+    await teams.changeTeam(adapter, { action: 'create', name: 'Sud' });
+    const directory = await teams.teamDirectory(adapter);
+    const north = directory.teams.find(team => team.name === 'Echipa Nord').id;
+    const south = directory.teams.find(team => team.name === 'Sud').id;
+    await teams.changeTeam(adapter, { action: 'assign', username: 'tech', teamId: north });
+    await assert.rejects(teams.changeTeam(adapter, { action: 'delete', id: north }), /Mută/);
+    await assert.rejects(teams.changeTeam(adapter, { action: 'assign', username: 'missing', teamId: north }), /nu există/);
+    await assert.rejects(teams.changeTeam(adapter, { action: 'assign', username: 'tech', teamId: 'missing' }), /nu mai există/);
+    await teams.changeTeam(adapter, { action: 'assign', username: 'tech', teamId: south });
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM app_team_members').get().n, 1);
+    await teams.changeTeam(adapter, { action: 'rename', id: south, name: 'Centru' });
+    migrateDatabase(db);
+    assert.equal((await teams.teamDirectory(adapter)).users.find(user => user.username === 'tech').teamId, south);
+    assert.equal(db.prepare('SELECT technician_username FROM projects').get().technician_username, 'tech');
+    assert.equal(db.prepare('SELECT role FROM app_users WHERE username=?').get('tech').role, 'Tehnician');
+    await teams.changeTeam(adapter, { action: 'delete', id: north });
+    await teams.changeTeam(adapter, { action: 'assign', username: 'tech', teamId: null });
+    await teams.changeTeam(adapter, { action: 'delete', id: south });
+    assert.equal((await teams.teamDirectory(adapter)).teams.length, 0);
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM app_users').get().n, 2);
+  } finally { db.close(); }
+});

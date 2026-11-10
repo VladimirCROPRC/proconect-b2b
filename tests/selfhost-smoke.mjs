@@ -46,6 +46,19 @@ try {
   const list = await (await fetch(origin + '/api/orange-oroc', { headers: headers(technician) })).json(); assert.equal(list.tickets[0].ticketNumber, 'FITT-SMOKE');
   const forbidden = await fetch(origin + '/api/accounts', { method: 'PATCH', headers: { ...headers(admin), Origin: 'https://attacker.test' }, body: JSON.stringify({ username: 'tech', email: 'other@example.com' }) });
   assert.equal(forbidden.status, 403);
+  assert.equal((await fetch(origin + '/api/teams')).status, 401);
+  assert.equal((await fetch(origin + '/api/teams', { headers: headers(technician) })).status, 403);
+  const mutateTeam = (body, extra = {}) => fetch(origin + '/api/teams', { method: 'POST', headers: { ...headers(admin), ...extra }, body: JSON.stringify(body) });
+  assert.equal((await mutateTeam({ action: 'create', name: 'Test' }, { Origin: 'https://attacker.test' })).status, 403);
+  assert.equal((await fetch(origin + '/api/teams', { method: 'POST', headers: headers(technician), body: JSON.stringify({ action: 'create', name: 'Denied' }) })).status, 403);
+  const created = await mutateTeam({ action: 'create', name: 'Nord' }); assert.equal(created.status, 200);
+  const teamId = (await created.json()).teams[0].id;
+  assert.equal((await mutateTeam({ action: 'assign', username: 'tech', teamId })).status, 200);
+  const directory = await (await fetch(origin + '/api/teams', { headers: headers(admin) })).json();
+  assert.equal(directory.users.find(user => user.username === 'tech').teamId, teamId);
+  assert.equal((await mutateTeam({ action: 'delete', id: teamId })).status, 409);
+  assert.equal((await mutateTeam({ action: 'assign', username: 'tech', teamId: null })).status, 200);
+  assert.equal((await mutateTeam({ action: 'delete', id: teamId })).status, 200);
   console.log('Self-hosted HTTP smoke passed: Access-only login, local roles, copied projects, local files and Orange ticket writes.');
 } finally {
   child.kill('SIGTERM');

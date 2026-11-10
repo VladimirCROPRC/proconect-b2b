@@ -194,3 +194,24 @@ toate tokenurile deja emise. Dezactivarea contului local blochează cererile noi
 - [Export D1](https://developers.cloudflare.com/d1/best-practices/import-export-data/)
 - [Rclone pentru R2](https://developers.cloudflare.com/r2/examples/rclone/)
 - [Token-file pentru Tunnel](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/configure-tunnels/run-parameters/)
+
+### Echipe de utilizatori
+
+În „Echipă și conturi”, administratorul poate crea și redenumi echipe, poate
+asocia orice utilizator unei singure echipe sau îl poate trece la „Fără echipă”.
+Lista poate fi filtrată după echipă. Echipele cu membri nu pot fi șterse până
+când utilizatorii nu sunt mutați sau scoși din echipă. Conturile noi apar automat
+în această listă după creare.
+
+Actualizarea copiei existente:
+
+```bash
+git pull --ff-only
+docker compose -f compose.selfhost.yml build app
+docker compose -f compose.selfhost.yml up -d app
+```
+
+Tabelele pentru echipe se creează automat la pornire, fără reimportarea bazei.
+Conturile existente pornesc fără echipă; rolurile și alocările lucrărilor se păstrează.
+Echipa este o grupare administrativă și nu schimbă drepturile de acces sau raportarea.
+Funcția este disponibilă numai în copia de pe server, pentru administratori.

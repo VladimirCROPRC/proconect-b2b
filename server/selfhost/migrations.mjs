@@ -36,6 +36,14 @@ export function migrateDatabase(db, { adoptCurrent = false, migrations = migrati
     try { db.exec(migration.sql); db.prepare('INSERT INTO selfhost_migrations VALUES (?,?)').run(migration.name, migration.hash); db.exec('COMMIT'); }
     catch (error) { db.exec('ROLLBACK'); throw error; }
   }
+  db.exec(`CREATE TABLE IF NOT EXISTS app_teams(
+    id TEXT PRIMARY KEY, name TEXT NOT NULL, name_key TEXT NOT NULL UNIQUE
+  );
+  CREATE TABLE IF NOT EXISTS app_team_members(
+    user_id TEXT PRIMARY KEY REFERENCES app_users(id) ON DELETE CASCADE,
+    team_id TEXT NOT NULL REFERENCES app_teams(id) ON DELETE RESTRICT
+  );
+  CREATE INDEX IF NOT EXISTS app_team_members_team_idx ON app_team_members(team_id);`);
   db.exec('CREATE TABLE IF NOT EXISTS app_user_access(user_id TEXT PRIMARY KEY REFERENCES app_users(id) ON DELETE CASCADE, email TEXT NOT NULL COLLATE NOCASE UNIQUE)');
 }
 
