@@ -19,7 +19,7 @@ import { TechnicianReports } from "./technician-reports";
 
 type View = "orange-oroc" | "projects" | "interventions" | "surveys" | "intervention-workspace" | "intervention-execution" | "intervention-documentation" | "survey-workspace" | "team" | "cpe" | "drive" | "documents" | "client" | "route" | "splices" | "site";
 type ActivityListView = "projects" | "interventions" | "surveys";
-type Modal = "project" | "edit-project" | "delete-project" | "account" | "access-email" | "cpe" | "edit-cpe" | null;
+type Modal = "project" | "edit-project" | "delete-project" | "account" | "access-email" | "delete-account" | "cpe" | "edit-cpe" | null;
 type ServiceType = "Internet" | "VPN" | "Internet+OL" | "OL";
 type ClientPhotoKey = "report" | "speed" | "olTest" | "overview" | "detail" | "labels" | "grounding";
 
@@ -158,6 +158,9 @@ function initials(name: string) {
 export default function Home() {
   const [authenticatedAccount, setAuthenticatedAccount] = useState<SignedInAccount | null>(null);
   const [authenticationMode, setAuthenticationMode] = useState(process.env.NEXT_PUBLIC_AUTH_MODE === "cloudflare-access" ? "cloudflare-access" : "password");
+  const [deletingAccount, setDeletingAccount] = useState<Account | null>(null);
+  const [deletingAccountBusy, setDeletingAccountBusy] = useState(false);
+  const [deleteAccountError, setDeleteAccountError] = useState("");
   const [editingEmailAccount, setEditingEmailAccount] = useState<Account | null>(null);
   const [checkingAuthentication, setCheckingAuthentication] = useState(true);
   const [authenticationPending, setAuthenticationPending] = useState(false);
@@ -760,6 +763,27 @@ export default function Home() {
     }
   }
 
+  function openAccountDeletion(username: string) {
+    const account = accounts.find(item => item.username === username);
+    if (!account || account.username === authenticatedAccount?.username) return;
+    setDeletingAccount(account); setDeleteAccountError(""); setModal("delete-account");
+  }
+
+  async function confirmAccountDeletion(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!deletingAccount || deletingAccountBusy) return;
+    const confirmation = String(new FormData(event.currentTarget).get("confirmation") || "");
+    setDeletingAccountBusy(true); setDeleteAccountError("");
+    try {
+      const response = await fetch("/api/accounts", { method: "DELETE", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: deletingAccount.username, confirmation }) });
+      const result = await response.json() as { deleted?: string; error?: string };
+      if (!response.ok || !result.deleted) throw new Error(result.error || "Contul nu a putut fi șters.");
+      setAccounts(current => current.filter(account => account.username !== result.deleted));
+      setModal(null); setDeletingAccount(null); showToast("Contul a fost șters. Istoricul lucrărilor a fost păstrat.");
+    } catch (error) { setDeleteAccountError(error instanceof Error ? error.message : "Contul nu a putut fi șters."); }
+    finally { setDeletingAccountBusy(false); }
+  }
+
   async function saveAccessEmail(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!editingEmailAccount) return;
@@ -1309,7 +1333,7 @@ export default function Home() {
               <article><small>TEHNICIENI</small><strong>{technicians.length}</strong></article>
               <article><small>ADMINISTRATORI</small><strong>{accounts.filter((a) => a.role === "Admin").length}</strong></article>
             </section>
-            {authenticationMode === "cloudflare-access" && currentAccount.role === "Admin" && <TeamManagement key={accounts.map(account => account.username).join(",")} onNotify={showToast} accounts={accounts} onEditEmail={username => { const account = accounts.find(item => item.username === username); if (account) { setEditingEmailAccount(account); setModal("access-email"); } }} />}
+            {authenticationMode === "cloudflare-access" && currentAccount.role === "Admin" && <TeamManagement key={accounts.map(account => account.username).join(",")} onNotify={showToast} accounts={accounts} currentUsername={currentAccount.username} onDelete={openAccountDeletion} onEditEmail={username => { const account = accounts.find(item => item.username === username); if (account) { setEditingEmailAccount(account); setModal("access-email"); } }} />}
             <TechnicianReports onEditWork={id => { const work = projects.find(project => project.id === id); if (work) openProjectEditor(work); else showToast("Reîncarcă lista lucrărilor pentru a edita acest proiect."); }} />
             <section className="project-card team-card">
               <div className="card-heading"><div><h2>Utilizatori</h2><p>{authenticationMode === "cloudflare-access" ? "Emailurile sunt asociate conturilor existente. Adaugă adresele permise și în politica Cloudflare Access." : "Parolele sunt protejate și nu sunt afișate după creare."}</p></div></div>
@@ -1319,6 +1343,7 @@ export default function Home() {
                     <div className={`avatar big ${index === 0 ? "avatar-green" : ""}`}>{initials(account.name)}</div>
                     <div className="account-copy"><strong>{account.name}</strong><small>@{account.username}</small>{authenticationMode === "cloudflare-access" && <small>{account.email || "Email neasociat"}</small>}<span className={account.role === "Tehnician" ? "role" : "role role-dark"}>{account.role}</span></div>
                     <div className="account-meta"><span><i className={account.active ? "online" : ""} />{account.active ? "Activ" : "Inactiv"}</span><small>{account.role === "Tehnician" ? `${account.jobs} lucrări` : "Acces complet"}</small></div>
+                    {authenticationMode === "cloudflare-access" && currentAccount.role === "Admin" && account.username !== currentAccount.username && <button className="secondary-button" style={{ color: "#b42336" }} onClick={() => openAccountDeletion(account.username)}>Șterge contul</button>}
                     {authenticationMode === "cloudflare-access" && currentAccount.role === "Admin" ? <button className="secondary-button" onClick={() => { setEditingEmailAccount(account); setModal("access-email"); }}>Email acces</button> : <button className="more" aria-label={`Opțiuni cont ${account.username}`}>•••</button>}
                   </article>
                 ))}
@@ -1574,6 +1599,11 @@ export default function Home() {
             <div className="modal-actions"><button type="button" className="secondary-button" onClick={closeModal} disabled={projectDeleting}>Anulează</button><button className="primary-button" style={{ background: "#b42336", borderColor: "#b42336" }} type="submit" disabled={projectDeleting || deleteConfirmation.trim() !== deletingProject.id}>{projectDeleting ? "Se șterge..." : "Șterge definitiv"}</button></div>
           </form>
         )}
+        {modal === "delete-account" && deletingAccount && <form className="modal small-modal" onSubmit={confirmAccountDeletion}>
+          <div className="modal-head"><div><h2>Șterge contul · {deletingAccount.name}</h2><p>@{deletingAccount.username}</p></div><button type="button" disabled={deletingAccountBusy} onClick={() => setModal(null)}>×</button></div>
+          <div className="modal-body stacked-form"><p>Utilizatorul nu va mai putea intra în aplicație și va fi eliminat din echipă. Lucrările, fotografiile și istoricul se păstrează. Username-ul rămâne rezervat istoricului.</p><label><span>Pentru confirmare, introdu {deletingAccount.username}</span><input name="confirmation" required autoComplete="off" disabled={deletingAccountBusy} /></label>{deleteAccountError && <p role="alert" style={{ color: "#b42336" }}>{deleteAccountError}</p>}</div>
+          <div className="modal-actions"><button type="button" className="secondary-button" disabled={deletingAccountBusy} onClick={() => setModal(null)}>Anulează</button><button className="primary-button" disabled={deletingAccountBusy}>{deletingAccountBusy ? "Se șterge…" : "Șterge contul"}</button></div>
+        </form>}
         {modal === "access-email" && editingEmailAccount && <form className="modal small-modal" onSubmit={saveAccessEmail}><div className="modal-head"><div><h2>Email de acces · {editingEmailAccount.name}</h2><p>Contul @{editingEmailAccount.username} își păstrează rolul și lucrările.</p></div><button type="button" onClick={() => setModal(null)}>×</button></div><div className="modal-body stacked-form"><label><span>Email *</span><input name="email" type="email" defaultValue={editingEmailAccount.email || ""} required /></label><p>Adresa trebuie permisă și în politica Cloudflare Access. Schimbarea emailului necesită autentificare cu noua adresă.</p></div><div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setModal(null)}>Anulează</button><button className="primary-button">Salvează emailul</button></div></form>}
         {modal === "account" && (
           <form className="modal small-modal" onSubmit={createAccount}>

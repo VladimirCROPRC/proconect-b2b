@@ -299,7 +299,7 @@ export async function updatePassword(request: Request, password: string) {
 
 export async function listAccounts() {
   if (accessMode()) {
-    const rows = await database().prepare("SELECT u.username, u.name, u.role, u.active, u.jobs, a.email FROM app_users u LEFT JOIN app_user_access a ON a.user_id = u.id ORDER BY u.name, u.username").all<{ username: string; name: string; role: AppRole; active: number; jobs: number; email: string | null }>();
+    const rows = await database().prepare("SELECT u.username, u.name, u.role, u.active, u.jobs, a.email FROM app_users u LEFT JOIN app_user_access a ON a.user_id = u.id WHERE NOT EXISTS (SELECT 1 FROM app_deleted_users d WHERE d.user_id=u.id) ORDER BY u.name, u.username").all<{ username: string; name: string; role: AppRole; active: number; jobs: number; email: string | null }>();
     return (rows.results ?? []).map(row => ({ ...row, email: row.email ?? "", active: Boolean(row.active), passwordResetRequired: false }));
   }
   const result = await database()
@@ -353,10 +353,28 @@ export async function setAccessEmail(username: string, value: unknown) {
   if (!accessMode()) return { error: "Opțiune disponibilă pentru Cloudflare Access.", status: 405 as const };
   const email = normalizedAccessEmail(value);
   if (!email) return { error: "Introdu un email valid.", status: 400 as const };
-  const user = await database().prepare("SELECT id FROM app_users WHERE username = ?").bind(username).first<{ id: string }>();
+  const user = await database().prepare("SELECT id FROM app_users WHERE username = ? AND NOT EXISTS (SELECT 1 FROM app_deleted_users d WHERE d.user_id=app_users.id)").bind(username).first<{ id: string }>();
   if (!user) return { error: "Cont indisponibil.", status: 404 as const };
   const other = await database().prepare("SELECT user_id FROM app_user_access WHERE email = ? AND user_id != ?").bind(email, user.id).first();
   if (other) return { error: "Emailul este deja asociat altui cont.", status: 409 as const };
   await database().prepare("INSERT INTO app_user_access (user_id, email) VALUES (?, ?) ON CONFLICT(user_id) DO UPDATE SET email = excluded.email").bind(user.id, email).run();
   return { email };
+}
+
+
+export async function deleteAccount(username: string, actorId: string) {
+  if (!accessMode()) return { error: "Opțiune disponibilă pe serverul propriu.", status: 405 as const };
+  const actor = await database().prepare("SELECT id FROM app_users WHERE id=? AND active=1 AND role='Admin'").bind(actorId).first();
+  if (!actor) return { error: "Acces rezervat administratorului.", status: 403 as const };
+  const user = await database().prepare("SELECT id FROM app_users WHERE username=? AND NOT EXISTS (SELECT 1 FROM app_deleted_users d WHERE d.user_id=app_users.id)").bind(username).first<{ id: string }>();
+  if (!user) return { error: "Contul nu există sau a fost deja șters.", status: 404 as const };
+  if (user.id === actorId) return { error: "Nu îți poți șterge propriul cont.", status: 409 as const };
+  await database().batch([
+    database().prepare("INSERT INTO app_deleted_users(user_id,deleted_at,deleted_by) VALUES (?,?,?)").bind(user.id, Date.now(), actorId),
+    database().prepare("UPDATE app_users SET active=0,updated_at=? WHERE id=?").bind(Date.now(), user.id),
+    database().prepare("DELETE FROM app_sessions WHERE user_id=?").bind(user.id),
+    database().prepare("DELETE FROM app_user_access WHERE user_id=?").bind(user.id),
+    database().prepare("DELETE FROM app_team_members WHERE user_id=?").bind(user.id),
+  ]);
+  return { deleted: username };
 }

@@ -143,6 +143,23 @@ test('Access maps email to existing usernames and local roles, refuses unmapped/
     assert.equal(added.account.email, 'new@example.com'); assert.equal(added.account.passwordResetRequired, false);
     assert.equal((await auth.addAccount({ username: 'duplicate', name: 'Duplicate', role: 'Tehnician', password: '', email: 'new@example.com' })).status, 409);
     assert.equal(db.prepare('SELECT technician_username FROM projects').get().technician_username, 'tech');
+    assert.equal((await auth.deleteAccount('admin', 'u2')).status, 409);
+    assert.equal((await auth.deleteAccount('admin', 'u1')).status, 403);
+    assert.equal((await auth.deleteAccount('missing', 'u2')).status, 404);
+    db.prepare('INSERT INTO app_teams VALUES (?,?,?)').run('north', 'Nord', 'nord');
+    db.prepare('INSERT INTO app_team_members VALUES (?,?)').run('u1', 'north');
+    assert.equal((await auth.deleteAccount('tech', 'u2')).deleted, 'tech');
+    assert.equal(await auth.currentSession(request(await token())), null);
+    assert.equal((await auth.listAccounts()).some(user => user.username === 'tech'), false);
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM app_team_members').get().n, 0);
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM app_sessions WHERE user_id=?').get('u1').n, 0);
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM app_user_access WHERE user_id=?').get('u1').n, 0);
+    assert.equal(db.prepare('SELECT technician_username FROM projects').get().technician_username, 'tech');
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM project_files').get().n, 1);
+    assert.equal((await auth.setAccessEmail('tech', 'restored@example.com')).status, 404);
+    assert.equal((await auth.addAccount({ username: 'tech', name: 'Other Person', role: 'Tehnician', password: '', email: 'other@example.com' })).status, 409);
+    migrateDatabase(db);
+    assert.equal((await auth.listAccounts()).some(user => user.username === 'tech'), false);
   } finally { delete globalThis.__selfhostAuth; db.close(); }
 });
 

@@ -215,3 +215,13 @@ Tabelele pentru echipe se creează automat la pornire, fără reimportarea bazei
 Conturile existente pornesc fără echipă; rolurile și alocările lucrărilor se păstrează.
 Echipa este o grupare administrativă și nu schimbă drepturile de acces sau raportarea.
 Funcția este disponibilă numai în copia de pe server, pentru administratori.
+
+### Ștergerea conturilor
+
+Administratorul are butonul „Șterge contul” pe cardurile utilizatorilor. Confirmarea
+cere username-ul exact. Propriul cont nu poate fi șters. Contul este eliminat din
+listele de administrare și din echipă; sesiunile locale și asocierea emailului sunt
+revocate. Identitatea este păstrată inactivă pentru istoricul lucrărilor,
+fișierelor și rapoartelor, iar username-ul nu poate fi reutilizat de altă persoană.
+Politica Cloudflare Access nu este modificată automat; chiar dacă emailul rămâne
+permis în Cloudflare, contul șters nu mai are acces în aplicație.

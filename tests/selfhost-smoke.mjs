@@ -59,6 +59,18 @@ try {
   assert.equal((await mutateTeam({ action: 'delete', id: teamId })).status, 409);
   assert.equal((await mutateTeam({ action: 'assign', username: 'tech', teamId: null })).status, 200);
   assert.equal((await mutateTeam({ action: 'delete', id: teamId })).status, 200);
+  const removeAccount = (username, confirmation = username, token = admin, originHeader = 'https://b2b.proconect.online') => fetch(origin + '/api/accounts', { method: 'DELETE', headers: { ...headers(token), Origin: originHeader }, body: JSON.stringify({ username, confirmation }) });
+  assert.equal((await removeAccount('tech', 'tech', technician)).status, 403);
+  assert.equal((await removeAccount('tech', 'tech', admin, 'https://attacker.test')).status, 403);
+  assert.equal((await removeAccount('admin')).status, 409);
+  assert.equal((await removeAccount('tech', 'wrong')).status, 400);
+  assert.equal((await removeAccount('tech')).status, 200);
+  assert.equal((await fetch(origin + '/api/projects', { headers: headers(technician) })).status, 401);
+  const remaining = await (await fetch(origin + '/api/accounts', { headers: headers(admin) })).json();
+  assert.equal(remaining.accounts.some(user => user.username === 'tech'), false);
+  const teamUsers = await (await fetch(origin + '/api/teams', { headers: headers(admin) })).json();
+  assert.equal(teamUsers.users.some(user => user.username === 'tech'), false);
+  assert.equal((await fetch(origin + '/api/files/photo', { headers: headers(admin) })).status, 200);
   console.log('Self-hosted HTTP smoke passed: Access-only login, local roles, copied projects, local files and Orange ticket writes.');
 } finally {
   child.kill('SIGTERM');

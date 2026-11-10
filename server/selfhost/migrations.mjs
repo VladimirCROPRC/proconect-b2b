@@ -36,6 +36,7 @@ export function migrateDatabase(db, { adoptCurrent = false, migrations = migrati
     try { db.exec(migration.sql); db.prepare('INSERT INTO selfhost_migrations VALUES (?,?)').run(migration.name, migration.hash); db.exec('COMMIT'); }
     catch (error) { db.exec('ROLLBACK'); throw error; }
   }
+  db.exec('CREATE TABLE IF NOT EXISTS app_deleted_users(user_id TEXT PRIMARY KEY REFERENCES app_users(id) ON DELETE CASCADE, deleted_at INTEGER NOT NULL, deleted_by TEXT NOT NULL)');
   db.exec(`CREATE TABLE IF NOT EXISTS app_teams(
     id TEXT PRIMARY KEY, name TEXT NOT NULL, name_key TEXT NOT NULL UNIQUE
   );
