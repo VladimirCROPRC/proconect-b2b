@@ -1,4 +1,4 @@
-import { addAccount, currentSession, listAccounts, sameOrigin, type AppRole } from "../../server-auth";
+import { deleteAccount, accessMode, setAccessEmail, addAccount, currentSession, listAccounts, sameOrigin, type AppRole } from "../../server-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -20,15 +20,45 @@ export async function POST(request: Request) {
     if (!session || session.account.passwordResetRequired) return Response.json({ error: "Autentificare necesară." }, { status: 401 });
     if (session.account.role !== "Admin") return Response.json({ error: "Acces rezervat administratorului." }, { status: 403 });
 
-    const body = (await request.json()) as { username?: unknown; name?: unknown; role?: unknown; password?: unknown };
-    if (typeof body.username !== "string" || typeof body.name !== "string" || typeof body.role !== "string" || typeof body.password !== "string") {
+    const body = (await request.json()) as { username?: unknown; name?: unknown; role?: unknown; password?: unknown; email?: unknown };
+    if (typeof body.username !== "string" || typeof body.name !== "string" || typeof body.role !== "string" || (!accessMode() && typeof body.password !== "string")) {
       return Response.json({ error: "Completează toate câmpurile utilizatorului." }, { status: 400 });
     }
 
-    const result = await addAccount({ username: body.username, name: body.name, role: body.role as AppRole, password: body.password });
+    const result = await addAccount({ username: body.username, name: body.name, role: body.role as AppRole, password: typeof body.password === "string" ? body.password : "", email: typeof body.email === "string" ? body.email : undefined });
     if ("error" in result) return Response.json({ error: result.error }, { status: result.status });
     return Response.json({ account: result.account }, { status: 201 });
   } catch {
     return Response.json({ error: "Contul nu a putut fi creat." }, { status: 503 });
   }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    if (!sameOrigin(request)) return Response.json({ error: "Cerere neautorizată." }, { status: 403 });
+    const session = await currentSession(request);
+    if (!session || session.account.passwordResetRequired) return Response.json({ error: "Autentificare necesară." }, { status: 401 });
+    if (session.account.role !== "Admin") return Response.json({ error: "Acces rezervat administratorului." }, { status: 403 });
+    const body = await request.json() as { username?: unknown; email?: unknown };
+    if (typeof body.username !== "string") return Response.json({ error: "Cont invalid." }, { status: 400 });
+    const result = await setAccessEmail(body.username, body.email);
+    if ("error" in result) return Response.json({ error: result.error }, { status: result.status });
+    return Response.json(result);
+  } catch { return Response.json({ error: "Emailul nu a putut fi asociat." }, { status: 503 }); }
+}
+
+
+export async function DELETE(request: Request) {
+  try {
+    if (!sameOrigin(request)) return Response.json({ error: "Cerere neautorizată." }, { status: 403 });
+    const session = await currentSession(request);
+    if (!session || session.account.passwordResetRequired) return Response.json({ error: "Autentificare necesară." }, { status: 401 });
+    if (session.account.role !== "Admin") return Response.json({ error: "Acces rezervat administratorului." }, { status: 403 });
+    let body: { username?: unknown; confirmation?: unknown } | null;
+    try { body = await request.json() as typeof body; } catch { return Response.json({ error: "Cerere invalidă." }, { status: 400 }); }
+    if (!body || typeof body.username !== "string" || body.confirmation !== body.username) return Response.json({ error: "Confirmă ștergerea introducând username-ul exact." }, { status: 400 });
+    const result = await deleteAccount(body.username, session.userId);
+    if ("error" in result) return Response.json({ error: result.error }, { status: result.status });
+    return Response.json(result);
+  } catch { return Response.json({ error: "Contul nu a putut fi șters." }, { status: 503 }); }
 }

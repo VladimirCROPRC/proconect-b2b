@@ -17,7 +17,7 @@ export function oneDriveConfigured() {
 }
 function config() {
   const e = environment();
-  if (!oneDriveConfigured()) throw new Error("Configurează variabilele OneDrive în Cloudflare înainte de conectare.");
+  if (!oneDriveConfigured()) throw new Error("Configurează variabilele OneDrive ale aplicației înainte de conectare.");
   const guid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
   if (!guid.test(e.ONEDRIVE_CLIENT_ID!) || !guid.test(e.ONEDRIVE_TENANT_ID!) || !/^[a-f0-9]{64}$/i.test(e.ONEDRIVE_ENCRYPTION_KEY!)) throw new Error("Configurarea OneDrive nu este validă.");
   return { client: e.ONEDRIVE_CLIENT_ID!, tenant: e.ONEDRIVE_TENANT_ID!, secret: e.ONEDRIVE_CLIENT_SECRET!, key: e.ONEDRIVE_ENCRYPTION_KEY!, origin: fixedOrigin(e.PROCONECT_APP_URL!) };
@@ -164,7 +164,7 @@ async function uploadJob(c: Connection, job: Job) {
     if (!file) return;
     projectId = file.project_id;
     const stored = await bucket().get(file.storage_key);
-    if (!stored) throw new Error("Fișierul sursă nu mai este disponibil în Cloudflare.");
+    if (!stored) throw new Error("Fișierul sursă nu mai este disponibil în stocarea aplicației.");
     filename = await safeName(`${file.section}--${file.original_name}`, file.id);
     body = await new Response(stored.body).arrayBuffer(); contentType = file.content_type;
   } else {

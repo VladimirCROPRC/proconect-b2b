@@ -3,7 +3,7 @@ import "./globals.css";
 import { PwaRegistration } from "./pwa-registration";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://proconect-b2b.vladimir-carlan.workers.dev"),
+  metadataBase: new URL(process.env.PROCONECT_SELF_HOSTED === "1" ? "https://b2b.proconect.online" : "https://proconect-b2b.vladimir-carlan.workers.dev"),
   title: "Proconect B2B",
   description:
     "Management și documentare pentru instalări B2B de fibră optică.",

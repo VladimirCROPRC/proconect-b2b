@@ -1,23 +1,24 @@
-import { currentSession, ensureInitialAccounts, expiredSessionCookie, sameOrigin, signIn, signOut, updatePassword } from "../../server-auth";
+import { accessMode, currentSession, ensureInitialAccounts, expiredSessionCookie, sameOrigin, signIn, signOut, updatePassword } from "../../server-auth";
 
 export const dynamic = "force-dynamic";
 
 function unexpectedError(error: unknown) {
   console.error("Proconect authentication error:", error instanceof Error ? error.message : "Unknown authentication failure");
-  return Response.json({ error: "Autentificarea nu este disponibilă momentan. Încearcă din nou." }, { status: 503 });
+  return Response.json({ authMode: accessMode() ? "cloudflare-access" : "password", error: "Autentificarea nu este disponibilă momentan. Încearcă din nou." }, { status: 503 });
 }
 
 export async function GET(request: Request) {
   try {
     await ensureInitialAccounts();
     const session = await currentSession(request);
-    return Response.json({ authenticated: Boolean(session), account: session?.account ?? null }, { headers: { "Cache-Control": "no-store" } });
+    return Response.json({ authMode: accessMode() ? "cloudflare-access" : "password", authenticated: Boolean(session), account: session?.account ?? null }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return unexpectedError(error);
   }
 }
 
 export async function POST(request: Request) {
+  if (accessMode()) return Response.json({ error: "Folosește Cloudflare Access pentru autentificare." }, { status: 405 });
   try {
     if (!sameOrigin(request)) return Response.json({ error: "Cerere neautorizată." }, { status: 403 });
     await ensureInitialAccounts();
@@ -35,6 +36,7 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
+  if (accessMode()) return Response.json({ error: "Contul nu folosește o parolă locală." }, { status: 405 });
   try {
     if (!sameOrigin(request)) return Response.json({ error: "Cerere neautorizată." }, { status: 403 });
     const body = (await request.json()) as { password?: unknown };
@@ -53,7 +55,7 @@ export async function DELETE(request: Request) {
   try {
     if (!sameOrigin(request)) return Response.json({ error: "Cerere neautorizată." }, { status: 403 });
     await signOut(request);
-    return Response.json({ authenticated: false }, { headers: { "Set-Cookie": expiredSessionCookie(), "Cache-Control": "no-store" } });
+    return Response.json({ authenticated: false, ...(accessMode() ? { logoutUrl: "/cdn-cgi/access/logout" } : {}) }, { headers: { "Set-Cookie": expiredSessionCookie(), "Cache-Control": "no-store" } });
   } catch (error) {
     return unexpectedError(error);
   }

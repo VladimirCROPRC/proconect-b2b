@@ -1,0 +1,29 @@
+name: Verify Ubuntu copy
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  selfhost:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Access, SQLite, file storage and copy isolation tests
+        run: node --test tests/selfhost.test.mjs
+      - name: Build without pre-generated Cloudflare types
+        run: |
+          rm -f worker-configuration.d.ts tsconfig.tsbuildinfo
+          npm run build:selfhost
+      - name: Real HTTP smoke test
+        run: node tests/selfhost-smoke.mjs
+      - name: Docker image build from clean context
+        run: docker build -f Dockerfile.selfhost -t proconect-selfhost-ci .
