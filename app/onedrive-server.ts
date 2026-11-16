@@ -3,10 +3,10 @@ import { getRawDb } from "../db";
 import { bucket, getFileRow } from "./project-server";
 import { base64url, decode64, fixedOrigin, retryDelay, safeName, usesOneDrive, validMode, type BackupMode } from "./onedrive-core";
 
-type Environment = { PROCONECT_APP_URL?: string; ONEDRIVE_CLIENT_ID?: string; ONEDRIVE_TENANT_ID?: string; ONEDRIVE_CLIENT_SECRET?: string; ONEDRIVE_ENCRYPTION_KEY?: string };
+type Environment = { ONEDRIVE_FOLDER_URL?: string; PROCONECT_APP_URL?: string; ONEDRIVE_CLIENT_ID?: string; ONEDRIVE_TENANT_ID?: string; ONEDRIVE_CLIENT_SECRET?: string; ONEDRIVE_ENCRYPTION_KEY?: string };
 type Connection = { mode: BackupMode; generation: string; access_token: string; refresh_token: string; expires_at: number; drive_id: string; root_id: string; root_url: string; account: string; owner_id: string; lease: string; lease_until: number };
 type Job = { id: string; kind: "file" | "project"; item_id: string; revision: number; attempts: number };
-type Item = { id: string; webUrl?: string; folder?: object; driveType?: string; owner?: { user?: { id?: string; displayName?: string; email?: string } } };
+type Item = { id: string; parentReference?: { driveId?: string }; webUrl?: string; folder?: object; driveType?: string; owner?: { user?: { id?: string; displayName?: string; email?: string } } };
 const encoder = new TextEncoder();
 const settingsId = "onedrive";
 const scope = "offline_access https://graph.microsoft.com/Files.ReadWrite";
@@ -101,8 +101,25 @@ export async function finishOneDrive(sessionId: string, state: string, code: str
   if (drive.driveType !== "business" || !drive.id) throw new Error("Conectează contul OneDrive de serviciu Microsoft 365.");
   const existing = await connection();
   if (existing?.drive_id && existing.drive_id !== drive.id) throw new Error("Este conectat alt OneDrive. Deconectează-l explicit înainte de schimbarea contului.");
-  const root = await checked(await graph(tokens.access_token!, "/me/drive/root"));
-  const destination = await folder(tokens.access_token!, root.id, "Proconect B2B");
+  const sharedUrl = environment().ONEDRIVE_FOLDER_URL?.trim();
+  let destination: Item;
+  if (sharedUrl) {
+    const url = new URL(sharedUrl);
+    if (url.protocol !== "https:" || !url.hostname.endsWith(".sharepoint.com") || url.username || url.password) {
+      throw new Error("Introdu un link HTTPS către un folder SharePoint.");
+    }
+    const shareId = "u!" + base64url(encoder.encode(sharedUrl));
+    destination = await checked(await graph(tokens.access_token!, `/shares/${encodeURIComponent(shareId)}/driveItem`));
+    if (!destination.id || !destination.folder || destination.parentReference?.driveId !== drive.id) {
+      throw new Error("Conectează contul Microsoft 365 care deține folderul indicat.");
+    }
+  } else {
+    const root = await checked(await graph(tokens.access_token!, "/me/drive/root"));
+    destination = await folder(tokens.access_token!, root.id, "Proconect B2B");
+  }
+  if (existing?.root_id && existing.root_id !== destination.id) {
+    throw new Error("Deconectează OneDrive înainte de schimbarea folderului.");
+  }
   const generation = crypto.randomUUID();
   await getRawDb().prepare("INSERT INTO onedrive_connection (id, mode, generation, access_token, refresh_token, expires_at, drive_id, root_id, root_url, account, owner_id, lease, lease_until) VALUES (?, 'google', ?, ?, ?, ?, ?, ?, ?, ?, ?, '', 0) ON CONFLICT(id) DO UPDATE SET generation = excluded.generation, access_token = excluded.access_token, refresh_token = excluded.refresh_token, expires_at = excluded.expires_at, drive_id = excluded.drive_id, root_id = excluded.root_id, root_url = excluded.root_url, account = excluded.account, owner_id = excluded.owner_id, lease = '', lease_until = 0")
     .bind(settingsId, generation, await seal(tokens.access_token!), await seal(tokens.refresh_token), Date.now() + (tokens.expires_in ?? 3600) * 1000, drive.id, destination.id, destination.webUrl ?? "", drive.owner?.user?.email ?? drive.owner?.user?.displayName ?? "OneDrive Microsoft 365", drive.owner?.user?.id ?? "").run();
