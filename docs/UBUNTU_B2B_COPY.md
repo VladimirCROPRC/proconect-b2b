@@ -225,3 +225,11 @@ revocate. Identitatea este păstrată inactivă pentru istoricul lucrărilor,
 fișierelor și rapoartelor, iar username-ul nu poate fi reutilizat de altă persoană.
 Politica Cloudflare Access nu este modificată automat; chiar dacă emailul rămâne
 permis în Cloudflare, contul șters nu mai are acces în aplicație.
+
+### Roluri multiple
+
+În administrarea conturilor, administratorul poate bifa unul sau mai multe roluri la creare sau din butonul „Roluri” al unui cont existent. Rolurile disponibile sunt Admin, Manager, Coordonator și Tehnician. Conturile existente își păstrează automat rolul actual la actualizare; nu este necesară configurare suplimentară.
+
+După autentificarea Cloudflare Access, conturile cu mai multe roluri aleg rolul activ. „Schimbă rolul” permite o nouă alegere în timpul sesiunii. Permisiunile API sunt verificate pentru rolul activ, iar un rol retras de administrator nu mai poate fi folosit. Conturile cu un singur rol intră direct în aplicație. Nu se poate retrage rolul ultimului administrator activ.
+
+Un utilizator care are atribuit și rolul Tehnician apare în listele pentru alocarea lucrărilor și în centralizatoarele lunare, inclusiv atunci când are și rol de Coordonator sau Manager.

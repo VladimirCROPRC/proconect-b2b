@@ -14,12 +14,14 @@ import type { ClientFieldSummary, InterventionFieldSummary, ProjectFieldDocument
 import { TechnicianProjectSafety, type ProjectSafetyStatus } from "./technician-project-safety";
 import { OrangeOrocSection } from "./orange-oroc";
 import { NoInterventionControl } from "./no-intervention-control";
+import { AccountRoleFields, ActiveRolePicker } from "./account-role-controls";
+import { accountHasRole, type AppRole } from "./account-roles";
 import { TeamManagement } from "./team-management";
 import { TechnicianReports } from "./technician-reports";
 
 type View = "orange-oroc" | "projects" | "interventions" | "surveys" | "intervention-workspace" | "intervention-execution" | "intervention-documentation" | "survey-workspace" | "team" | "cpe" | "drive" | "documents" | "client" | "route" | "splices" | "site";
 type ActivityListView = "projects" | "interventions" | "surveys";
-type Modal = "project" | "edit-project" | "delete-project" | "account" | "access-email" | "delete-account" | "cpe" | "edit-cpe" | null;
+type Modal = "project" | "edit-project" | "delete-project" | "account" | "access-email" | "account-roles" | "delete-account" | "cpe" | "edit-cpe" | null;
 type ServiceType = "Internet" | "VPN" | "Internet+OL" | "OL";
 type ClientPhotoKey = "report" | "speed" | "olTest" | "overview" | "detail" | "labels" | "grounding";
 
@@ -81,9 +83,10 @@ type Account = {
   active: boolean;
   jobs: number;
   email?: string;
+  roles?: AppRole[];
 };
 
-type SignedInAccount = Account & { passwordResetRequired: boolean };
+type SignedInAccount = Account & { passwordResetRequired: boolean; roleSelectionRequired?: boolean };
 
 const initialAccounts: Account[] = [
   { username: "vladimir.carlan", name: "Vladimir", role: "Admin", active: true, jobs: 0 },
@@ -161,6 +164,10 @@ export default function Home() {
   const [deletingAccount, setDeletingAccount] = useState<Account | null>(null);
   const [deletingAccountBusy, setDeletingAccountBusy] = useState(false);
   const [deleteAccountError, setDeleteAccountError] = useState("");
+  const [editingRolesAccount, setEditingRolesAccount] = useState<Account | null>(null);
+  const [rolesSaving, setRolesSaving] = useState(false);
+  const [rolesError, setRolesError] = useState("");
+  const [choosingRole, setChoosingRole] = useState(false);
   const [editingEmailAccount, setEditingEmailAccount] = useState<Account | null>(null);
   const [checkingAuthentication, setCheckingAuthentication] = useState(true);
   const [authenticationPending, setAuthenticationPending] = useState(false);
@@ -224,12 +231,12 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (authenticatedAccount?.role !== "Admin" || authenticatedAccount.passwordResetRequired) return;
+    if (!authenticatedAccount || authenticatedAccount.role === "Tehnician" || authenticatedAccount.passwordResetRequired || authenticatedAccount.roleSelectionRequired) return;
 
     let mounted = true;
     async function loadAccounts() {
       try {
-        const response = await fetch("/api/accounts", { cache: "no-store", credentials: "same-origin" });
+        const response = await fetch(authenticatedAccount?.role === "Admin" ? "/api/accounts" : "/api/accounts?technicians=1", { cache: "no-store", credentials: "same-origin" });
         if (!response.ok) return;
         const payload = (await response.json()) as { accounts?: Account[] };
         if (mounted && payload.accounts?.length) setAccounts(payload.accounts);
@@ -245,7 +252,7 @@ export default function Home() {
   }, [authenticatedAccount]);
 
   useEffect(() => {
-    if (!authenticatedAccount || authenticatedAccount.passwordResetRequired || authenticatedAccount.role === "Tehnician") return;
+    if (!authenticatedAccount || authenticatedAccount.roleSelectionRequired || authenticatedAccount.passwordResetRequired || authenticatedAccount.role === "Tehnician") return;
     let mounted = true;
     const oneDriveResult = new URLSearchParams(window.location.search).get("onedrive");
     if (oneDriveResult && authenticatedAccount.role === "Admin") {
@@ -285,7 +292,7 @@ export default function Home() {
   }, [authenticatedAccount]);
 
   useEffect(() => {
-    if (!authenticatedAccount || authenticatedAccount.passwordResetRequired) return;
+    if (!authenticatedAccount || authenticatedAccount.roleSelectionRequired || authenticatedAccount.passwordResetRequired) return;
 
     let mounted = true;
     async function loadProjectData() {
@@ -319,7 +326,7 @@ export default function Home() {
   }, [authenticatedAccount, projectReloadKey]);
 
   useEffect(() => {
-    if (!authenticatedAccount || authenticatedAccount.passwordResetRequired || !activeProjectId || !projectDataReady) return;
+    if (!authenticatedAccount || authenticatedAccount.roleSelectionRequired || authenticatedAccount.passwordResetRequired || !activeProjectId || !projectDataReady) return;
 
     let mounted = true;
     fetchProjectFiles(activeProjectId, "client")
@@ -353,7 +360,7 @@ export default function Home() {
     });
   }, [activeProjectId, fieldDocumentation]);
 
-  const technicians = accounts.filter((account) => account.role === "Tehnician" && account.active);
+  const technicians = accounts.filter((account) => accountHasRole(account, "Tehnician") && account.active);
   const currentAccount = authenticatedAccount ?? accounts[0];
   const canManageDocuments = currentAccount?.role === "Admin" || currentAccount?.role === "Manager" || currentAccount?.role === "Coordonator";
   const activeProject = projects.find((project) => project.id === activeProjectId) ?? projects[0] ?? emptyProject;
@@ -736,6 +743,8 @@ export default function Home() {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const username = String(form.get("username"));
+    const roles = authenticationMode === "cloudflare-access" ? form.getAll("roles").map(String) : [String(form.get("role"))];
+    if (!roles.length) { showToast("Selectează cel puțin un rol."); return; }
     if (accounts.some((account) => account.username === username)) {
       showToast("Username-ul este deja folosit.");
       return;
@@ -748,7 +757,7 @@ export default function Home() {
         body: JSON.stringify({
           username,
           name: String(form.get("name")),
-          role: String(form.get("role")),
+          role: roles[0], roles,
           password: authenticationMode === "cloudflare-access" ? undefined : String(form.get("password")),
           email: authenticationMode === "cloudflare-access" ? String(form.get("email")) : undefined,
         }),
@@ -782,6 +791,39 @@ export default function Home() {
       setModal(null); setDeletingAccount(null); showToast("Contul a fost șters. Istoricul lucrărilor a fost păstrat.");
     } catch (error) { setDeleteAccountError(error instanceof Error ? error.message : "Contul nu a putut fi șters."); }
     finally { setDeletingAccountBusy(false); }
+  }
+
+  async function activateRole(role: AppRole) {
+    setAuthenticationPending(true); setAuthenticationError("");
+    try {
+      const response = await fetch("/api/auth", { method: "PUT", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ role }) });
+      const result = await response.json() as { account?: SignedInAccount; error?: string };
+      if (!response.ok || !result.account) throw new Error(result.error || "Rolul nu a putut fi activat.");
+      window.location.reload();
+    } catch (error) { setAuthenticationError(error instanceof Error ? error.message : "Rolul nu a putut fi activat."); setAuthenticationPending(false); }
+  }
+
+  function openAccountRoles(username: string) {
+    const account = accounts.find(item => item.username === username);
+    if (!account) return;
+    setEditingRolesAccount(account); setRolesError(""); setModal("account-roles");
+  }
+
+  async function saveAccountRoles(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingRolesAccount || rolesSaving) return;
+    const roles = new FormData(event.currentTarget).getAll("roles").map(String);
+    if (!roles.length) { setRolesError("Selectează cel puțin un rol."); return; }
+    setRolesSaving(true); setRolesError("");
+    try {
+      const response = await fetch("/api/accounts", { method: "PATCH", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: editingRolesAccount.username, roles }) });
+      const result = await response.json() as { account?: Account; error?: string };
+      if (!response.ok || !result.account) throw new Error(result.error || "Rolurile nu au putut fi salvate.");
+      setAccounts(current => current.map(account => account.username === result.account!.username ? result.account! : account));
+      setModal(null); setEditingRolesAccount(null); showToast("Rolurile contului au fost actualizate.");
+      if (result.account.username === authenticatedAccount?.username) window.location.reload();
+    } catch (error) { setRolesError(error instanceof Error ? error.message : "Rolurile nu au putut fi salvate."); }
+    finally { setRolesSaving(false); }
   }
 
   async function saveAccessEmail(event: FormEvent<HTMLFormElement>) {
@@ -1096,11 +1138,15 @@ export default function Home() {
     );
   }
 
+  if (authenticatedAccount && (authenticatedAccount.roleSelectionRequired || choosingRole)) {
+    return <ActiveRolePicker name={authenticatedAccount.name} roles={authenticatedAccount.roles ?? [authenticatedAccount.role]} busy={authenticationPending} error={authenticationError} onSelect={role => void activateRole(role)} onSignOut={() => void handleSignOut()} />;
+  }
+
   if (!authenticatedAccount && authenticationMode === "cloudflare-access") {
     return <main className="auth-shell"><section className="auth-card"><h1>Acces prin email</h1><p>{authenticationError || "Emailul autentificat nu este asociat unui cont activ. Contactează administratorul."}</p><button className="primary-button" onClick={() => window.location.assign("/cdn-cgi/access/logout")}>Autentifică-te cu alt email</button></section></main>;
   }
 
-  if (!authenticatedAccount || authenticatedAccount.passwordResetRequired) {
+  if (!authenticatedAccount || authenticatedAccount.roleSelectionRequired || authenticatedAccount.passwordResetRequired) {
     const changingPassword = Boolean(authenticatedAccount?.passwordResetRequired);
 
     return (
@@ -1193,6 +1239,7 @@ export default function Home() {
         <div className="sidebar-footer">
           <div className="avatar avatar-green">{initials(displayedAccountName)}</div>
           <div><strong>{displayedAccountName}</strong><small>{displayedAccountRole}</small></div>
+          {(authenticatedAccount.roles?.length ?? 1) > 1 && <button onClick={() => { setAuthenticationError(""); setChoosingRole(true); }} aria-label="Schimbă rolul" title="Schimbă rolul">⇄</button>}
           <button onClick={handleSignOut} aria-label="Deconectare" title="Deconectare">⎋</button>
         </div>
       </aside>
@@ -1219,6 +1266,7 @@ export default function Home() {
             <button className="help-button" aria-label="Ajutor">?</button>
             <button className="bell" aria-label="Notificări">●<span>3</span></button>
             <div className="top-profile"><span className="avatar avatar-green">{initials(displayedAccountName)}</span><div><strong>{displayedAccountName}</strong><small>{displayedAccountRole}</small></div></div>
+            {(authenticatedAccount.roles?.length ?? 1) > 1 && <button className="secondary-button" onClick={() => { setAuthenticationError(""); setChoosingRole(true); }}>Schimbă rolul</button>}
             <button className="logout-button" onClick={handleSignOut} aria-label="Deconectare" title="Deconectare">⎋</button>
           </div>
         </header>
@@ -1326,14 +1374,14 @@ export default function Home() {
           <div className="page-wrap inner-page">
             <section className="page-heading compact">
               <div><p className="eyebrow">ADMINISTRARE</p><h1>Echipă și conturi</h1><p>Creează conturi și gestionează accesul administratorilor și tehnicienilor.</p></div>
-              <button className="primary-button" onClick={() => setModal("account")}><span>＋</span> Cont nou</button>
+              {currentAccount.role === "Admin" && <button className="primary-button" onClick={() => setModal("account")}><span>＋</span> Cont nou</button>}
             </section>
             <section className="mini-metrics">
               <article><small>CONTURI ACTIVE</small><strong>{accounts.filter((a) => a.active).length}</strong></article>
               <article><small>TEHNICIENI</small><strong>{technicians.length}</strong></article>
-              <article><small>ADMINISTRATORI</small><strong>{accounts.filter((a) => a.role === "Admin").length}</strong></article>
+              <article><small>ADMINISTRATORI</small><strong>{accounts.filter((a) => accountHasRole(a, "Admin")).length}</strong></article>
             </section>
-            {authenticationMode === "cloudflare-access" && currentAccount.role === "Admin" && <TeamManagement key={accounts.map(account => account.username).join(",")} onNotify={showToast} accounts={accounts} currentUsername={currentAccount.username} onDelete={openAccountDeletion} onEditEmail={username => { const account = accounts.find(item => item.username === username); if (account) { setEditingEmailAccount(account); setModal("access-email"); } }} />}
+            {authenticationMode === "cloudflare-access" && currentAccount.role === "Admin" && <TeamManagement key={accounts.map(account => account.username).join(",")} onNotify={showToast} accounts={accounts} currentUsername={currentAccount.username} onEditRoles={openAccountRoles} onDelete={openAccountDeletion} onEditEmail={username => { const account = accounts.find(item => item.username === username); if (account) { setEditingEmailAccount(account); setModal("access-email"); } }} />}
             <TechnicianReports onEditWork={id => { const work = projects.find(project => project.id === id); if (work) openProjectEditor(work); else showToast("Reîncarcă lista lucrărilor pentru a edita acest proiect."); }} />
             <section className="project-card team-card">
               <div className="card-heading"><div><h2>Utilizatori</h2><p>{authenticationMode === "cloudflare-access" ? "Emailurile sunt asociate conturilor existente. Adaugă adresele permise și în politica Cloudflare Access." : "Parolele sunt protejate și nu sunt afișate după creare."}</p></div></div>
@@ -1341,8 +1389,9 @@ export default function Home() {
                 {accounts.map((account, index) => (
                   <article className="account-card" key={account.username}>
                     <div className={`avatar big ${index === 0 ? "avatar-green" : ""}`}>{initials(account.name)}</div>
-                    <div className="account-copy"><strong>{account.name}</strong><small>@{account.username}</small>{authenticationMode === "cloudflare-access" && <small>{account.email || "Email neasociat"}</small>}<span className={account.role === "Tehnician" ? "role" : "role role-dark"}>{account.role}</span></div>
-                    <div className="account-meta"><span><i className={account.active ? "online" : ""} />{account.active ? "Activ" : "Inactiv"}</span><small>{account.role === "Tehnician" ? `${account.jobs} lucrări` : "Acces complet"}</small></div>
+                    <div className="account-copy"><strong>{account.name}</strong><small>@{account.username}</small>{authenticationMode === "cloudflare-access" && <small>{account.email || "Email neasociat"}</small>}<span className={account.role === "Tehnician" ? "role" : "role role-dark"}>{(account.roles ?? [account.role]).join(" · ")}</span></div>
+                    <div className="account-meta"><span><i className={account.active ? "online" : ""} />{account.active ? "Activ" : "Inactiv"}</span><small>{accountHasRole(account, "Tehnician") ? `${account.jobs} lucrări` : "Acces complet"}</small></div>
+                    {authenticationMode === "cloudflare-access" && currentAccount.role === "Admin" && <button className="secondary-button" onClick={() => openAccountRoles(account.username)}>Roluri</button>}
                     {authenticationMode === "cloudflare-access" && currentAccount.role === "Admin" && account.username !== currentAccount.username && <button className="secondary-button" style={{ color: "#b42336" }} onClick={() => openAccountDeletion(account.username)}>Șterge contul</button>}
                     {authenticationMode === "cloudflare-access" && currentAccount.role === "Admin" ? <button className="secondary-button" onClick={() => { setEditingEmailAccount(account); setModal("access-email"); }}>Email acces</button> : <button className="more" aria-label={`Opțiuni cont ${account.username}`}>•••</button>}
                   </article>
@@ -1604,6 +1653,11 @@ export default function Home() {
           <div className="modal-body stacked-form"><p>Utilizatorul nu va mai putea intra în aplicație și va fi eliminat din echipă. Lucrările, fotografiile și istoricul se păstrează. Username-ul rămâne rezervat istoricului.</p><label><span>Pentru confirmare, introdu {deletingAccount.username}</span><input name="confirmation" required autoComplete="off" disabled={deletingAccountBusy} /></label>{deleteAccountError && <p role="alert" style={{ color: "#b42336" }}>{deleteAccountError}</p>}</div>
           <div className="modal-actions"><button type="button" className="secondary-button" disabled={deletingAccountBusy} onClick={() => setModal(null)}>Anulează</button><button className="primary-button" disabled={deletingAccountBusy}>{deletingAccountBusy ? "Se șterge…" : "Șterge contul"}</button></div>
         </form>}
+        {modal === "account-roles" && editingRolesAccount && <form className="modal small-modal" onSubmit={saveAccountRoles}>
+          <div className="modal-head"><div><h2>Roluri · {editingRolesAccount.name}</h2><p>@{editingRolesAccount.username}</p></div><button type="button" disabled={rolesSaving} onClick={() => setModal(null)}>×</button></div>
+          <div className="modal-body stacked-form"><AccountRoleFields selected={editingRolesAccount.roles ?? [editingRolesAccount.role]} />{rolesError && <p role="alert" className="auth-error">{rolesError}</p>}</div>
+          <div className="modal-actions"><button type="button" className="secondary-button" disabled={rolesSaving} onClick={() => setModal(null)}>Anulează</button><button className="primary-button" disabled={rolesSaving}>{rolesSaving ? "Se salvează…" : "Salvează rolurile"}</button></div>
+        </form>}
         {modal === "access-email" && editingEmailAccount && <form className="modal small-modal" onSubmit={saveAccessEmail}><div className="modal-head"><div><h2>Email de acces · {editingEmailAccount.name}</h2><p>Contul @{editingEmailAccount.username} își păstrează rolul și lucrările.</p></div><button type="button" onClick={() => setModal(null)}>×</button></div><div className="modal-body stacked-form"><label><span>Email *</span><input name="email" type="email" defaultValue={editingEmailAccount.email || ""} required /></label><p>Adresa trebuie permisă și în politica Cloudflare Access. Schimbarea emailului necesită autentificare cu noua adresă.</p></div><div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setModal(null)}>Anulează</button><button className="primary-button">Salvează emailul</button></div></form>}
         {modal === "account" && (
           <form className="modal small-modal" onSubmit={createAccount}>
@@ -1612,7 +1666,7 @@ export default function Home() {
               <label><span>Nume complet *</span><input name="name" required placeholder="Nume și prenume" /></label>
               <label><span>Username *</span><input name="username" required autoComplete="off" placeholder="ex. andrei.m" /></label>
               {authenticationMode === "cloudflare-access" ? <label><span>Email pentru acces *</span><input type="email" name="email" required autoComplete="email" /><small>Permite această adresă și în Cloudflare Access.</small></label> : <label><span>Parolă temporară *</span><input name="password" required type="password" minLength={8} autoComplete="new-password" placeholder="Minimum 8 caractere" /><small>Utilizatorul o va schimba la prima autentificare.</small></label>}
-              <label><span>Rol *</span><select name="role"><option>Tehnician</option><option>Admin</option><option>Coordonator</option><option>Manager</option></select></label>
+              {authenticationMode === "cloudflare-access" ? <AccountRoleFields /> : <label><span>Rol *</span><select name="role"><option>Tehnician</option><option>Admin</option><option>Coordonator</option><option>Manager</option></select></label>}
             </div>
             <div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setModal(null)}>Anulează</button><button className="primary-button" type="submit">Creează contul</button></div>
           </form>

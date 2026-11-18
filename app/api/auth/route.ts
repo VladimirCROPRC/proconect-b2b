@@ -1,4 +1,4 @@
-import { accessMode, currentSession, ensureInitialAccounts, expiredSessionCookie, sameOrigin, signIn, signOut, updatePassword } from "../../server-auth";
+import { accessMode, currentSession, ensureInitialAccounts, expiredRoleCookie, expiredSessionCookie, sameOrigin, selectActiveRole, signIn, signOut, updatePassword } from "../../server-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +10,7 @@ function unexpectedError(error: unknown) {
 export async function GET(request: Request) {
   try {
     await ensureInitialAccounts();
-    const session = await currentSession(request);
+    const session = await currentSession(request, { allowRoleSelection: true });
     return Response.json({ authMode: accessMode() ? "cloudflare-access" : "password", authenticated: Boolean(session), account: session?.account ?? null }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return unexpectedError(error);
@@ -55,8 +55,21 @@ export async function DELETE(request: Request) {
   try {
     if (!sameOrigin(request)) return Response.json({ error: "Cerere neautorizată." }, { status: 403 });
     await signOut(request);
-    return Response.json({ authenticated: false, ...(accessMode() ? { logoutUrl: "/cdn-cgi/access/logout" } : {}) }, { headers: { "Set-Cookie": expiredSessionCookie(), "Cache-Control": "no-store" } });
+    const headers = new Headers({ "Cache-Control": "no-store" });
+    headers.append("Set-Cookie", expiredSessionCookie());
+    headers.append("Set-Cookie", expiredRoleCookie());
+    return Response.json({ authenticated: false, ...(accessMode() ? { logoutUrl: "/cdn-cgi/access/logout" } : {}) }, { headers });
   } catch (error) {
     return unexpectedError(error);
   }
+}
+
+export async function PUT(request: Request) {
+  try {
+    if (!sameOrigin(request)) return Response.json({ error: "Cerere neautorizată." }, { status: 403 });
+    const body = await request.json() as { role?: unknown };
+    const result = await selectActiveRole(request, body?.role);
+    if ("error" in result) return Response.json({ error: result.error }, { status: result.status });
+    return Response.json({ authenticated: true, account: result.account }, { headers: { "Set-Cookie": result.cookie, "Cache-Control": "no-store" } });
+  } catch (error) { return unexpectedError(error); }
 }

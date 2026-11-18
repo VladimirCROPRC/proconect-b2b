@@ -1,3 +1,4 @@
+import { userRoleSql } from "./server-auth";
 import { getRawDb } from "../db";
 import { operationPhotos, type DailyPhoto } from "./daily-technician-report";
 import type { ProjectFieldDocumentation } from "./field-documentation";
@@ -10,7 +11,7 @@ async function reportingData() {
   const db = getRawDb();
   // Keep former technicians in the historical report. Inactive accounts cannot
   // sign in, but their saved work must remain attributable.
-  const technicians = await db.prepare("SELECT username,name FROM app_users WHERE role='Tehnician' ORDER BY name,username").all<ReportingTechnician>();
+  const technicians = await db.prepare(`SELECT username,name FROM app_users WHERE ${userRoleSql("Tehnician")} ORDER BY name,username`).all<ReportingTechnician>();
   const projects = await db.prepare(`SELECT p.id,p.technician_username,e.content_json AS estimate,d.content_json AS documentation
     FROM projects p JOIN project_estimates e ON e.project_id=p.id
     LEFT JOIN project_field_documentation d ON d.project_id=p.id
@@ -19,7 +20,7 @@ async function reportingData() {
   }>();
   const photos = await db.prepare(`SELECT f.project_id AS projectId,f.section,f.category,f.uploaded_by AS uploadedBy,
     f.created_at AS uploadedAt,f.captured_at AS capturedAt FROM project_files f
-    JOIN app_users u ON u.username=f.uploaded_by WHERE u.role='Tehnician' ORDER BY f.created_at DESC`).all<DailyPhoto>();
+    JOIN app_users u ON u.username=f.uploaded_by WHERE ${userRoleSql("Tehnician", "u")} ORDER BY f.created_at DESC`).all<DailyPhoto>();
   const tickets = await db.prepare(`SELECT ticket_number,work_date,service_package_code,technician_username
     FROM orange_oroc_tickets WHERE technician_username IS NOT NULL ORDER BY work_date,ticket_number`).all<{
     ticket_number: string; work_date: string; service_package_code: string; technician_username: string;

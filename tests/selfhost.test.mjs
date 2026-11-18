@@ -14,6 +14,7 @@ const temporaryRoot = resolve('.sites-runtime/tmp');
 await mkdir(temporaryRoot, { recursive: true });
 const source = path => readFile(new URL('../' + path, import.meta.url), 'utf8');
 const moduleUrl = code => 'data:text/javascript;base64,' + Buffer.from(stripTypeScriptTypes(code, { mode: 'transform', disableExperimentalWarning: true })).toString('base64');
+const roleCore = await import(moduleUrl(await source('app/account-roles.ts')));
 const access = await import(moduleUrl((await source('app/access-auth.ts')).replace('"jose"', JSON.stringify(import.meta.resolve('jose')))));
 const issuer = 'https://test-team.cloudflareaccess.com', audience = 'a'.repeat(64);
 const keys = await generateKeyPair('RS256');
@@ -121,9 +122,9 @@ test('Access maps email to existing usernames and local roles, refuses unmapped/
   const db = openDatabase(':memory:'); db.exec(fixtureSql()); migrateDatabase(db, { adoptCurrent: true });
   db.prepare('INSERT INTO app_user_access VALUES (?,?)').run('u1', 'tech@example.com');
   const env = { DB: d1Adapter(db), PROCONECT_AUTH_MODE: 'cloudflare-access', PROCONECT_APP_URL: 'https://b2b.proconect.online', CF_ACCESS_TEAM_DOMAIN: issuer, CF_ACCESS_AUD: audience };
-  globalThis.__selfhostAuth = { env, ...access, accessIdentity: (request, config) => access.accessIdentity(request, config, resolver) };
+  globalThis.__selfhostAuth = { env, ...roleCore, ...access, accessIdentity: (request, config) => access.accessIdentity(request, config, resolver) };
   const code = (await source('app/server-auth.ts')).replace(/^import .*;$/gm, '');
-  const auth = await import(moduleUrl('const {env,accessConfiguration,accessIdentity,normalizedAccessEmail}=globalThis.__selfhostAuth;\n' + code));
+  const auth = await import(moduleUrl('const {env,accessConfiguration,accessIdentity,normalizedAccessEmail,normalizeAccountRoles}=globalThis.__selfhostAuth;\n' + code));
   try {
     await auth.ensureInitialAccounts(); assert.equal(db.prepare('SELECT count(*) AS n FROM app_users').get().n, 2);
     const current = await auth.currentSession(request(await token({ role: 'Admin' })));
@@ -196,4 +197,49 @@ test('teams preserve existing accounts, enforce one team per user and survive re
     assert.equal((await teams.teamDirectory(adapter)).teams.length, 0);
     assert.equal(db.prepare('SELECT COUNT(*) AS n FROM app_users').get().n, 2);
   } finally { db.close(); }
+});
+
+
+test('multiple roles require an explicit active role, bind it to the verified Access session and enforce revocation', async () => {
+  const db = openDatabase(':memory:'); db.exec(fixtureSql()); migrateDatabase(db, { adoptCurrent: true });
+  db.prepare('INSERT INTO app_user_access VALUES (?,?)').run('u1', 'tech@example.com');
+  db.prepare('INSERT INTO app_user_access VALUES (?,?)').run('u2', 'admin@example.com');
+  const env = { DB: d1Adapter(db), PROCONECT_AUTH_MODE: 'cloudflare-access', PROCONECT_APP_URL: 'https://b2b.proconect.online', CF_ACCESS_TEAM_DOMAIN: issuer, CF_ACCESS_AUD: audience };
+  globalThis.__selfhostAuth = { env, ...roleCore, ...access, accessIdentity: (request, config) => access.accessIdentity(request, config, resolver) };
+  const code = (await source('app/server-auth.ts')).replace(/^import .*;$/gm, '');
+  const auth = await import(moduleUrl('const isolatedRolesModule = true;\nconst {env,accessConfiguration,accessIdentity,normalizedAccessEmail,normalizeAccountRoles}=globalThis.__selfhostAuth;\n' + code));
+  const jwt = await token();
+  const withCookie = (cookie = '', identity = jwt) => new Request('https://b2b.proconect.online/api/projects', { headers: { 'Cf-Access-Jwt-Assertion': identity, cookie } });
+  try {
+    const updated = await auth.setAccountRoles('tech', ['Tehnician', 'Coordonator']);
+    assert.deepEqual(updated.account.roles, ['Coordonator', 'Tehnician']);
+    assert.equal(await auth.currentSession(withCookie()), null);
+    const pending = await auth.currentSession(withCookie(), { allowRoleSelection: true });
+    assert.equal(pending.account.roleSelectionRequired, true);
+    assert.deepEqual(pending.account.roles, ['Coordonator', 'Tehnician']);
+    assert.equal((await auth.selectActiveRole(withCookie(), 'Admin')).status, 403);
+    assert.equal(await auth.currentSession(withCookie('proconect_role_session=Admin')), null);
+    const selected = await auth.selectActiveRole(withCookie(), 'Tehnician');
+    const cookie = selected.cookie.split(';')[0];
+    assert.match(selected.cookie, /HttpOnly; Secure; SameSite=Lax/);
+    assert.equal((await auth.currentSession(withCookie(cookie))).account.role, 'Tehnician');
+    assert.equal(await auth.currentSession(withCookie(cookie, await token({ nonce: 'another-login' }))), null);
+    const switched = await auth.selectActiveRole(withCookie(cookie), 'Coordonator');
+    const switchedCookie = switched.cookie.split(';')[0];
+    assert.equal((await auth.currentSession(withCookie(switchedCookie))).account.role, 'Coordonator');
+    assert.equal(await auth.currentSession(withCookie(cookie)), null);
+    await auth.setAccountRoles('tech', ['Manager', 'Tehnician']);
+    assert.equal(await auth.currentSession(withCookie(switchedCookie)), null);
+    const chosen = await auth.selectActiveRole(withCookie(), 'Tehnician');
+    const chosenCookie = chosen.cookie.split(';')[0];
+    await auth.signOut(withCookie(chosenCookie));
+    assert.equal(await auth.currentSession(withCookie(chosenCookie)), null);
+    assert.equal((await auth.setAccountRoles('admin', ['Tehnician'])).status, 409);
+    assert.equal(db.prepare("SELECT role FROM app_users WHERE id='u2'").get().role, 'Admin');
+    assert.equal((await auth.setAccountRoles('tech', [])).status, 400);
+    assert.equal((await auth.setAccountRoles('tech', ['Owner'])).status, 400);
+    assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM app_users WHERE ${auth.userRoleSql('Tehnician')}`).get().n, 1);
+    migrateDatabase(db);
+    assert.deepEqual((await auth.listAccounts()).find(user => user.username === 'tech').roles, ['Manager', 'Tehnician']);
+  } finally { delete globalThis.__selfhostAuth; db.close(); }
 });

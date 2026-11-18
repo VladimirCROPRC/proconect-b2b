@@ -48,11 +48,30 @@ export function migrateDatabase(db, { adoptCurrent = false, migrations = migrati
   );
   CREATE INDEX IF NOT EXISTS app_team_members_team_idx ON app_team_members(team_id);`);
   db.exec('CREATE TABLE IF NOT EXISTS app_user_access(user_id TEXT PRIMARY KEY REFERENCES app_users(id) ON DELETE CASCADE, email TEXT NOT NULL COLLATE NOCASE UNIQUE)');
+  db.exec(`CREATE TABLE IF NOT EXISTS app_user_roles(
+    user_id TEXT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+    role TEXT NOT NULL CHECK(role IN ('Admin','Manager','Coordonator','Tehnician')),
+    PRIMARY KEY(user_id,role)
+  );
+  INSERT OR IGNORE INTO app_user_roles(user_id,role)
+    SELECT id,role FROM app_users WHERE role IN ('Admin','Manager','Coordonator','Tehnician');
+  CREATE TABLE IF NOT EXISTS app_role_sessions(
+    token_hash TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+    identity_hash TEXT NOT NULL, active_role TEXT NOT NULL, expires_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS app_role_sessions_user_idx ON app_role_sessions(user_id);
+  CREATE TRIGGER IF NOT EXISTS app_roles_keep_last_admin BEFORE DELETE ON app_user_roles
+  WHEN OLD.role='Admin'
+    AND EXISTS (SELECT 1 FROM app_users WHERE id=OLD.user_id AND active=1)
+    AND NOT EXISTS (SELECT 1 FROM app_user_roles r JOIN app_users u ON u.id=r.user_id
+      WHERE r.role='Admin' AND u.active=1 AND u.id!=OLD.user_id)
+  BEGIN SELECT RAISE(ABORT,'LAST_ACTIVE_ADMIN'); END;`);
 }
 
 export function isolateCopy(db) {
   // These are local rows in the imported copy, never requests to either provider.
-  const tables = ['app_sessions', 'google_drive_oauth_states', 'google_drive_file_sync', 'google_drive_project_folders', 'google_drive_settings', 'onedrive_oauth_states', 'onedrive_jobs', 'onedrive_connection'];
+  const tables = ['app_role_sessions', 'app_sessions', 'google_drive_oauth_states', 'google_drive_file_sync', 'google_drive_project_folders', 'google_drive_settings', 'onedrive_oauth_states', 'onedrive_jobs', 'onedrive_connection'];
   db.exec('BEGIN IMMEDIATE');
   try { for (const table of tables) db.exec(`DELETE FROM ${table}`); db.exec('COMMIT'); }
   catch (error) { db.exec('ROLLBACK'); throw error; }

@@ -93,6 +93,33 @@ try {
   const changedFiles = unzipSync(new Uint8Array(await changedWorkbook.arrayBuffer()));
   assert.ok(!strFromU8(changedFiles['xl/worksheets/sheet2.xml']).includes('Coordinator added operation'));
 
+  const updateRoles = roles => fetch(origin + '/api/accounts', { method: 'PATCH', headers: headers(admin), body: JSON.stringify({ username: 'tech', roles }) });
+  assert.equal((await updateRoles(['Coordonator', 'Tehnician'])).status, 200);
+  const pendingRoles = await (await fetch(origin + '/api/auth', { headers: headers(technician) })).json();
+  assert.equal(pendingRoles.account.roleSelectionRequired, true);
+  assert.equal((await fetch(origin + '/api/projects', { headers: headers(technician) })).status, 401);
+  const chooseRole = (role, cookie = '') => fetch(origin + '/api/auth', { method: 'PUT', headers: { ...headers(technician), cookie }, body: JSON.stringify({ role }) });
+  assert.equal((await chooseRole('Admin')).status, 403);
+  const selectedRole = await chooseRole('Tehnician');
+  assert.equal(selectedRole.status, 200);
+  const techRoleCookie = selectedRole.headers.get('set-cookie').split(';')[0];
+  assert.equal((await fetch(origin + '/api/projects', { headers: { ...headers(technician), cookie: techRoleCookie } })).status, 200);
+  assert.equal((await fetch(origin + '/api/accounts?technicians=1', { headers: { ...headers(technician), cookie: techRoleCookie } })).status, 403);
+  const coordinatorRole = await chooseRole('Coordonator', techRoleCookie);
+  const coordinatorCookie = coordinatorRole.headers.get('set-cookie').split(';')[0];
+  const coordinatorHeaders = { ...headers(technician), cookie: coordinatorCookie };
+  assert.equal((await fetch(origin + '/api/accounts', { headers: coordinatorHeaders })).status, 403);
+  const technicianDirectory = await (await fetch(origin + '/api/accounts?technicians=1', { headers: coordinatorHeaders })).json();
+  assert.ok(technicianDirectory.accounts.some(user => user.username === 'tech'));
+  assert.equal((await fetch(origin + '/api/accounts', { method: 'PATCH', headers: coordinatorHeaders, body: JSON.stringify({ username: 'tech', roles: ['Admin'] }) })).status, 403);
+  const multiWorkbook = await fetch(origin + '/api/reporting-workbook?month=2026-11', { headers: headers(admin) });
+  const multiFiles = unzipSync(new Uint8Array(await multiWorkbook.arrayBuffer()));
+  assert.ok(strFromU8(multiFiles['xl/worksheets/sheet2.xml']).includes('Coordinator saved operation'));
+  assert.equal((await updateRoles(['Tehnician'])).status, 200);
+  const resetSession = await (await fetch(origin + '/api/auth', { headers: coordinatorHeaders })).json();
+  assert.equal(resetSession.account.role, 'Tehnician');
+  assert.equal(resetSession.account.roleSelectionRequired, false);
+
   const removeAccount = (username, confirmation = username, token = admin, originHeader = 'https://b2b.proconect.online') => fetch(origin + '/api/accounts', { method: 'DELETE', headers: { ...headers(token), Origin: originHeader }, body: JSON.stringify({ username, confirmation }) });
   assert.equal((await removeAccount('tech', 'tech', technician)).status, 403);
   assert.equal((await removeAccount('tech', 'tech', admin, 'https://attacker.test')).status, 403);

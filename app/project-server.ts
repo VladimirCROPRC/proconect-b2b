@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 import { getRawDb } from "../db";
 import { requiredInterventionCablePhotos, type InterventionDocumentationSummary, type InterventionExecutionActivity, type InterventionExecutionSummary, type InterventionJunction, type ProjectFieldDocumentation } from "./field-documentation";
 import { initialCpeCatalog, initialFieldDocumentation, initialProjects, type CpeCatalogItem, type ProjectActivityType, type ProjectRecord } from "./project-data";
-import { accessMode, type AuthenticatedAccount } from "./server-auth";
+import { accessMode, userRoleSql, type AuthenticatedAccount } from "./server-auth";
 
 type ProjectRow = {
   id: string;
@@ -245,7 +245,7 @@ export async function createProject(input: ProjectRecord, createdBy: Authenticat
   if (existing) return { error: activityType === "Intervenție" ? "Numărul tichetului există deja. Verifică valoarea introdusă." : "Request ID există deja. Verifică numărul introdus.", status: 409 as const };
 
   const technician = await getRawDb()
-    .prepare("SELECT username, name FROM app_users WHERE name = ? AND role = 'Tehnician' AND active = 1 LIMIT 1")
+    .prepare(`SELECT username, name FROM app_users WHERE name = ? AND ${userRoleSql("Tehnician")} AND active = 1 LIMIT 1`)
     .bind(input.technician)
     .first<{ username: string; name: string }>();
   if (!technician) return { error: "Tehnicianul selectat nu este disponibil.", status: 400 as const };
@@ -302,7 +302,7 @@ export async function updateProject(input: ProjectRecord) {
   const technician = input.technician.trim() === existing.technician
     ? { username: existing.technician_username, name: existing.technician }
     : await getRawDb()
-      .prepare("SELECT username, name FROM app_users WHERE name = ? AND role = 'Tehnician' AND active = 1 LIMIT 1")
+      .prepare(`SELECT username, name FROM app_users WHERE name = ? AND ${userRoleSql("Tehnician")} AND active = 1 LIMIT 1`)
       .bind(input.technician.trim())
       .first<{ username: string; name: string }>();
   if (!technician) return { error: "Tehnicianul selectat nu este disponibil.", status: 400 as const };
