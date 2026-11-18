@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { readOneDriveResponse } from "./onedrive-client";
 type Status = { configured: boolean; connected: boolean; mode: string; account: string; rootUrl: string; synced: number; pending: number; errors: { kind: string; item_id: string; last_error: string }[]; reporting?: { pending: boolean; error: string } | null };
 type Payload = Status & { error?: string; authorizationUrl?: string };
 export function OneDriveSettings() {
@@ -12,8 +13,7 @@ export function OneDriveSettings() {
   useEffect(() => {
     let mounted = true;
     fetch("/api/onedrive", { cache: "no-store" }).then(async response => {
-      const data = await response.json() as Payload;
-      if (!response.ok) throw new Error(data.error);
+      const data = await readOneDriveResponse<Payload>(response);
       if (mounted) setStatus(data);
     }).catch(e => { if (mounted) setError(e.message); });
     return () => { mounted = false; };
@@ -22,8 +22,7 @@ export function OneDriveSettings() {
     setBusy(true); setError(""); setNotice("");
     try {
       const response = await fetch("/api/onedrive", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: actionName, mode }) });
-      const data = await response.json() as Payload;
-      if (!response.ok) throw new Error(data.error);
+      const data = await readOneDriveResponse<Payload>(response);
       if (data.authorizationUrl) { window.location.assign(data.authorizationUrl); return; }
       setStatus(data as Status);
       if (actionName === "retry") setProcessing(true);
@@ -46,8 +45,7 @@ export function OneDriveSettings() {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "process" }), signal: controller.signal,
         });
-        const data = await response.json() as Payload;
-        if (!response.ok) throw new Error(data.error || "Actualizarea centralizatorului nu a reușit.");
+        const data = await readOneDriveResponse<Payload>(response);
         if (controller.signal.aborted) return;
         setStatus(data);
         if (!data.connected || data.mode === "google") throw new Error("Salvarea în OneDrive a fost oprită.");
@@ -76,8 +74,7 @@ export function OneDriveSettings() {
     async function next() {
       try {
         const response = await fetch("/api/onedrive", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "process" }) });
-        const data = await response.json() as Payload;
-        if (!response.ok) throw new Error(data.error);
+        const data = await readOneDriveResponse<Payload>(response);
         if (cancelled) return;
         setStatus(data);
         if (!data.pending) { setProcessing(false); return; }
