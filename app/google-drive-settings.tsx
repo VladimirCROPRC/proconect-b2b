@@ -167,11 +167,13 @@ export function GoogleDriveSettings({ initialStatus, onStatusChange, onNotify }:
   };
   const activityFolders = status?.activityFolders ?? {
     Instalare: "Instalari",
+    Deployment: "Deployment",
     "Intervenție": "Interventii",
     Survey: "Survey",
   };
   const activitySections = status?.activitySections ?? {
     Instalare: sections,
+    Deployment: Object.fromEntries(Object.entries(sections).map(([key, value]) => key === "client" ? ["site-a", "03_Operatiuni site A"] : [key, value])),
     "Intervenție": {
       "intervention-assessment": "01_Constatare",
       "intervention-execution": "02_Executie",
@@ -269,4 +271,3 @@ export function GoogleDriveSettings({ initialStatus, onStatusChange, onNotify }:
     </div>
   );
 }
-

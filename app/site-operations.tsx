@@ -25,6 +25,8 @@ type SiteTextField = "odf" | "odfPort" | "etn" | "etnPort";
 
 type Props = {
   project: SiteProject;
+  section?: "site" | "site-a";
+  title?: string;
   initialSummary?: SiteFieldSummary;
   onNotify: (message: string) => void;
   onSaved?: (summary: SiteFieldSummary) => Promise<void> | void;
@@ -44,7 +46,7 @@ const sitePhotoCatalog: Array<{ key: SitePhotoKey; badge: string; title: string;
   { key: "overview", badge: "360", title: "Foto ansamblu", description: "Fotografiază ansamblul instalației din site." },
 ];
 
-export function SiteOperationsSection({ project: projectItem, initialSummary, onNotify, onSaved }: Props) {
+export function SiteOperationsSection({ project: projectItem, initialSummary, onNotify, onSaved, section = "site", title = "Operațiuni site" }: Props) {
   const [operation, setOperation] = useState<SiteOperation>(emptyOperation);
   const [savedOperations, setSavedOperations] = useState<Record<string, SiteOperation>>({});
   const [noIntervention, setNoIntervention] = useState(false);
@@ -71,7 +73,7 @@ export function SiteOperationsSection({ project: projectItem, initialSummary, on
         setNoInterventionReason(initialSummary?.noInterventionReason ?? "");
       }
     });
-    fetchProjectFiles(projectItem.id, "site")
+    fetchProjectFiles(projectItem.id, section)
       .then((files) => {
         if (!active) return;
         const restoredPhotos = { ...restored.photos };
@@ -86,7 +88,7 @@ export function SiteOperationsSection({ project: projectItem, initialSummary, on
     return () => {
       active = false;
     };
-  }, [projectItem.id, initialSummary]);
+  }, [projectItem.id, initialSummary, section]);
 
   function updateField(field: SiteTextField, value: string) {
     setOperation((current) => ({ ...current, [field]: value }));
@@ -100,7 +102,7 @@ export function SiteOperationsSection({ project: projectItem, initialSummary, on
       photos: { ...current.photos, [key]: file.name },
     }));
     try {
-      const stored = await uploadProjectFile({ projectId: projectItem.id, section: "site", category: key, file });
+      const stored = await uploadProjectFile({ projectId: projectItem.id, section, category: key, file });
       setOperation((current) => ({ ...current, photos: { ...current.photos, [key]: stored.name } }));
     } catch (error) {
       setOperation((current) => ({ ...current, photos: { ...current.photos, [key]: "" } }));
@@ -183,7 +185,7 @@ export function SiteOperationsSection({ project: projectItem, initialSummary, on
       <section className="page-heading client-heading">
         <div>
           <p className="eyebrow">DOCUMENTAȚIE DIN TEREN</p>
-          <h1>Operațiuni site</h1>
+          <h1>{title}</h1>
           <p>Documentează punctele de conectare și cele 3 fotografii obligatorii din site.</p>
         </div>
         <div className="field-technician">
@@ -199,7 +201,7 @@ export function SiteOperationsSection({ project: projectItem, initialSummary, on
       </section>
 
       <NoInterventionControl
-        sectionLabel="Operațiuni site"
+        sectionLabel={title}
         noIntervention={noIntervention}
         reason={noInterventionReason}
         onSelectionChange={setNoIntervention}
@@ -291,3 +293,4 @@ export function SiteOperationsSection({ project: projectItem, initialSummary, on
     </div>
   );
 }
+

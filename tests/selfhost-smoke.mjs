@@ -42,6 +42,33 @@ try {
   assert.equal((await fetch(origin + '/api/auth', { method: 'POST', headers: headers(admin), body: JSON.stringify({ username: 'admin', password: 'ignored' }) })).status, 405);
   assert.equal((await fetch(origin + '/api/files/photo', { headers: headers(admin) })).status, 200);
   const image = await fetch(origin + '/api/files/photo', { headers: headers(admin) }); assert.equal(await image.text(), 'test');
+  const projectData = await (await fetch(origin + '/api/projects', { headers: headers(admin) })).json();
+  const deploymentInput = { ...projectData.projects[0], id: 'RID98765', activityType: 'Deployment', client: 'Deployment smoke', requirements: 'Site A deployment', technician: 'Technician', cpe: '' };
+  const createdDeployment = await fetch(origin + '/api/projects', { method: 'POST', headers: headers(admin), body: JSON.stringify({ project: deploymentInput }) });
+  assert.equal(createdDeployment.status, 201, await createdDeployment.clone().text());
+  const deployment = (await createdDeployment.json()).project;
+  assert.equal(deployment.activityType, 'Deployment');
+  assert.equal(deployment.cpe, '');
+  const deploymentUpdate = await fetch(origin + '/api/projects', { method: 'PATCH', headers: headers(admin), body: JSON.stringify({ project: { ...deployment, requirements: 'Updated site A' } }) });
+  assert.equal(deploymentUpdate.status, 200, await deploymentUpdate.clone().text());
+  const deploymentReload = await (await fetch(origin + '/api/projects', { headers: headers(technician) })).json();
+  assert.ok(deploymentReload.projects.some(project => project.id === deployment.id && project.activityType === 'Deployment' && project.requirements === 'Updated site A'));
+
+  const siteSummary = { odf: 'ODF-A', odfPort: '1', etn: 'ETN-A', etnPort: '2', photos: { odfPort: 'odf.jpg', etn: 'etn.jpg', overview: 'overview.jpg' } };
+  const saveDeploymentSite = (section, content) => fetch(origin + '/api/documentation', { method: 'PATCH', headers: headers(admin), body: JSON.stringify({ projectId: deployment.id, section, content }) });
+  assert.equal((await saveDeploymentSite('site-a', siteSummary)).status, 200);
+  assert.equal((await saveDeploymentSite('site', { ...siteSummary, odf: 'ODF-B' })).status, 200);
+  const savedDeployment = await (await fetch(origin + '/api/projects', { headers: headers(admin) })).json();
+  assert.equal(savedDeployment.fieldDocumentation[deployment.id]['site-a'].odf, 'ODF-A');
+  assert.equal(savedDeployment.fieldDocumentation[deployment.id].site.odf, 'ODF-B');
+  const siteAUpload = new FormData();
+  siteAUpload.set('projectId', deployment.id); siteAUpload.set('section', 'site-a'); siteAUpload.set('category', 'odfPort');
+  siteAUpload.set('file', new File(['photo'], 'site-a.jpg', { type: 'image/jpeg' }));
+  const uploadedSiteA = await fetch(origin + '/api/files', { method: 'POST', headers: { 'Cf-Access-Jwt-Assertion': admin, Origin: 'https://b2b.proconect.online' }, body: siteAUpload });
+  assert.equal(uploadedSiteA.status, 201, await uploadedSiteA.clone().text());
+  const siteAFiles = await (await fetch(origin + '/api/files?projectId=' + deployment.id + '&section=site-a', { headers: headers(admin) })).json();
+  assert.equal(siteAFiles.files[0].name, 'site-a.jpg');
+
   const ticket = await fetch(origin + '/api/orange-oroc', { method: 'POST', headers: headers(admin), body: JSON.stringify({ ticketNumber: 'FITT-SMOKE', workDate: '2026-11-09', servicePackageCode: 'SP2 FOA', technicianUsername: 'tech' }) });
   assert.equal(ticket.status, 201, await ticket.text());
   const list = await (await fetch(origin + '/api/orange-oroc', { headers: headers(technician) })).json(); assert.equal(list.tickets[0].ticketNumber, 'FITT-SMOKE');

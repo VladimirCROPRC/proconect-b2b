@@ -45,6 +45,7 @@ export async function POST(request: Request) {
     }
     const project = await getAuthorizedProject(projectId, session.account);
     if (!project) return Response.json({ error: "Proiect indisponibil." }, { status: 404 });
+    if (section === "site-a" && project.activity_type !== "Deployment") return Response.json({ error: "Site A este disponibil numai pentru Deployment." }, { status: 400 });
     if (section === "safety") {
       if (session.account.role !== "Tehnician") {
         return Response.json({ error: "Verificarea Pretask se completează de tehnicianul alocat lucrării." }, { status: 403 });

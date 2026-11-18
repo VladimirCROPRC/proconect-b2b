@@ -50,7 +50,7 @@ type StorageEnvironment = {
 };
 
 const storageEnvironment = env as unknown as StorageEnvironment;
-const fileSections = new Set(["project", "safety", "client", "route", "splices", "site", "documents", "intervention-assessment", "intervention-execution"]);
+const fileSections = new Set(["project", "safety", "client", "route", "splices", "site", "site-a", "documents", "intervention-assessment", "intervention-execution"]);
 const maximumUploadBytes = 20 * 1024 * 1024;
 
 function validWorkIdentifier(value: string, activityType: ProjectActivityType) {
@@ -227,7 +227,7 @@ export async function hasCompletedProjectSafety(projectId: string, account: Auth
 }
 
 export async function createProject(input: ProjectRecord, createdBy: AuthenticatedAccount) {
-  const activityType: ProjectActivityType = ["Instalare", "Intervenție", "Survey"].includes(input.activityType) ? input.activityType : "Instalare";
+  const activityType: ProjectActivityType = ["Instalare", "Intervenție", "Survey", "Deployment"].includes(input.activityType) ? input.activityType : "Instalare";
   const workId = typeof input.id === "string" ? input.id.trim().toUpperCase() : "";
   if (!validWorkIdentifier(workId, activityType)) {
     return {
@@ -284,7 +284,7 @@ export async function createProject(input: ProjectRecord, createdBy: Authenticat
 }
 
 export async function updateProject(input: ProjectRecord) {
-  const activityType: ProjectActivityType = ["Instalare", "Intervenție", "Survey"].includes(input.activityType) ? input.activityType : "Instalare";
+  const activityType: ProjectActivityType = ["Instalare", "Intervenție", "Survey", "Deployment"].includes(input.activityType) ? input.activityType : "Instalare";
   if (!validWorkIdentifier(input.id, activityType)) {
     return { error: activityType === "Intervenție" ? "Numărul tichetului nu este valid." : "Request ID-ul proiectului nu este valid.", status: 400 as const };
   }
@@ -318,7 +318,7 @@ export async function updateProject(input: ProjectRecord) {
   const project: ProjectRecord = {
     ...input,
     id: existing.id,
-    activityType: ["Instalare", "Intervenție", "Survey"].includes(input.activityType) ? input.activityType : existing.activity_type,
+    activityType: ["Instalare", "Intervenție", "Survey", "Deployment"].includes(input.activityType) ? input.activityType : existing.activity_type,
     client: input.client.trim(),
     address: input.address.trim(),
     contact: input.contact.trim(),
@@ -413,7 +413,7 @@ export async function deleteProject(projectId: string) {
 }
 
 export async function saveFieldDocumentation(projectId: string, section: string, content: unknown, account: AuthenticatedAccount) {
-  if (!["client", "route", "splices", "site", "intervention"].includes(section)) {
+  if (!["client", "route", "splices", "site", "site-a", "intervention"].includes(section)) {
     return { error: "Secțiunea de documentație nu este validă.", status: 400 as const };
   }
   const project = await getAuthorizedProject(projectId, account);
@@ -421,6 +421,7 @@ export async function saveFieldDocumentation(projectId: string, section: string,
   if (!(await hasCompletedProjectSafety(projectId, account))) {
     return { error: "Încarcă fotografiile Pretask și EIP înainte de accesarea lucrării.", status: 403 as const };
   }
+  if (section === "site-a" && project.activity_type !== "Deployment") return { error: "Site A este disponibil numai pentru Deployment.", status: 400 as const };
   let finalizedProject: ProjectRecord | undefined;
 
   if (section !== "intervention") {

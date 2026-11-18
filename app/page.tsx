@@ -19,8 +19,8 @@ import { accountHasRole, type AppRole } from "./account-roles";
 import { TeamManagement } from "./team-management";
 import { TechnicianReports } from "./technician-reports";
 
-type View = "orange-oroc" | "projects" | "interventions" | "surveys" | "intervention-workspace" | "intervention-execution" | "intervention-documentation" | "survey-workspace" | "team" | "cpe" | "drive" | "documents" | "client" | "route" | "splices" | "site";
-type ActivityListView = "projects" | "interventions" | "surveys";
+type View = "deployment" | "orange-oroc" | "projects" | "interventions" | "surveys" | "intervention-workspace" | "intervention-execution" | "intervention-documentation" | "survey-workspace" | "team" | "cpe" | "drive" | "documents" | "client" | "route" | "splices" | "site";
+type ActivityListView = "projects" | "interventions" | "surveys" | "deployment";
 type Modal = "project" | "edit-project" | "delete-project" | "account" | "access-email" | "account-roles" | "delete-account" | "cpe" | "edit-cpe" | null;
 type ServiceType = "Internet" | "VPN" | "Internet+OL" | "OL";
 type ClientPhotoKey = "report" | "speed" | "olTest" | "overview" | "detail" | "labels" | "grounding";
@@ -129,6 +129,10 @@ const activitySections: Record<ActivityListView, { type: ProjectActivityType; ti
     description: "Instalări B2B, trasee FO, suduri și operațiuni site.",
     createLabel: "Instalare nouă",
   },
+  deployment: {
+    type: "Deployment", title: "Deployment", singular: "deployment",
+    description: "Lucrări deployment, operațiuni site A, trasee FO și suduri.", createLabel: "Deployment nou",
+  },
   interventions: {
     type: "Intervenție",
     title: "Intervenții",
@@ -146,7 +150,7 @@ const activitySections: Record<ActivityListView, { type: ProjectActivityType; ti
 };
 
 function listViewForActivity(type: ProjectActivityType): ActivityListView {
-  return type === "Intervenție" ? "interventions" : type === "Survey" ? "surveys" : "projects";
+  return type === "Deployment" ? "deployment" : type === "Intervenție" ? "interventions" : type === "Survey" ? "surveys" : "projects";
 }
 
 function initials(name: string) {
@@ -368,8 +372,8 @@ export default function Home() {
   const isInterventionWorkspace = view === "intervention-workspace" || view === "intervention-execution" || view === "intervention-documentation";
   const isActivityWorkspace = isInterventionWorkspace || view === "survey-workspace";
   const isProjectView = isDocumentationView || view === "documents" || isActivityWorkspace;
-  const isActivityListView = view === "projects" || view === "interventions" || view === "surveys";
-  const currentListView: ActivityListView = view === "interventions" || isInterventionWorkspace
+  const isActivityListView = view === "projects" || view === "deployment" || view === "interventions" || view === "surveys";
+  const currentListView: ActivityListView = view === "deployment" || (isProjectView && activeProject.activityType === "Deployment") ? "deployment" : view === "interventions" || isInterventionWorkspace
     ? "interventions"
     : view === "surveys" || view === "survey-workspace"
       ? "surveys"
@@ -378,7 +382,9 @@ export default function Home() {
   const currentActivityProjects = useMemo(() => projects.filter((project) => project.activityType === currentActivitySection.type), [currentActivitySection.type, projects]);
   const formActivityType = editingProject?.activityType ?? currentActivitySection.type;
   const isInstallationForm = formActivityType === "Instalare";
-  const showInstallationNavigation = view === "projects" || isDocumentationView || (view === "documents" && activeProject.activityType === "Instalare");
+  const isDeployment = view === "deployment" || (isProjectView && activeProject.activityType === "Deployment");
+  const clientSectionLabel = isDeployment ? "Operațiuni site A" : "Client";
+  const showInstallationNavigation = ((view === "projects" || view === "deployment") && currentActivityProjects.length > 0) || isDocumentationView || (view === "documents" && (activeProject.activityType === "Instalare" || activeProject.activityType === "Deployment"));
   const displayedAccountName = currentAccount.name;
   const displayedAccountRole = currentAccount.role;
   const activeFieldDocumentation = fieldDocumentation[activeProject.id] ?? {};
@@ -970,7 +976,7 @@ export default function Home() {
     );
   }
 
-  async function persistFieldSection(section: "client" | "route" | "splices" | "site" | "intervention", content: ClientFieldSummary | RouteFieldSummary | SpliceFieldSummary | SiteFieldSummary | InterventionFieldSummary) {
+  async function persistFieldSection(section: "client" | "route" | "splices" | "site" | "site-a" | "intervention", content: ClientFieldSummary | RouteFieldSummary | SpliceFieldSummary | SiteFieldSummary | InterventionFieldSummary) {
     const projectId = activeProject.id;
     const response = await fetch("/api/documentation", {
       method: "PATCH",
@@ -1092,8 +1098,12 @@ export default function Home() {
       return;
     }
     let destinationProject = activeProject;
+    if (next === "projects" || next === "deployment") {
+      const activity = next === "deployment" ? "Deployment" : "Instalare";
+      destinationProject = projects.find(project => project.activityType === activity) ?? activeProject;
+    }
     if (next === "client" || next === "route" || next === "splices" || next === "site") {
-      const installation = activeProject.activityType === "Instalare"
+      const installation = (activeProject.activityType === "Instalare" || activeProject.activityType === "Deployment")
         ? activeProject
         : projects.find((project) => project.activityType === "Instalare");
       if (!installation?.id) {
@@ -1103,7 +1113,7 @@ export default function Home() {
       }
       destinationProject = installation;
     }
-    if (next === "projects" || next === "interventions" || next === "surveys") {
+    if (next === "projects" || next === "deployment" || next === "interventions" || next === "surveys") {
       setSearch("");
       setFilter("Toate statusurile");
     }
@@ -1205,6 +1215,7 @@ export default function Home() {
           <button className={view === "projects" ? "active" : ""} onClick={() => goTo("projects")}>
             <span className="nav-symbol">IN</span> Instalări
           </button>
+          <button className={view === "deployment" ? "active" : ""} onClick={() => goTo("deployment")}><span className="nav-symbol">DP</span> Deployment</button>
           <button className={view === "interventions" || isInterventionWorkspace ? "active" : ""} onClick={() => goTo("interventions")}>
             <span className="nav-symbol">IT</span> Intervenții
           </button>
@@ -1223,8 +1234,8 @@ export default function Home() {
             <span className="nav-symbol">GD</span> Drive și OneDrive
           </button>}
           {showInstallationNavigation && <>
-            <p>DOCUMENTAȚIE INSTALĂRI</p>
-            <button className={view === "client" ? "active" : ""} onClick={() => goTo("client")}><span className="nav-symbol">CL</span> Client</button>
+            <p>{isDeployment ? "DOCUMENTAȚIE DEPLOYMENT" : "DOCUMENTAȚIE INSTALĂRI"}</p>
+            <button className={view === "client" ? "active" : ""} onClick={() => goTo("client")}><span className="nav-symbol">CL</span> {clientSectionLabel}</button>
             <button className={view === "route" ? "active" : ""} onClick={() => goTo("route")}><span className="nav-symbol">TR</span> Traseu FO</button>
             <button className={view === "splices" ? "active" : ""} onClick={() => goTo("splices")}><span className="nav-symbol">SU</span> Suduri FO</button>
             <button className={view === "site" ? "active" : ""} onClick={() => goTo("site")}><span className="nav-symbol">ST</span> Operațiuni site</button>
@@ -1261,7 +1272,7 @@ export default function Home() {
             <img className="proconect-logo mobile-proconect-logo" src={proconectLogoUrl} alt="PRO CONECT" />
             <strong>B2B</strong>
           </button>
-          <div className="breadcrumb"><span>{view === "orange-oroc" ? "Activități" : isProjectView ? `${activitySections[listViewForActivity(activeProject.activityType)].title} · ${activeProject.id}` : "Management"}</span><b>/</b><strong>{view === "orange-oroc" ? "Orange/OROC" : view === "projects" ? "Instalări" : view === "interventions" ? "Intervenții" : view === "surveys" ? "Survey" : view === "intervention-workspace" ? "Constatare" : view === "intervention-execution" ? "Execuție" : view === "intervention-documentation" ? "Documentare" : view === "survey-workspace" ? "Fișa survey" : view === "team" ? "Echipă" : view === "cpe" ? "Echipamente CPE" : view === "drive" ? "Google Drive" : view === "client" ? "Client" : view === "route" ? "Traseu FO" : view === "splices" ? "Suduri FO" : view === "documents" ? "Documente" : "Operațiuni site"}</strong></div>
+          <div className="breadcrumb"><span>{view === "orange-oroc" ? "Activități" : isProjectView ? `${activitySections[listViewForActivity(activeProject.activityType)].title} · ${activeProject.id}` : "Management"}</span><b>/</b><strong>{view === "orange-oroc" ? "Orange/OROC" : view === "projects" ? "Instalări" : view === "deployment" ? "Deployment" : view === "interventions" ? "Intervenții" : view === "surveys" ? "Survey" : view === "intervention-workspace" ? "Constatare" : view === "intervention-execution" ? "Execuție" : view === "intervention-documentation" ? "Documentare" : view === "survey-workspace" ? "Fișa survey" : view === "team" ? "Echipă" : view === "cpe" ? "Echipamente CPE" : view === "drive" ? "Google Drive" : view === "client" ? clientSectionLabel : view === "route" ? "Traseu FO" : view === "splices" ? "Suduri FO" : view === "documents" ? "Documente" : "Operațiuni site"}</strong></div>
           <div className="top-actions">
             <button className="help-button" aria-label="Ajutor">?</button>
             <button className="bell" aria-label="Notificări">●<span>3</span></button>
@@ -1275,6 +1286,7 @@ export default function Home() {
           <nav className={`mobile-section-tabs${canManageDocuments ? " manager-tabs" : ""}`} aria-label="Secțiunile aplicației">
             <button className={view === "projects" ? "active" : ""} onClick={() => goTo("projects")}>Instalări</button>
             <button className={view === "interventions" ? "active" : ""} onClick={() => goTo("interventions")}>Intervenții</button>
+            <button className={view === "deployment" ? "active" : ""} onClick={() => goTo("deployment")}>Deployment</button>
             <button className={view === "surveys" ? "active" : ""} onClick={() => goTo("surveys")}>Survey</button>
             <button className={`orange-nav-button ${view === "orange-oroc" ? "active" : ""}`} onClick={() => goTo("orange-oroc")}>Orange/OROC</button>
             {canManageDocuments && <button className={view === "team" ? "active" : ""} onClick={() => goTo("team")}>Echipă</button>}
@@ -1297,8 +1309,8 @@ export default function Home() {
               <em className={statusClass[activeProject.status]}><i />{activeProject.status}</em>
             </div>
             <nav className="project-operation-tabs" aria-label="Operațiunile proiectului activ">
-              {activeProject.activityType === "Instalare" ? <>
-                <button className={view === "client" ? "active" : ""} onClick={() => goTo("client")}><span>1</span>Client</button>
+              {(activeProject.activityType === "Instalare" || activeProject.activityType === "Deployment") ? <>
+                <button className={view === "client" ? "active" : ""} onClick={() => goTo("client")}><span>1</span>{clientSectionLabel}</button>
                 <button className={view === "route" ? "active" : ""} onClick={() => goTo("route")} title="Traseu FO"><span>2</span>Traseu</button>
                 <button className={view === "splices" ? "active" : ""} onClick={() => goTo("splices")} title="Suduri FO"><span>3</span>Suduri</button>
                 <button className={view === "site" ? "active" : ""} onClick={() => goTo("site")}><span>4</span>Site</button>
@@ -1419,12 +1431,12 @@ export default function Home() {
           </div>
         )}
 
-        {view === "client" && (
+        {view === "client" && !isDeployment && (
           <div className="page-wrap client-page">
             <section className="page-heading client-heading">
               <div>
                 <p className="eyebrow">DOCUMENTAȚIE DIN TEREN</p>
-                <h1>Secțiunea client</h1>
+                <h1>{isDeployment ? "Operațiuni site A" : "Secțiunea client"}</h1>
                 <p>Confirmă serviciul, echipamentele instalate și documentația foto obligatorie.</p>
               </div>
               <div className="field-technician">
@@ -1452,13 +1464,13 @@ export default function Home() {
                     </label>
                     <div className="client-address">
                       <span className="location-pin">⌖</span>
-                      <div><small>LOCAȚIE CLIENT</small><strong>{activeProject.address}</strong><p>{activeProject.contact} · {activeProject.phone}</p></div>
+                      <div><small>{isDeployment ? "LOCAȚIE SITE A" : "LOCAȚIE CLIENT"}</small><strong>{activeProject.address}</strong><p>{activeProject.contact} · {activeProject.phone}</p></div>
                     </div>
                   </div>
                 </section>
 
                 <NoInterventionControl
-                  sectionLabel="secțiunea Client"
+                  sectionLabel={`secțiunea ${clientSectionLabel}`}
                   noIntervention={clientNoIntervention}
                   reason={clientNoInterventionReason}
                   onSelectionChange={setClientNoIntervention}
@@ -1482,7 +1494,7 @@ export default function Home() {
                     {activeProject.terminalBox && <article className="install-equipment"><span className="equipment-symbol">TB</span><div><small>TERMINAȚIE</small><strong>Terminal Box</strong></div><span className="install-state">De instalat</span></article>}
                     {activeProject.cpeRequiresGrounding && <div className={clientHasNoGroundingSystem ? "grounding-requirement exception" : "grounding-requirement"}>
                       <div><span className="grounding-icon">PE</span><p><strong>Împământare obligatorie</strong><small>{clientHasNoGroundingSystem ? "Excepția va fi inclusă automat în procesul-verbal." : "Conectează echipamentul și fotografiază clar împământarea."}</small></p></div>
-                      <label><input type="checkbox" checked={clientHasNoGroundingSystem} onChange={(event) => setClientHasNoGroundingSystem(event.target.checked)} /><span>Clientul nu dispune de sistem de împământare</span></label>
+                      <label><input type="checkbox" checked={clientHasNoGroundingSystem} onChange={(event) => setClientHasNoGroundingSystem(event.target.checked)} /><span>{isDeployment ? "Site-ul A nu dispune de sistem de împământare" : "Clientul nu dispune de sistem de împământare"}</span></label>
                       {clientHasNoGroundingSystem && <p className="grounding-warning">Mențiunea trebuie să apară în procesul-verbal înainte ca documentul să fie semnat de client.</p>}
                     </div>}
                   </div>
@@ -1595,14 +1607,15 @@ export default function Home() {
         {view === "drive" && canManageDocuments && <GoogleDriveSettings initialStatus={driveStatus} onStatusChange={setDriveStatus} onNotify={showToast} />}
         {view === "route" && <FoRouteSection project={activeProject} initialSummary={activeFieldDocumentation.route} onNotify={showToast} onSaved={saveRouteSummary} />}
         {view === "splices" && <FoSplicesSection project={activeProject} initialSummary={activeFieldDocumentation.splices} onNotify={showToast} onSaved={saveSpliceSummary} />}
-        {view === "site" && <SiteOperationsSection project={activeProject} initialSummary={activeFieldDocumentation.site} onNotify={showToast} onSaved={saveSiteSummary} />}
+        {view === "client" && isDeployment && <SiteOperationsSection key={`${activeProject.id}-site-a`} section="site-a" title="Operațiuni site A" project={activeProject} initialSummary={activeFieldDocumentation["site-a"]} onNotify={showToast} onSaved={summary => persistFieldSection("site-a", summary)} />}
+        {view === "site" && <SiteOperationsSection key={`${activeProject.id}-site`} project={activeProject} initialSummary={activeFieldDocumentation.site} onNotify={showToast} onSaved={saveSiteSummary} />}
         {view === "documents" && canManageDocuments && <ProjectDocumentsSection key={activeProject.id} project={activeProject} fieldData={activeFieldDocumentation} onNotify={showToast} />}
       </section>
 
       {modal && <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && closeModal()}>
         {(modal === "project" || modal === "edit-project") && (
           <form className="modal project-modal" onSubmit={modal === "edit-project" ? saveProjectChanges : createProject}>
-            <div className="modal-head"><div><span className="modal-kicker">{editingProject ? "EDITARE LUCRARE" : currentActivitySection.title.toUpperCase()}</span><h2>{editingProject ? `Actualizează ${editingProject.id}` : currentActivitySection.createLabel}</h2><p>{editingProject ? "Modificările se salvează permanent pentru lucrarea selectată." : isInstallationForm ? "Datele inițiale pentru instalarea B2B." : formActivityType === "Intervenție" ? "Datele și cerințele specifice intervenției." : "Datele și obiectivele vizitei de survey."}</p></div><button type="button" onClick={closeModal} aria-label="Închide">×</button></div>
+            <div className="modal-head"><div><span className="modal-kicker">{editingProject ? "EDITARE LUCRARE" : currentActivitySection.title.toUpperCase()}</span><h2>{editingProject ? `Actualizează ${editingProject.id}` : currentActivitySection.createLabel}</h2><p>{editingProject ? "Modificările se salvează permanent pentru lucrarea selectată." : formActivityType === "Deployment" ? "Datele inițiale pentru lucrarea Deployment." : isInstallationForm ? "Datele inițiale pentru instalarea B2B." : formActivityType === "Intervenție" ? "Datele și cerințele specifice intervenției." : "Datele și obiectivele vizitei de survey."}</p></div><button type="button" onClick={closeModal} aria-label="Închide">×</button></div>
             <div className="modal-body">
               <div className="form-section"><h3><span>1</span> {formActivityType === "Intervenție" ? "Date tichet și client" : "Date proiect și client"}</h3><div className="form-grid">
                 <input type="hidden" name="activityType" value={formActivityType} />
@@ -1628,11 +1641,11 @@ export default function Home() {
                   <label className="switch-card"><span><b>Terminal Box</b><small>Cutie terminală</small></span><input type="checkbox" name="terminalBox" defaultChecked={editingProject ? editingProject.terminalBox : true} /><i /></label>
                 </div></div>}
               </div></div>
-              {isInstallationForm && <div className="form-section"><h3><span>3</span> Documente</h3><div className="upload-grid">
+              {(isInstallationForm || formActivityType === "Deployment") && <div className="form-section"><h3><span>3</span> Documente</h3><div className="upload-grid">
                 <label className={ipwoName ? "upload-box has-file" : "upload-box"}><input type="file" accept=".pdf,.doc,.docx" onChange={(event) => { const file = event.target.files?.[0] ?? null; setIpwoFile(file); setIpwoName(file?.name ?? editingProject?.ipwo ?? ""); }} /><b>{ipwoName ? "✓" : "↑"}</b><strong>{ipwoName || "Încarcă IPWO"}</strong><small>{ipwoFile ? "Fișier nou selectat" : editingProject && ipwoName ? "Document existent · selectează pentru înlocuire" : "PDF sau DOC, max. 20 MB"}</small></label>
                 <label className={spliceName ? "upload-box has-file" : "upload-box"}><input type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={(event) => { const file = event.target.files?.[0] ?? null; setSpliceFile(file); setSpliceName(file?.name ?? editingProject?.splice ?? ""); }} /><b>{spliceName ? "✓" : "↑"}</b><strong>{spliceName || "Diagrama de suduri"}</strong><small>{spliceFile ? "Fișier nou selectat" : editingProject && spliceName ? "Document existent · selectează pentru înlocuire" : "PDF, PNG sau JPG, max. 20 MB"}</small></label>
               </div></div>}
-              <div className="drive-note"><span className="drive-mark"><i /><i /><i /></span><div><strong>{driveStatus?.connected ? "Google Drive conectat" : "Stocare securizată proiect"}</strong><p>{driveStatus?.connected ? <>Dosarul lucrării se creează automat în <b>{formActivityType === "Intervenție" ? "Interventii" : formActivityType === "Survey" ? "Survey" : "Instalari"}</b>.</> : <>Documentele sunt salvate permanent. Configurează <b>Google Drive</b> din secțiunea administrativă pentru sincronizare automată.</>}</p></div></div>
+              <div className="drive-note"><span className="drive-mark"><i /><i /><i /></span><div><strong>{driveStatus?.connected ? "Google Drive conectat" : "Stocare securizată proiect"}</strong><p>{driveStatus?.connected ? <>Dosarul lucrării se creează automat în <b>{formActivityType === "Deployment" ? "Deployment" : formActivityType === "Intervenție" ? "Interventii" : formActivityType === "Survey" ? "Survey" : "Instalari"}</b>.</> : <>Documentele sunt salvate permanent. Configurează <b>Google Drive</b> din secțiunea administrativă pentru sincronizare automată.</>}</p></div></div>
             </div>
             <div className="modal-actions"><button type="button" className="secondary-button" onClick={closeModal}>Anulează</button><button className="primary-button" type="submit" disabled={projectSaving}>{projectSaving ? "Se salvează..." : editingProject ? "Salvează modificările" : formActivityType === "Intervenție" ? "Creează intervenția" : "Generează proiectul"} <span>→</span></button></div>
           </form>
@@ -1687,14 +1700,14 @@ export default function Home() {
         {selectedSafetyComplete && <><div className="drawer-section"><small>CERINȚELE LUCRĂRII</small><p className="requirements-text">{selected.requirements}</p></div>
         <div className="drawer-section"><small>TEHNICIAN ALOCAT</small><div className="technician large"><span className="avatar">{initials(selected.technician)}</span><div><strong>{selected.technician}</strong><p>Programare: {selected.date}</p></div></div></div>
         {selected.activityType === "Instalare" && <div className="drawer-section"><small>ECHIPAMENTE</small><strong>{selected.cpe}</strong><div className="tag-row">{selected.cpeRequiresGrounding && <span>Împământare obligatorie</span>}{selected.sfp && <span>SFP</span>}{selected.mc && <span>MC</span>}{selected.terminalBox && <span>Terminal Box</span>}</div></div>}
-        {selected.activityType === "Instalare" && <div className="drawer-section"><small>DOCUMENTE</small><button className="file-row" onClick={() => void openProjectFile(selected.id, "ipwo")}><span>PDF</span><div><strong>{selected.ipwo}</strong><small>IPWO</small></div><b>↗</b></button><button className="file-row" onClick={() => void openProjectFile(selected.id, "splice-diagram")}><span>FO</span><div><strong>{selected.splice}</strong><small>Diagramă suduri</small></div><b>↗</b></button></div>}
+        {(selected.activityType === "Instalare" || selected.activityType === "Deployment") && <div className="drawer-section"><small>DOCUMENTE</small><button className="file-row" onClick={() => void openProjectFile(selected.id, "ipwo")}><span>PDF</span><div><strong>{selected.ipwo}</strong><small>IPWO</small></div><b>↗</b></button><button className="file-row" onClick={() => void openProjectFile(selected.id, "splice-diagram")}><span>FO</span><div><strong>{selected.splice}</strong><small>Diagramă suduri</small></div><b>↗</b></button></div>}
         <div className="drive-folder"><span className="folder-icon">▰</span><div><small>{driveStatus?.folders[selected.id] ? "GOOGLE DRIVE" : "STOCARE SECURIZATĂ"}</small><strong>Dosar {selected.id}</strong></div>{driveStatus?.folders[selected.id] ? <a className="drive-folder-open" href={driveStatus.folders[selected.id]} target="_blank" rel="noreferrer" aria-label={`Deschide dosarul Google Drive ${selected.id}`}>↗</a> : <span>✓</span>}</div></>}
         <div className="drawer-project-actions">
           <button className="primary-button" onClick={() => openProject(selected)}>{selectedSafetyComplete ? selected.activityType === "Intervenție" ? "Deschide intervenția" : "Deschide proiectul" : "Completează Pretask și EIP"} <span>→</span></button>
           {canManageDocuments && <button className="secondary-button" onClick={() => openProjectEditor(selected)}>{selected.activityType === "Intervenție" ? "Editează intervenția" : "Editează proiectul"}</button>}
           {canManageDocuments && selected.activityType !== "Survey" && <button className="secondary-button" onClick={() => openProjectDocuments(selected)}>Documente administrative</button>}
           {canManageDocuments && <button className="secondary-button" style={{ color: "#b42336", borderColor: "#ecc8cc" }} onClick={() => openProjectDeletion(selected)}>{selected.activityType === "Intervenție" ? "Șterge intervenția" : "Șterge proiectul"}</button>}
-          <small>{selected.activityType === "Instalare" ? "Client, traseu, suduri, operațiuni site și închiderea proiectului" : selected.activityType === "Intervenție" ? "Constatare, execuție și documentarea intervenției" : "Fișă și obiective dedicate survey-ului"}</small>
+          <small>{(selected.activityType === "Instalare" || selected.activityType === "Deployment") ? selected.activityType === "Deployment" ? "Operațiuni site A, traseu, suduri și operațiuni site" : "Client, traseu, suduri, operațiuni site și închiderea proiectului" : selected.activityType === "Intervenție" ? "Constatare, execuție și documentarea intervenției" : "Fișă și obiective dedicate survey-ului"}</small>
         </div>
       </aside></div>}
 

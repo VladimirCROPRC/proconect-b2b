@@ -1,6 +1,6 @@
 import type { ProjectFieldDocumentation } from "./field-documentation";
 
-export type ProjectActivityType = "Instalare" | "Intervenție" | "Survey";
+export type ProjectActivityType = "Instalare" | "Intervenție" | "Survey" | "Deployment";
 
 export type CpeCatalogItem = {
   name: string;

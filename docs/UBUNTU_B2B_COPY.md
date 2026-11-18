@@ -233,3 +233,8 @@ permis în Cloudflare, contul șters nu mai are acces în aplicație.
 După autentificarea Cloudflare Access, conturile cu mai multe roluri aleg rolul activ. „Schimbă rolul” permite o nouă alegere în timpul sesiunii. Permisiunile API sunt verificate pentru rolul activ, iar un rol retras de administrator nu mai poate fi folosit. Conturile cu un singur rol intră direct în aplicație. Nu se poate retrage rolul ultimului administrator activ.
 
 Un utilizator care are atribuit și rolul Tehnician apare în listele pentru alocarea lucrărilor și în centralizatoarele lunare, inclusiv atunci când are și rol de Coordonator sau Manager.
+
+
+### Deployment
+
+Secțiunea Deployment păstrează lucrările separat de Instalări, cu același flux de alocare, Pretask/EIP, traseu FO, suduri și documente, fără CPE. „Operațiuni site A” folosește același formular ODF/eTN și aceleași trei fotografii ca „Operațiuni site”. Datele și fotografiile site A sunt salvate separat, în secțiunea `site-a`, fără a suprascrie secțiunea `site`. Identificatorii RID rămân unici pentru toate tipurile de lucrări.

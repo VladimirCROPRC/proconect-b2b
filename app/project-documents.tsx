@@ -82,7 +82,11 @@ function buildReport(project: DocumentProject, fieldData: ProjectFieldDocumentat
     ...(project.mc ? ["Media Converter"] : []),
     ...(project.terminalBox ? ["Terminal Box"] : []),
   ];
-  const clientLines = fieldData.client?.noIntervention
+  const siteA = fieldData["site-a"];
+  const clientLines = project.activityType === "Deployment"
+    ? siteA?.noIntervention ? [`Nu s-a intervenit la site A. Motiv: ${siteA.noInterventionReason}.`]
+      : siteA ? [`Site A: ODF ${siteA.odf}, port ${siteA.odfPort} → eTN ${siteA.etn}, port ${siteA.etnPort}.`] : ["Operațiunile site A nu au fost documentate încă."]
+    : fieldData.client?.noIntervention
     ? [`Nu s-a intervenit la client. Motiv: ${fieldData.client.noInterventionReason}.`]
     : [
         `S-a instalat și configurat echipamentul ${equipment[0] || project.cpe}.`,
@@ -260,7 +264,7 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
               </section>
               {(["route", "client"] as const).map((section) => (
                 <section className="editable-report-section" key={section}>
-                  <h2>{section === "route" ? "Traseu" : "Client"}</h2>
+                  <h2>{section === "route" ? "Traseu" : project.activityType === "Deployment" ? "Operațiuni site A" : "Client"}</h2>
                   <textarea value={report[section]} onChange={(event) => updateReport(section, event.target.value)} rows={Math.max(2, report[section].split("\n").length + 1)} aria-label={`Conținut secțiune ${section}`} />
                   <small>Fiecare rând este inclus ca punct distinct în raport.</small>
                 </section>
