@@ -28,6 +28,10 @@ function column(index: number) {
   return name;
 }
 
+function shortDate(date: string) {
+  return `${date.slice(8, 10)}.${date.slice(5, 7)}`;
+}
+
 export function validReportingMonth(month: string) {
   return /^\d{4}-(0[1-9]|1[0-2])$/.test(month);
 }
@@ -69,7 +73,13 @@ export function reportingSheets(technicians: ReportingTechnician[], entries: Rep
     const own = entries.filter(entry => entry.username === technician.username);
     const positions = new Map(defaults.map(item => [positionKey(item), item]));
     for (const entry of own) positions.set(positionKey(entry), entry);
-    const works = [...new Set(own.map(entry => JSON.stringify([entry.source, entry.workId, entry.date])))].sort();
+    const works = [...new Set(own.map(entry => JSON.stringify([entry.source, entry.workId, entry.date])))].sort((first, second) => {
+      const [firstSource, firstId, firstDate] = JSON.parse(first) as string[];
+      const [secondSource, secondId, secondDate] = JSON.parse(second) as string[];
+      return firstDate.localeCompare(secondDate)
+        || firstId.localeCompare(secondId, "ro", { numeric: true })
+        || firstSource.localeCompare(secondSource);
+    });
     const workCount = Math.max(1, works.length);
     const lastColumn = column(6 + workCount);
     const rows: ExcelCell[][] = [];
@@ -115,8 +125,8 @@ export function reportingSheets(technicians: ReportingTechnician[], entries: Rep
     rows.push(daily);
     const headers = ["Furnizor", "Poziție / cod", "Manoperă / pachet", "UM", "Tarif EUR fără TVA", "Cantitate totală", "Valoare confirmată EUR"];
     for (const work of works) {
-      const [source, id, date] = JSON.parse(work) as string[];
-      headers.push(`${id}\n${date}\n${source}`);
+      const [, id, date] = JSON.parse(work) as string[];
+      headers.push(`${id}\n${shortDate(date)}`);
     }
     if (!works.length) headers.push("Lucrare / tichet\nData execuției");
     technicianSheets.push({
@@ -150,7 +160,7 @@ export function reportingSheets(technicians: ReportingTechnician[], entries: Rep
   summaries.push(totals);
   return [{
     name: "Centralizator", title: `Realizări tehnicieni${month ? ` · ${month}` : ""} · Vodafone și Orange/OROC`, subtitle: "",
-    headers: ["Tehnician", "Username", "Vodafone EUR", "Orange/OROC EUR", "Total confirmat EUR", "Poziții cu tarif lipsă", ...dates],
+    headers: ["Tehnician", "Username", "Vodafone EUR", "Orange/OROC EUR", "Total confirmat EUR", "Poziții cu tarif lipsă", ...dates.map(shortDate)],
     widths: [27, 25, 22, 23, 25, 26, ...dates.map(() => 22)], rows: summaries,
     moneyColumns: [2, 3, 4, ...dates.map((_, index) => index + 6)], numericColumns: [5], dataRowCount: technicians.length,
   }, ...technicianSheets];

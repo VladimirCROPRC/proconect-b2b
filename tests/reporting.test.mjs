@@ -66,3 +66,21 @@ test('monthly workbooks use execution month, keep separate totals and reflect co
   assert.throws(() => reportingFilename('2026-13'), /invalidă/);
   assert.throws(() => reportingSheets([tech], all, '../2026-11'), /invalidă/);
 });
+
+test('work columns sort chronologically across providers and keep their quantities and daily totals aligned', () => {
+  const rows = [
+    { ...entry, workId: 'RID2', date: '2026-11-12', quantity: 2 },
+    { ...entry, workId: 'RID20', date: '2026-11-01', quantity: 4 },
+    { ...entry, workId: 'RID10', date: '2026-11-10', quantity: 3 },
+    { ...entry, workId: 'RID3', date: '2026-11-01', quantity: 1 },
+    { ...entry, source: 'Orange/OROC', code: 'SP2 FOA', workId: 'FITT9', date: '2026-11-01', price: 300, quantity: 1 },
+  ];
+  const [summary, technician] = reportingSheets([tech], rows, '2026-11');
+  assert.deepEqual(technician.headers.slice(7), ['FITT9\n01.11', 'RID3\n01.11', 'RID20\n01.11', 'RID10\n10.11', 'RID2\n12.11']);
+  const operation = technician.rows.find(row => row[0] === 'Vodafone' && row[2] === entry.name);
+  assert.deepEqual(operation.slice(7), [0, 1, 4, 3, 2]);
+  assert.deepEqual(technician.rows.at(-1).slice(7).map(cell => cell.value), [300, 12.5, 50, 37.5, 25]);
+  assert.deepEqual(summary.headers.slice(6), ['01.11', '10.11', '12.11']);
+  assert.deepEqual(summary.rows[0].slice(6).map(cell => cell.value), [362.5, 37.5, 25]);
+  assert.equal(summary.rows[0][4].value, 425);
+});
