@@ -12,6 +12,8 @@ export type BudgetSuggestion = {
   evidence: string;
   selected: boolean;
   note?: string;
+  catalog?: "deployment-nd";
+  night?: boolean;
 };
 
 export function catalogSuggestion(id: string, row: number | undefined, quantity: number, evidence: string, pendingName = "Alege poziția BoQ"): BudgetSuggestion {

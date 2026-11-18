@@ -238,3 +238,9 @@ Un utilizator care are atribuit și rolul Tehnician apare în listele pentru alo
 ### Deployment
 
 Secțiunea Deployment păstrează lucrările separat de Instalări, cu același flux de alocare, Pretask/EIP, traseu FO, suduri și documente, fără CPE. „Operațiuni site A” folosește același formular ODF/eTN și aceleași trei fotografii ca „Operațiuni site”. Datele și fotografiile site A sunt salvate separat, în secțiunea `site-a`, fără a suprascrie secțiunea `site`. Identificatorii RID rămân unici pentru toate tipurile de lucrări.
+
+### Deviz Deployment — ND FO
+
+Deployment folosește catalogul și modelul original `BoQ_ND_FO.xlsx` (Table 1), independent de devizul VBTS din Instalări. Codurile, descrierile și tarifele provin din acest model. Din cele 166 de poziții, 22 au tariful necompletat: sunt afișate ca atare și nu se pot selecta pentru facturare. Un serviciu inclus în altă poziție sau furnizat de beneficiar poate fi marcat „Inclus”, cu justificare.
+
+Bifa „Noapte +25%” aplică formula modelului NIGHT=Yes. Alegerea se aplică tuturor liniilor aceleiași poziții, deoarece modelul are un singur rând pentru fiecare poziție. Exportul agregă cantitățile pe poziție în coloana G, setează NIGHT în H și actualizează totalurile J și G6, păstrând tarifele I, formulele, traducerile și formatul sursei. Serverul recalculează tarifele din catalog, fără a accepta prețuri trimise de browser.

@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { spawn } from 'node:child_process';
+import { stripTypeScriptTypes } from 'node:module';
 import { generateKeyPair, exportJWK, SignJWT } from 'jose';
 import { unzipSync, strFromU8 } from 'fflate';
 import { openDatabase } from '../server/selfhost/sqlite.mjs';
@@ -61,6 +62,22 @@ try {
   const savedDeployment = await (await fetch(origin + '/api/projects', { headers: headers(admin) })).json();
   assert.equal(savedDeployment.fieldDocumentation[deployment.id]['site-a'].odf, 'ODF-A');
   assert.equal(savedDeployment.fieldDocumentation[deployment.id].site.odf, 'ODF-B');
+  const moduleUrl = code => 'data:text/javascript;base64,' + Buffer.from(stripTypeScriptTypes(code, { mode: 'transform', disableExperimentalWarning: true })).toString('base64');
+  const source = path => readFile(new URL('../' + path, import.meta.url), 'utf8');
+  const oldCatalogUrl = moduleUrl(await source('app/boq-catalog.ts'));
+  const ndCatalogUrl = moduleUrl(await source('app/deployment-catalog.ts'));
+  const oldBudgetUrl = moduleUrl((await source('app/project-budget.ts')).replace('"./boq-catalog"', JSON.stringify(oldCatalogUrl)));
+  const ndCode = (await source('app/deployment-budget.ts')).replace('"./boq-catalog"', JSON.stringify(oldCatalogUrl)).replace('"./deployment-catalog"', JSON.stringify(ndCatalogUrl)).replace('"./project-budget"', JSON.stringify(oldBudgetUrl));
+  const ndBudget = await import(moduleUrl(ndCode));
+  const ndExpected = ndBudget.buildDeploymentBudget(savedDeployment.fieldDocumentation[deployment.id]);
+  const saveNd = (rows, token = admin) => fetch(origin + '/api/estimates', { method: 'PATCH', headers: headers(token), body: JSON.stringify({ projectId: deployment.id, rows, source: JSON.stringify(ndExpected) }) });
+  assert.equal((await saveNd(ndExpected.map(row => ({ ...row, catalog: undefined })))).status, 400);
+  assert.equal((await saveNd(ndExpected.map(row => ({ ...row, catalogPosition: '15' })))).status, 400);
+  assert.equal((await saveNd(ndExpected, technician)).status, 403);
+  const ndSaved = await saveNd(ndExpected.map(row => ({ ...row, night: true, unitPrice: 999 })));
+  assert.equal(ndSaved.status, 200, await ndSaved.clone().text());
+  assert.ok((await ndSaved.json()).rows.every(row => Math.abs(row.unitPrice - 6.6) < 1e-9));
+
   const siteAUpload = new FormData();
   siteAUpload.set('projectId', deployment.id); siteAUpload.set('section', 'site-a'); siteAUpload.set('category', 'odfPort');
   siteAUpload.set('file', new File(['photo'], 'site-a.jpg', { type: 'image/jpeg' }));
