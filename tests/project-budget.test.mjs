@@ -198,3 +198,11 @@ test('estimate API restricts access, validates source coverage and persists cano
     assert.equal((await api.PATCH(request())).status, 401);
   } finally { delete globalThis.__budgetApi; }
 });
+
+test('Deployment keeps site A and existing site operations as separate budget suggestions', () => {
+  const site = { odf: 'ODF', odfPort: '1', etn: 'ETN', etnPort: '2', photos: {} };
+  const rows = budget.buildBudgetSuggestions({ 'site-a': site, site: { ...site, odf: 'ODF-B' } });
+  assert.ok(rows.some(row => row.id === 'site-a-patch' && row.evidence.includes('Site A')));
+  assert.ok(rows.some(row => row.id === 'site-patch' && row.evidence.includes('ODF-B')));
+  assert.ok(!budget.buildBudgetSuggestions({ 'site-a': { ...site, noIntervention: true } }).some(row => row.id === 'site-a-patch'));
+});

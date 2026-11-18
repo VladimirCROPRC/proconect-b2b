@@ -3,10 +3,10 @@ import { getRawDb } from "../db";
 import { bucket, getFileRow } from "./project-server";
 import { base64url, decode64, fixedOrigin, retryDelay, safeName, usesOneDrive, validMode, type BackupMode } from "./onedrive-core";
 
-type Environment = { PROCONECT_APP_URL?: string; ONEDRIVE_CLIENT_ID?: string; ONEDRIVE_TENANT_ID?: string; ONEDRIVE_CLIENT_SECRET?: string; ONEDRIVE_ENCRYPTION_KEY?: string };
+type Environment = { PROCONECT_REPORTING_ENABLED?: string; ONEDRIVE_FOLDER_URL?: string; PROCONECT_APP_URL?: string; ONEDRIVE_CLIENT_ID?: string; ONEDRIVE_TENANT_ID?: string; ONEDRIVE_CLIENT_SECRET?: string; ONEDRIVE_ENCRYPTION_KEY?: string };
 type Connection = { mode: BackupMode; generation: string; access_token: string; refresh_token: string; expires_at: number; drive_id: string; root_id: string; root_url: string; account: string; owner_id: string; lease: string; lease_until: number };
-type Job = { id: string; kind: "file" | "project"; item_id: string; revision: number; attempts: number };
-type Item = { id: string; webUrl?: string; folder?: object; driveType?: string; owner?: { user?: { id?: string; displayName?: string; email?: string } } };
+type Job = { id: string; kind: "file" | "project" | "reporting"; item_id: string; revision: number; attempts: number };
+type Item = { id: string; parentReference?: { driveId?: string }; webUrl?: string; folder?: object; driveType?: string; owner?: { user?: { id?: string; displayName?: string; email?: string } } };
 const encoder = new TextEncoder();
 const settingsId = "onedrive";
 const scope = "offline_access https://graph.microsoft.com/Files.ReadWrite";
@@ -17,7 +17,7 @@ export function oneDriveConfigured() {
 }
 function config() {
   const e = environment();
-  if (!oneDriveConfigured()) throw new Error("Configurează variabilele OneDrive în Cloudflare înainte de conectare.");
+  if (!oneDriveConfigured()) throw new Error("Configurează variabilele OneDrive ale aplicației înainte de conectare.");
   const guid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
   if (!guid.test(e.ONEDRIVE_CLIENT_ID!) || !guid.test(e.ONEDRIVE_TENANT_ID!) || !/^[a-f0-9]{64}$/i.test(e.ONEDRIVE_ENCRYPTION_KEY!)) throw new Error("Configurarea OneDrive nu este validă.");
   return { client: e.ONEDRIVE_CLIENT_ID!, tenant: e.ONEDRIVE_TENANT_ID!, secret: e.ONEDRIVE_CLIENT_SECRET!, key: e.ONEDRIVE_ENCRYPTION_KEY!, origin: fixedOrigin(e.PROCONECT_APP_URL!) };
@@ -58,7 +58,9 @@ async function exchange(parameters: URLSearchParams) {
   return tokens;
 }
 async function graph(token: string, path: string, options: RequestInit = {}) {
-  if (!path.startsWith("/me/drive")) throw new Error("Adresă Graph nepermisă.");
+  const ownDrive = path === "/me/drive" || path.startsWith("/me/drive/");
+  const sharedFolder = /^\/shares\/u![A-Za-z0-9_-]+\/driveItem$/.test(path) && (!options.method || options.method === "GET");
+  if (!ownDrive && !sharedFolder) throw new Error("Adresă Graph nepermisă.");
   const headers = new Headers(options.headers); headers.set("Authorization", `Bearer ${token}`);
   return fetch(`https://graph.microsoft.com/v1.0${path}`, { ...options, headers, redirect: "error", signal: AbortSignal.timeout(8000) });
 }
@@ -101,8 +103,25 @@ export async function finishOneDrive(sessionId: string, state: string, code: str
   if (drive.driveType !== "business" || !drive.id) throw new Error("Conectează contul OneDrive de serviciu Microsoft 365.");
   const existing = await connection();
   if (existing?.drive_id && existing.drive_id !== drive.id) throw new Error("Este conectat alt OneDrive. Deconectează-l explicit înainte de schimbarea contului.");
-  const root = await checked(await graph(tokens.access_token!, "/me/drive/root"));
-  const destination = await folder(tokens.access_token!, root.id, "Proconect B2B");
+  const sharedUrl = environment().ONEDRIVE_FOLDER_URL?.trim();
+  let destination: Item;
+  if (sharedUrl) {
+    const url = new URL(sharedUrl);
+    if (url.protocol !== "https:" || !url.hostname.endsWith(".sharepoint.com") || url.username || url.password) {
+      throw new Error("Introdu un link HTTPS către un folder SharePoint.");
+    }
+    const shareId = "u!" + base64url(encoder.encode(sharedUrl));
+    destination = await checked(await graph(tokens.access_token!, `/shares/${encodeURIComponent(shareId)}/driveItem`));
+    if (!destination.id || !destination.folder || destination.parentReference?.driveId !== drive.id) {
+      throw new Error("Conectează contul Microsoft 365 care deține folderul indicat.");
+    }
+  } else {
+    const root = await checked(await graph(tokens.access_token!, "/me/drive/root"));
+    destination = await folder(tokens.access_token!, root.id, "Proconect B2B");
+  }
+  if (existing?.root_id && existing.root_id !== destination.id) {
+    throw new Error("Deconectează OneDrive înainte de schimbarea folderului.");
+  }
   const generation = crypto.randomUUID();
   await getRawDb().prepare("INSERT INTO onedrive_connection (id, mode, generation, access_token, refresh_token, expires_at, drive_id, root_id, root_url, account, owner_id, lease, lease_until) VALUES (?, 'google', ?, ?, ?, ?, ?, ?, ?, ?, ?, '', 0) ON CONFLICT(id) DO UPDATE SET generation = excluded.generation, access_token = excluded.access_token, refresh_token = excluded.refresh_token, expires_at = excluded.expires_at, drive_id = excluded.drive_id, root_id = excluded.root_id, root_url = excluded.root_url, account = excluded.account, owner_id = excluded.owner_id, lease = '', lease_until = 0")
     .bind(settingsId, generation, await seal(tokens.access_token!), await seal(tokens.refresh_token), Date.now() + (tokens.expires_in ?? 3600) * 1000, drive.id, destination.id, destination.webUrl ?? "", drive.owner?.user?.email ?? drive.owner?.user?.displayName ?? "OneDrive Microsoft 365", drive.owner?.user?.id ?? "").run();
@@ -146,7 +165,45 @@ export async function oneDriveStatus() {
   const c = await connection();
   const counts = await getRawDb().prepare("SELECT SUM(CASE WHEN done_revision = revision THEN 1 ELSE 0 END) AS synced, SUM(CASE WHEN done_revision < revision THEN 1 ELSE 0 END) AS pending FROM onedrive_jobs").first<{ synced: number; pending: number }>();
   const errors = await getRawDb().prepare("SELECT kind, item_id, last_error FROM onedrive_jobs WHERE last_error != '' ORDER BY next_at LIMIT 10").all();
-  return { configured, connected: Boolean(c?.refresh_token), mode: c?.mode ?? "google", account: c?.account ?? "", rootUrl: c?.root_url ?? "", synced: counts?.synced ?? 0, pending: counts?.pending ?? 0, errors: errors.results ?? [] };
+  const reports = await getRawDb().prepare("SELECT item_id,revision,done_revision,last_error FROM onedrive_jobs WHERE kind='reporting' ORDER BY item_id")
+    .all<{ item_id: string; revision: number; done_revision: number; last_error: string }>();
+  const reportingRows = reports.results ?? [];
+  const failedReport = reportingRows.find(row => row.last_error);
+  return { configured, connected: Boolean(c?.refresh_token), mode: c?.mode ?? "google", account: c?.account ?? "", rootUrl: c?.root_url ?? "", synced: counts?.synced ?? 0, pending: counts?.pending ?? 0, errors: errors.results ?? [],
+    reporting: reportingRows.length ? { pending: reportingRows.some(row => row.done_revision < row.revision),
+      error: failedReport ? `${failedReport.item_id}: ${failedReport.last_error}` : "" } : null };
+}
+
+async function queueMonthlyReporting(state?: { signature: string; dailyDate: string }, now = Date.now()) {
+  const { reportingMonths } = await import("./reporting-server");
+  const db = getRawDb();
+  const known = await db.prepare("SELECT month FROM app_reporting_months ORDER BY month").all<{ month: string }>();
+  // Remember exported months even after all their records are removed or moved
+  // to another month, so a refresh can also clear their previous totals.
+  const months = [...new Set([...(await reportingMonths(now)), ...(known.results ?? []).map(row => row.month)])]
+    .filter(month => /^\d{4}-(0[1-9]|1[0-2])$/.test(month)).sort();
+  const statements = [db.prepare("DELETE FROM onedrive_jobs WHERE id='reporting:centralizator'")];
+  for (const month of months) {
+    statements.push(db.prepare("INSERT OR IGNORE INTO app_reporting_months(month) VALUES (?)").bind(month));
+    statements.push(db.prepare(`INSERT INTO onedrive_jobs(id,kind,item_id,revision,done_revision,attempts,next_at,last_error)
+      VALUES (?,'reporting',?,1,0,0,0,'') ON CONFLICT(id) DO UPDATE SET revision=revision+1,attempts=0,next_at=0,last_error=''`)
+      .bind(`reporting:${month}`, month));
+  }
+  if (state) {
+    statements.push(db.prepare(`INSERT INTO app_reporting_state(id,signature,daily_date) VALUES ('centralizator',?,?)
+      ON CONFLICT(id) DO UPDATE SET signature=excluded.signature,daily_date=excluded.daily_date`)
+      .bind(state.signature, state.dailyDate));
+  }
+  await db.batch(statements);
+}
+
+export async function refreshReportingNow() {
+  const c = await connection();
+  if (!oneDriveConfigured() || !c?.refresh_token || !usesOneDrive(c.mode)) {
+    throw new Error("Conectează OneDrive și selectează-l ca destinație pentru salvare.");
+  }
+  await queueMonthlyReporting();
+  await drainOneDrive();
 }
 async function tokenFor(c: Connection) {
   if (c.expires_at > Date.now() + 60_000) return unseal(c.access_token);
@@ -158,13 +215,28 @@ async function tokenFor(c: Connection) {
 }
 async function uploadJob(c: Connection, job: Job) {
   const token = await tokenFor(c);
+  if (job.kind === "reporting") {
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(job.item_id)) throw new Error("Lună de raportare invalidă. Reîncearcă actualizarea centralizatorului.");
+    const { buildReportingWorkbook } = await import("./reporting-server");
+    const bytes = await buildReportingWorkbook(job.item_id);
+    const current = await connection();
+    if (!current || current.generation !== c.generation || current.lease !== c.lease || !usesOneDrive(current.mode)) {
+      throw new Error("Sincronizarea OneDrive a fost oprită.");
+    }
+    const name = encodeURIComponent(`Reporting b2b ${job.item_id}.xlsx`);
+    await checked(await graph(token, `/me/drive/items/${encodeURIComponent(c.root_id)}:/${name}:/content`, {
+      method: "PUT", headers: { "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
+      body: bytes.buffer as ArrayBuffer,
+    }));
+    return;
+  }
   let projectId = job.item_id, filename: string, body: BodyInit, contentType = "application/json";
   if (job.kind === "file") {
     const file = await getFileRow(job.item_id);
     if (!file) return;
     projectId = file.project_id;
     const stored = await bucket().get(file.storage_key);
-    if (!stored) throw new Error("Fișierul sursă nu mai este disponibil în Cloudflare.");
+    if (!stored) throw new Error("Fișierul sursă nu mai este disponibil în stocarea aplicației.");
     filename = await safeName(`${file.section}--${file.original_name}`, file.id);
     body = await new Response(stored.body).arrayBuffer(); contentType = file.content_type;
   } else {
@@ -182,6 +254,33 @@ async function uploadJob(c: Connection, job: Job) {
   if (!current || current.generation !== c.generation || current.lease !== c.lease || !usesOneDrive(current.mode)) throw new Error("Sincronizarea OneDrive a fost oprită.");
   await checked(await graph(token, `/me/drive/items/${encodeURIComponent(destination.id)}:/${encodeURIComponent(filename)}:/content`, { method: "PUT", headers: { "Content-Type": contentType }, body }));
 }
+
+export async function scheduleReporting(now = Date.now()) {
+  if (environment().PROCONECT_REPORTING_ENABLED !== "1" || !oneDriveConfigured()) return;
+  const c = await connection();
+  if (!c?.refresh_token || !usesOneDrive(c.mode)) return;
+  const db = getRawDb();
+  const queries = [
+    "SELECT username,name,role,active,updated_at FROM app_users ORDER BY username",
+    "SELECT id,technician_username,activity_type,updated_at FROM projects ORDER BY id",
+    "SELECT project_id,updated_at FROM project_estimates ORDER BY project_id",
+    "SELECT project_id,updated_at FROM project_field_documentation ORDER BY project_id",
+    "SELECT id,project_id,uploaded_by,created_at,captured_at FROM project_files ORDER BY id",
+    "SELECT id,updated_at FROM orange_oroc_tickets ORDER BY id",
+  ];
+  const results = await Promise.all(queries.map(query => db.prepare(query).all()));
+  const content = JSON.stringify(["monthly-reporting-v1", c.generation, ...results.map(result => result.results)]);
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", encoder.encode(content)));
+  const signature = Array.from(digest, value => value.toString(16).padStart(2, "0")).join("");
+  const day = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Bucharest", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+  const time = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Bucharest", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(now);
+  const previous = await db.prepare("SELECT signature,daily_date FROM app_reporting_state WHERE id='centralizator'").first<{ signature: string; daily_date: string }>();
+  const dailyDue = time >= "23:55" && previous?.daily_date !== day;
+  if (previous?.signature === signature && !dailyDue) return;
+  // Queue the refresh and record its input signature in one transaction. A
+  // failed upload remains pending and can be retried after a server restart.
+  await queueMonthlyReporting({ signature, dailyDate: dailyDue ? day : previous?.daily_date ?? "" }, now);
+}
 export async function drainOneDrive() {
   if (!oneDriveConfigured()) return;
   const lease = crypto.randomUUID();
@@ -189,7 +288,7 @@ export async function drainOneDrive() {
     .bind(lease, Date.now() + 120_000, settingsId, Date.now()).first<Connection>();
   if (!c) return;
   try {
-    const job = await getRawDb().prepare("SELECT * FROM onedrive_jobs WHERE revision > done_revision AND next_at <= ? ORDER BY next_at, id LIMIT 1").bind(Date.now()).first<Job>();
+    const job = await getRawDb().prepare("SELECT * FROM onedrive_jobs WHERE revision > done_revision AND next_at <= ? ORDER BY CASE WHEN kind = 'reporting' THEN 0 ELSE 1 END, next_at, id LIMIT 1").bind(Date.now()).first<Job>();
     if (!job) return;
     try {
       await uploadJob(c, job);

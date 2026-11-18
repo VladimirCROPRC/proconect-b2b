@@ -1,5 +1,5 @@
 import { getRawDb } from "../../../db";
-import { currentSession } from "../../server-auth";
+import { userRoleSql, currentSession } from "../../server-auth";
 import { isManagementRole } from "../../project-server";
 import { reportRange } from "../../technician-report";
 import { buildDailyReport, type DailyPhoto, type DailyProject, type DailyTicket } from "../../daily-technician-report";
@@ -14,7 +14,7 @@ export async function GET(request: Request) {
     const url = new URL(request.url), username = url.searchParams.get("technician") ?? "", from = url.searchParams.get("from") ?? "", to = url.searchParams.get("to") ?? "";
     if (!username || !reportRange(from, to)) return Response.json({ error: "Selectează tehnicianul și o perioadă validă." }, { status: 400 });
     const db = getRawDb();
-    const users = await db.prepare("SELECT username, name FROM app_users WHERE username = ? AND role = 'Tehnician' UNION SELECT technician_username AS username, technician AS name FROM projects WHERE technician_username = ? UNION SELECT technician_username AS username, technician_name AS name FROM orange_oroc_tickets WHERE technician_username = ?").bind(username, username, username).all<{ username: string; name: string }>();
+    const users = await db.prepare(`SELECT username, name FROM app_users WHERE username = ? AND ${userRoleSql("Tehnician")} UNION SELECT technician_username AS username, technician AS name FROM projects WHERE technician_username = ? UNION SELECT technician_username AS username, technician_name AS name FROM orange_oroc_tickets WHERE technician_username = ?`).bind(username, username, username).all<{ username: string; name: string }>();
     const technician = users.results?.[0];
     if (!technician) return Response.json({ error: "Tehnician indisponibil." }, { status: 400 });
     const projects = await db.prepare("SELECT p.id, p.client, p.technician_username AS assignedUsername, d.content_json AS documentation, e.content_json AS estimate FROM projects p LEFT JOIN project_field_documentation d ON d.project_id = p.id LEFT JOIN project_estimates e ON e.project_id = p.id WHERE p.technician_username = ? OR EXISTS (SELECT 1 FROM project_files f WHERE f.project_id = p.id AND f.uploaded_by = ? AND f.content_type LIKE 'image/%')").bind(username, username).all<DailyProject>();

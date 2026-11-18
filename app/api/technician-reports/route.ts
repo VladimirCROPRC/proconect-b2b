@@ -1,6 +1,6 @@
 import { getRawDb } from "../../../db";
 import { isManagementRole } from "../../project-server";
-import { currentSession } from "../../server-auth";
+import { userRoleSql, currentSession } from "../../server-auth";
 import { dayStart, reportRange, savedEstimateTotal, type TechnicianReport } from "../../technician-report";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +11,7 @@ export async function GET(request: Request) {
     if (!session || session.account.passwordResetRequired) return Response.json({ error: "Autentificare necesară." }, { status: 401 });
     if (!isManagementRole(session.account)) return Response.json({ error: "Acces rezervat managementului." }, { status: 403 });
     const db = getRawDb();
-    const technicians = await db.prepare("SELECT username, name FROM app_users WHERE role = 'Tehnician' UNION SELECT technician_username AS username, technician AS name FROM projects WHERE technician_username NOT IN (SELECT username FROM app_users WHERE role = 'Tehnician') UNION SELECT technician_username AS username, technician_name AS name FROM orange_oroc_tickets WHERE technician_username IS NOT NULL AND technician_username NOT IN (SELECT username FROM app_users WHERE role = 'Tehnician') ORDER BY name, username").all<{ username: string; name: string }>();
+    const technicians = await db.prepare(`SELECT username, name FROM app_users WHERE ${userRoleSql("Tehnician")} UNION SELECT technician_username AS username, technician AS name FROM projects WHERE technician_username NOT IN (SELECT username FROM app_users WHERE ${userRoleSql("Tehnician")}) UNION SELECT technician_username AS username, technician_name AS name FROM orange_oroc_tickets WHERE technician_username IS NOT NULL AND technician_username NOT IN (SELECT username FROM app_users WHERE ${userRoleSql("Tehnician")}) ORDER BY name, username`).all<{ username: string; name: string }>();
     const url = new URL(request.url), username = url.searchParams.get("technician");
     if (!username && !url.searchParams.has("from") && !url.searchParams.has("to")) return Response.json({ technicians: technicians.results ?? [] }, { headers: { "Cache-Control": "no-store" } });
     const technician = technicians.results?.find(item => item.username === username);

@@ -1,6 +1,6 @@
 import { getRawDb } from "../../../db";
 import { isManagementRole } from "../../project-server";
-import { currentSession, sameOrigin } from "../../server-auth";
+import { userRoleSql, currentSession, sameOrigin } from "../../server-auth";
 import { validateOrangeTicket } from "../../orange-oroc-data";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +17,7 @@ export async function GET(request: Request) {
     const sql = "SELECT t.id, t.ticket_number, t.work_date, t.service_package_code, t.technician_username, COALESCE(u.name,t.technician_name) AS technician_name, t.created_at, t.updated_at FROM orange_oroc_tickets t LEFT JOIN app_users u ON u.username = t.technician_username";
     const query = canManage ? db.prepare(sql + " ORDER BY t.work_date DESC, t.created_at DESC, t.ticket_number") : db.prepare(sql + " WHERE t.technician_username = ? ORDER BY t.work_date DESC, t.created_at DESC, t.ticket_number").bind(session.account.username);
     const result = await query.all<Row>();
-    const technicians = canManage ? await db.prepare("SELECT username, name FROM app_users WHERE role = 'Tehnician' AND active = 1 ORDER BY name, username").all<{ username: string; name: string }>() : { results: [] };
+    const technicians = canManage ? await db.prepare(`SELECT username, name FROM app_users WHERE ${userRoleSql("Tehnician")} AND active = 1 ORDER BY name, username`).all<{ username: string; name: string }>() : { results: [] };
     return Response.json({ tickets: (result.results ?? []).map(record), technicians: technicians.results ?? [] }, { headers: { "Cache-Control": "no-store" } });
   } catch { return Response.json({ error: "Tichetele Orange/OROC nu sunt disponibile momentan." }, { status: 503 }); }
 }
@@ -46,7 +46,7 @@ async function save(request: Request, editing: boolean) {
     }
     const technician = await db.prepare("SELECT username, name, role, active FROM app_users WHERE username = ?").bind(ticket.technicianUsername).first<{ username: string; name: string; role: string; active: number }>();
     const preservingAssignment = editing && previousTechnician === ticket.technicianUsername;
-    if (!preservingAssignment && (!technician || technician.role !== "Tehnician" || !technician.active)) return Response.json({ error: "Selectează un tehnician activ." }, { status: 400 });
+    if (!preservingAssignment && (!technician || !technician.active || !await db.prepare(`SELECT id FROM app_users WHERE username=? AND ${userRoleSql("Tehnician")}`).bind(ticket.technicianUsername).first())) return Response.json({ error: "Selectează un tehnician activ." }, { status: 400 });
     const technicianName = technician?.name ?? previousName;
     const duplicate = await db.prepare("SELECT id FROM orange_oroc_tickets WHERE ticket_number = ? AND id <> ?").bind(ticket.ticketNumber, id).first();
     if (duplicate) return Response.json({ error: "Numărul tichetului există deja în Orange/OROC." }, { status: 409 });

@@ -1,0 +1,39 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.selfhost
+    restart: unless-stopped
+    init: true
+    env_file: .env.selfhost
+    environment:
+      PROCONECT_SELF_HOSTED: "1"
+      PROCONECT_APP_URL: https://b2b.proconect.online
+      PROCONECT_DATA_DIR: /data
+    ports:
+      - "127.0.0.1:3001:3000"
+    volumes:
+      - ./data:/data
+      - ./imports:/imports:ro
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/selfhost/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    security_opt:
+      - no-new-privileges:true
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    user: "1000:1000"
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token-file /run/secrets/tunnel_token
+    profiles: [tunnel]
+    secrets: [tunnel_token]
+    depends_on:
+      app:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+secrets:
+  tunnel_token:
+    file: ./.secrets/cloudflared-token

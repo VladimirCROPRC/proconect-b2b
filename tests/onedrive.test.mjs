@@ -20,18 +20,20 @@ test('OneDrive API restricts actions to an authenticated Admin and matching orig
     disconnectOneDrive: async () => { operations++; },
     drainOneDrive: async () => { operations++; },
     retryOneDrive: async () => { operations++; },
+    refreshReportingNow: async () => { operations++; },
     setBackupMode: async () => { operations++; },
   };
   const code = (await source('app/api/onedrive/route.ts'))
-    .replace(/^import .*onedrive-server";$/m, 'const { beginOneDrive, disconnectOneDrive, drainOneDrive, oneDriveSameOrigin, oneDriveStatus, retryOneDrive, setBackupMode } = globalThis.__odApi;')
+    .replace(/^import .*onedrive-server";$/m, 'const { beginOneDrive, disconnectOneDrive, drainOneDrive, oneDriveSameOrigin, oneDriveStatus, refreshReportingNow, retryOneDrive, setBackupMode } = globalThis.__odApi;')
     .replace(/^import .*server-auth";$/m, 'const { currentSession } = globalThis.__odApi;');
   const api = await import(moduleUrl(code));
-  const request = (origin = 'https://example.test') => new Request('https://example.test/api/onedrive', { method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'authorize' }) });
+  const request = (origin = 'https://example.test', actionName = 'authorize') => new Request('https://example.test/api/onedrive', { method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' }, body: JSON.stringify({ action: actionName }) });
   try {
     assert.equal((await api.POST(request())).status, 401);
     for (const role of ['Tehnician', 'Manager', 'Coordonator']) {
       session = { sessionId: 'session', account: { role, passwordResetRequired: false } };
       assert.equal((await api.POST(request())).status, 403);
+      assert.equal((await api.POST(request('https://example.test', 'refresh-reporting'))).status, 403);
       assert.equal((await api.GET(new Request('https://example.test/api/onedrive'))).status, 403);
     }
     session.account = { role: 'Admin', passwordResetRequired: true };
@@ -43,6 +45,9 @@ test('OneDrive API restricts actions to an authenticated Admin and matching orig
     assert.equal(allowed.status, 200);
     assert.equal(allowed.headers.get('Cache-Control'), 'no-store');
     assert.equal(operations, 1);
+    assert.equal((await api.POST(request('https://evil.test', 'refresh-reporting'))).status, 403);
+    assert.equal((await api.POST(request('https://example.test', 'refresh-reporting'))).status, 200);
+    assert.equal(operations, 2);
   } finally { delete globalThis.__odApi; }
 });
 
@@ -79,8 +84,9 @@ test('OneDrive server with isolated SQLite, fake Microsoft responses and fake R2
     async all() { return { results: db.prepare(sql).all(...values) }; },
     async run() { return { meta: { changes: Number(db.prepare(sql).run(...values).changes) } }; },
   }; }, async batch(statements) { db.exec('BEGIN'); try { const r = []; for (const s of statements) r.push(await s.run()); db.exec('COMMIT'); return r; } catch (e) { db.exec('ROLLBACK'); throw e; } } };
-  globalThis.__od = { env, getRawDb: () => raw, getFileRow: async id => db.prepare('SELECT * FROM project_files WHERE id = ?').get(id), bucket: () => ({ get: async () => ({ body: new Blob(['photo']).stream() }) }) };
+  globalThis.__od = { env, months: ['2026-10', '2026-11'], getRawDb: () => raw, getFileRow: async id => db.prepare('SELECT * FROM project_files WHERE id = ?').get(id), bucket: () => ({ get: async () => ({ body: new Blob(['photo']).stream() }) }) };
   let text = await source('app/onedrive-server.ts');
+  text = text.replaceAll('await import("./reporting-server")', '({ buildReportingWorkbook: async () => new Uint8Array([80,75,3,4]), reportingMonths: async () => globalThis.__od.months })');
   text = text.replace('import { env } from "cloudflare:workers";', 'const { env } = globalThis.__od;')
     .replace('import { getRawDb } from "../db";', 'const { getRawDb } = globalThis.__od;')
     .replace('import { bucket, getFileRow } from "./project-server";', 'const { bucket, getFileRow } = globalThis.__od;')
@@ -95,7 +101,8 @@ test('OneDrive server with isolated SQLite, fake Microsoft responses and fake R2
       tokenCalls++;
       return Response.json({ access_token: 'fake-access', refresh_token: `fake-refresh-${tokenCalls}`, expires_in: 3600 });
     }
-    assert.ok(String(url).startsWith('https://graph.microsoft.com/v1.0/me/drive'));
+    assert.ok(String(url).startsWith('https://graph.microsoft.com/v1.0/me/drive') || String(url).startsWith('https://graph.microsoft.com/v1.0/shares/u!'));
+    if (String(url).includes('/shares/')) return Response.json({ id: 'folder', folder: {}, parentReference: { driveId }, webUrl: 'https://example.sharepoint.com/folder' });
     assert.equal(new Headers(options.headers).get('Authorization'), 'Bearer fake-access');
     if (String(url).endsWith('/me/drive')) return Response.json({ id: driveId, driveType: 'business', owner: { user: { id: 'owner', displayName: 'Test Microsoft' } } });
     if (String(url).endsWith('/content')) {
@@ -136,11 +143,22 @@ test('OneDrive server with isolated SQLite, fake Microsoft responses and fake R2
       assert.equal((await server.oneDriveStatus()).connected, true);
       assert.ok(!JSON.stringify(await server.oneDriveStatus()).includes('fake-access'));
     });
+    await t.test('configured SharePoint folder is resolved through Graph shares and does not create a default folder', async () => {
+      env.ONEDRIVE_FOLDER_URL = 'https://example-my.sharepoint.com/:f:/g/personal/test/SharedFolder?e=test';
+      const before = calls.length;
+      const url = new URL(await server.beginOneDrive('shared-session'));
+      await server.finishOneDrive('shared-session', url.searchParams.get('state'), 'code');
+      const encoded = 'u!' + Buffer.from(env.ONEDRIVE_FOLDER_URL).toString('base64url');
+      assert.ok(calls.slice(before).includes('https://graph.microsoft.com/v1.0/shares/' + encoded + '/driveItem'));
+      assert.ok(!calls.slice(before).some(url => url.includes('/me/drive/root')));
+      assert.equal(db.prepare('SELECT root_id FROM onedrive_connection').get().root_id, 'folder');
+      delete env.ONEDRIVE_FOLDER_URL;
+    });
     await t.test('expired state rejected before token exchange', async () => {
       const u = new URL(await server.beginOneDrive('session-2'));
       db.exec('UPDATE onedrive_oauth_states SET expires_at = 0');
       await assert.rejects(server.finishOneDrive('session-2', u.searchParams.get('state'), 'code'));
-      assert.equal(tokenCalls, 1);
+      assert.equal(tokenCalls, 2);
     });
     await t.test('both destinations seed backlog; concurrent drains do not duplicate upload', async () => {
       await assert.rejects(server.setBackupMode('invalid'));
@@ -178,10 +196,11 @@ test('OneDrive server with isolated SQLite, fake Microsoft responses and fake R2
       assert.equal((await server.oneDriveStatus()).errors.length, 0);
     });
     await t.test('expired tokens rotate refresh token securely', async () => {
+      const previousTokenCalls = tokenCalls;
       const before = db.prepare('SELECT refresh_token FROM onedrive_connection').get().refresh_token;
       db.exec('UPDATE onedrive_connection SET expires_at = 0');
       await server.queueOneDrive('file', 'f-1'); await server.drainOneDrive();
-      assert.equal(tokenCalls, 2);
+      assert.equal(tokenCalls, previousTokenCalls + 1);
       assert.notEqual(db.prepare('SELECT refresh_token FROM onedrive_connection').get().refresh_token, before);
     });
     await t.test('switching Microsoft drive requires explicit disconnect', async () => {
@@ -190,8 +209,72 @@ test('OneDrive server with isolated SQLite, fake Microsoft responses and fake R2
       await assert.rejects(server.finishOneDrive('session-3', u.searchParams.get('state'), 'code'), /alt OneDrive/);
       assert.equal(db.prepare('SELECT drive_id FROM onedrive_connection').get().drive_id, 'drive-1');
     });
+    await t.test('reporting refresh queues changed inputs and daily refresh once into separate monthly files', async () => {
+      db.exec(`CREATE TABLE app_reporting_state(id TEXT PRIMARY KEY,signature TEXT,daily_date TEXT);
+        CREATE TABLE app_reporting_months(month TEXT PRIMARY KEY);
+        CREATE TABLE app_users(username TEXT,name TEXT,role TEXT,active INTEGER,updated_at INTEGER);
+        CREATE TABLE project_estimates(project_id TEXT,updated_at INTEGER);
+        CREATE TABLE orange_oroc_tickets(id TEXT,updated_at INTEGER);
+        ALTER TABLE projects ADD COLUMN technician_username TEXT;
+        ALTER TABLE projects ADD COLUMN activity_type TEXT;
+        ALTER TABLE projects ADD COLUMN updated_at INTEGER;
+        ALTER TABLE project_field_documentation ADD COLUMN updated_at INTEGER;
+        ALTER TABLE project_files ADD COLUMN created_at INTEGER;`);
+      env.PROCONECT_REPORTING_ENABLED = '1';
+      const morning = Date.parse('2026-11-18T08:00:00Z');
+      await server.scheduleReporting(morning);
+      const readJob = () => db.prepare("SELECT * FROM onedrive_jobs WHERE kind='reporting' ORDER BY item_id").get();
+      assert.equal(readJob().revision, 1);
+      await server.scheduleReporting(morning);
+      assert.equal(readJob().revision, 1);
+      db.exec("INSERT INTO app_users VALUES ('new','New Technician','Tehnician',1,1)");
+      await server.scheduleReporting(morning);
+      assert.equal(readJob().revision, 2);
+      const nightly = Date.parse('2026-11-18T21:55:00Z');
+      await server.scheduleReporting(nightly);
+      assert.equal(readJob().revision, 3);
+      await server.scheduleReporting(nightly + 30000);
+      assert.equal(readJob().revision, 3);
+      await server.drainOneDrive();
+      assert.equal(readJob().done_revision, 3);
+      await server.drainOneDrive();
+      assert.ok(calls.some(url => url.endsWith('/Reporting%20b2b%202026-10.xlsx:/content')));
+      assert.equal(db.prepare("SELECT COUNT(*) AS n FROM onedrive_jobs WHERE kind='reporting'").get().n, 2);
+      delete env.PROCONECT_REPORTING_ENABLED;
+    });
+    await t.test('manual reporting refresh works without daily scheduling and waits for upload completion or exposes errors', async () => {
+      assert.equal(env.PROCONECT_REPORTING_ENABLED, undefined);
+      const projectsBefore = db.prepare("SELECT revision FROM onedrive_jobs WHERE kind='project'").all();
+      db.prepare("UPDATE onedrive_connection SET lease='other-worker',lease_until=?").run(Date.now() + 60000);
+      await server.refreshReportingNow();
+      assert.equal((await server.oneDriveStatus()).reporting.pending, true);
+      assert.deepEqual(db.prepare("SELECT revision FROM onedrive_jobs WHERE kind='project'").all(), projectsBefore);
+      db.exec("UPDATE onedrive_connection SET lease='',lease_until=0");
+      await server.drainOneDrive();
+      await server.drainOneDrive();
+      assert.deepEqual((await server.oneDriveStatus()).reporting, { pending: false, error: '' });
+      failUpload = true;
+      await server.refreshReportingNow();
+      const failed = (await server.oneDriveStatus()).reporting;
+      assert.equal(failed.pending, true);
+      assert.match(failed.error, /429/);
+      failUpload = false;
+      await server.refreshReportingNow();
+      await server.drainOneDrive();
+      assert.deepEqual((await server.oneDriveStatus()).reporting, { pending: false, error: '' });
+    });
+    await t.test('previously exported months remain queued when all their records move to another month', async () => {
+      globalThis.__od.months = ['2026-11'];
+      await server.refreshReportingNow();
+      const jobs = db.prepare("SELECT item_id FROM onedrive_jobs WHERE kind='reporting' ORDER BY item_id").all();
+      assert.deepEqual(jobs.map(job => job.item_id), ['2026-10', '2026-11']);
+      await server.drainOneDrive();
+      assert.equal((await server.oneDriveStatus()).reporting.pending, false);
+      globalThis.__od.months = ['2026-10', '2026-11'];
+    });
     await t.test('Google-only stops OneDrive; disconnect keeps remote copies', async () => {
       await server.setBackupMode('google');
+      await assert.rejects(server.refreshReportingNow(), /selectează/);
       const before = uploads;
       await server.queueOneDrive('file', 'f-1'); await server.drainOneDrive();
       assert.equal(uploads, before);

@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ProjectFieldDocumentation } from "./field-documentation";
 import { boqCatalog } from "./boq-catalog";
-import { buildBudgetSuggestions, catalogSuggestion, budgetReady, reconcileBudget, normalizeBudget, type BudgetSuggestion } from "./project-budget";
+import { buildBudgetSuggestions as buildInstallationBudget, catalogSuggestion as installationSuggestion, budgetReady as installationBudgetReady, reconcileBudget as reconcileInstallationBudget, normalizeBudget, type BudgetSuggestion } from "./project-budget";
+import { deploymentCatalog } from "./deployment-catalog";
+import { buildDeploymentBudget, deploymentSuggestion, deploymentBudgetReady, reconcileDeploymentBudget } from "./deployment-budget";
 import "./project-budget.css";
 import { downloadEstimateTemplate } from "./estimate-template";
 import { estimateTotal as calculateEstimateTotal } from "./estimate-values";
@@ -82,7 +84,11 @@ function buildReport(project: DocumentProject, fieldData: ProjectFieldDocumentat
     ...(project.mc ? ["Media Converter"] : []),
     ...(project.terminalBox ? ["Terminal Box"] : []),
   ];
-  const clientLines = fieldData.client?.noIntervention
+  const siteA = fieldData["site-a"];
+  const clientLines = project.activityType === "Deployment"
+    ? siteA?.noIntervention ? [`Nu s-a intervenit la site A. Motiv: ${siteA.noInterventionReason}.`]
+      : siteA ? [`Site A: ODF ${siteA.odf}, port ${siteA.odfPort} → eTN ${siteA.etn}, port ${siteA.etnPort}.`] : ["Operațiunile site A nu au fost documentate încă."]
+    : fieldData.client?.noIntervention
     ? [`Nu s-a intervenit la client. Motiv: ${fieldData.client.noInterventionReason}.`]
     : [
         `S-a instalat și configurat echipamentul ${equipment[0] || project.cpe}.`,
@@ -103,10 +109,15 @@ function buildReport(project: DocumentProject, fieldData: ProjectFieldDocumentat
 }
 
 export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props) {
+  const isDeployment = project.activityType === "Deployment";
+  const buildBudgetSuggestions = isDeployment ? buildDeploymentBudget : buildInstallationBudget;
+  const catalogSuggestion = isDeployment ? deploymentSuggestion : installationSuggestion;
+  const budgetReady = isDeployment ? deploymentBudgetReady : installationBudgetReady;
+  const reconcileBudget = isDeployment ? reconcileDeploymentBudget : reconcileInstallationBudget;
   const [tab, setTab] = useState<"report" | "estimate" | "splices" | "materials">(project.activityType === "Intervenție" ? "estimate" : "report");
   const [report, setReport] = useState(() => buildReport(project, fieldData));
   const [suggestions, setSuggestions] = useState(() => buildBudgetSuggestions(fieldData));
-  const generatedBudget = useMemo(() => buildBudgetSuggestions(fieldData), [fieldData]);
+  const generatedBudget = useMemo(() => buildBudgetSuggestions(fieldData), [fieldData, buildBudgetSuggestions]);
   const [savedAt, setSavedAt] = useState("");
   const [estimateState, setEstimateState] = useState("Se încarcă devizul…");
   const [estimateLoaded, setEstimateLoaded] = useState(false);
@@ -127,7 +138,7 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
         const payload = await response.json() as { saved?: { rows: BudgetSuggestion[] }; error?: string };
         if (!response.ok) throw new Error(payload.error || "Devizul nu a putut fi încărcat.");
         if (!active) return;
-        const saved = payload.saved ? normalizeBudget(payload.saved.rows) : [];
+        const saved = payload.saved ? isDeployment ? payload.saved.rows : normalizeBudget(payload.saved.rows) : [];
         if (!saved) throw new Error("Devizul salvat necesită verificare.");
         setSuggestions(reconcileBudget(buildBudgetSuggestions(fieldData), saved));
         setEstimateLoaded(true);
@@ -148,7 +159,7 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
     return () => {
       active = false;
     };
-  }, [project, fieldData]);
+  }, [project, fieldData, isDeployment, buildBudgetSuggestions, reconcileBudget]);
 
   const spliceSheet = spliceFieldSheet(project, fieldData);
   const materialSheet = materialFieldSheet(project, fieldData);
@@ -193,13 +204,14 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
   function catalogOptions(row: BudgetSuggestion) {
     const expected = generatedBudget.find(item => item.id === row.id);
     const fixedAccess = expected?.id.startsWith("closure-") && ["102", "103"].includes(expected.catalogPosition);
-    return boqCatalog.filter(item => item.row !== 109 && (!fixedAccess || String(item.row) === expected?.catalogPosition));
+    if (isDeployment) return deploymentCatalog.map(item => ({ row: item.row, label: `${item.code} · ${item.nameRo || item.name}${item.unitPrice === null ? " — Tarif necompletat" : ""}`, disabled: item.unitPrice === null }));
+    return boqCatalog.filter(item => item.row !== 109 && (!fixedAccess || String(item.row) === expected?.catalogPosition)).map(item => ({ row: item.row, label: `${item.row} · ${item.name}`, disabled: false }));
   }
 
   function selectCatalog(id: string, value: string) {
     setSuggestions(current => current.map(item => item.id !== id ? item : value === "included"
-      ? { ...item, catalogPosition: value, unitPrice: 0, unit: "buc" }
-      : { ...catalogSuggestion(id, Number(value), item.quantity, item.evidence, item.name), note: item.note }));
+      ? { ...item, catalogPosition: value, unitPrice: 0, unit: "buc", night: false }
+      : { ...(isDeployment ? deploymentSuggestion(id, Number(value), item.quantity, item.evidence, item.name, current.find(row => row.catalogPosition === value)?.night ?? item.night) : catalogSuggestion(id, Number(value), item.quantity, item.evidence, item.name)), note: item.note }));
     setEstimateState("Modificări nesalvate.");
   }
 
@@ -260,7 +272,7 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
               </section>
               {(["route", "client"] as const).map((section) => (
                 <section className="editable-report-section" key={section}>
-                  <h2>{section === "route" ? "Traseu" : "Client"}</h2>
+                  <h2>{section === "route" ? "Traseu" : project.activityType === "Deployment" ? "Operațiuni site A" : "Client"}</h2>
                   <textarea value={report[section]} onChange={(event) => updateReport(section, event.target.value)} rows={Math.max(2, report[section].split("\n").length + 1)} aria-label={`Conținut secțiune ${section}`} />
                   <small>Fiecare rând este inclus ca punct distinct în raport.</small>
                 </section>
@@ -288,15 +300,16 @@ export function ProjectDocumentsSection({ project, fieldData, onNotify }: Props)
           {suggestions.length ? (
             <div className="estimate-table-wrap">
               <table className="estimate-table">
-                <thead><tr><th>ACȚIUNE</th><th>RÂND BoQ</th><th>LUCRARE / MATERIAL</th><th>UM</th><th>PREȚ EUR</th><th>CANTITATE</th><th>TOTAL EUR</th></tr></thead>
+                <thead><tr><th>ACȚIUNE</th><th>RÂND BoQ</th><th>LUCRARE / MATERIAL</th><th>UM</th><th>PREȚ EUR</th><th>CANTITATE</th>{isDeployment && <th>NOAPTE +25%</th>}<th>TOTAL EUR</th></tr></thead>
                 <tbody>{suggestions.map((item) => (
                   <tr className={item.selected ? "selected" : ""} key={item.id}>
                     <td>{item.id.startsWith("manual-") ? <button disabled={!estimateLoaded || savingEstimate} onClick={() => { setSuggestions(current => current.filter(row => row.id !== item.id)); setEstimateState("Modificări nesalvate."); }} aria-label={`Șterge poziția manuală ${item.name}`}>Șterge</button> : "Din teren"}</td>
-                    <td><select aria-label={`Poziție BoQ: ${item.name}`} disabled={!estimateLoaded || savingEstimate || item.id === "site-patch"} value={item.catalogPosition} onChange={event => selectCatalog(item.id, event.target.value)}><option value="">Alege poziția</option><option value="included">Inclus / beneficiar (0 EUR)</option>{catalogOptions(item).map(entry => <option key={entry.row} value={entry.row}>{entry.row} · {entry.name}</option>)}</select></td>
+                    <td><select aria-label={`Poziție BoQ: ${item.name}`} disabled={!estimateLoaded || savingEstimate || (!isDeployment && item.id === "site-patch")} value={item.catalogPosition} onChange={event => selectCatalog(item.id, event.target.value)}><option value="">Alege poziția</option><option value="included">Inclus / beneficiar (0 EUR)</option>{catalogOptions(item).map(entry => <option key={entry.row} value={entry.row} disabled={entry.disabled}>{entry.label}</option>)}</select></td>
                     <td><strong>{item.id === "site-patch" ? item.name : item.catalogPosition === "included" ? "Inclus / furnizat de beneficiar" : item.name}</strong><small>{item.evidence}</small><input aria-label={`Observații: ${item.name}`} placeholder={item.catalogPosition === "included" ? "Justificare obligatorie / poziția care include lucrarea" : "Observații"} maxLength={2000} value={item.note ?? ""} disabled={!estimateLoaded || savingEstimate} onChange={event => updateSuggestion(item.id, { note: event.target.value })} /></td>
                     <td>{item.unit}</td>
-                    <td>{item.unitPrice.toLocaleString("ro-RO", { maximumFractionDigits: 5 })}</td>
+                    <td>{isDeployment && item.catalogPosition !== "included" && deploymentCatalog.find(entry => String(entry.row) === item.catalogPosition)?.unitPrice == null ? "Tarif necompletat" : item.unitPrice.toLocaleString("ro-RO", { maximumFractionDigits: 5 })}</td>
                     <td><input aria-label={`Cantitate: ${item.name}`} disabled={!estimateLoaded || savingEstimate} type="number" min="0.001" step="0.001" value={item.quantity} onChange={(event) => updateSuggestion(item.id, { quantity: Number(event.target.value) })} /></td>
+                    {isDeployment && <td><input type="checkbox" aria-label={`Lucrări de noapte: ${item.name}`} disabled={!estimateLoaded || savingEstimate || !item.catalogPosition || item.catalogPosition === "included"} checked={Boolean(item.night)} onChange={event => { const night = event.target.checked; setSuggestions(current => current.map(row => row.catalogPosition !== item.catalogPosition ? row : { ...deploymentSuggestion(row.id, Number(row.catalogPosition), row.quantity, row.evidence, row.name, night), note: row.note })); setEstimateState("Modificări nesalvate."); }} /></td>}
                     <td><strong>{formatNumber(item.quantity * item.unitPrice)}</strong></td>
                   </tr>
                 ))}</tbody>

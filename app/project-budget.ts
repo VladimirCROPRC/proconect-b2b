@@ -12,6 +12,8 @@ export type BudgetSuggestion = {
   evidence: string;
   selected: boolean;
   note?: string;
+  catalog?: "deployment-nd";
+  night?: boolean;
 };
 
 export function catalogSuggestion(id: string, row: number | undefined, quantity: number, evidence: string, pendingName = "Alege poziția BoQ"): BudgetSuggestion {
@@ -111,6 +113,10 @@ export function buildBudgetSuggestions(data: ProjectFieldDocumentation): BudgetS
   }
   if (site) rows.push(patchcordSuggestion("site-patch", 1,
     `Conexiune ODF ${site.odf}/${site.odfPort} → eTN ${site.etn}/${site.etnPort}. Instalare patchcord până la 5 metri, rândul 108.`));
+
+  const siteA = data["site-a"];
+  if (siteA && !siteA.noIntervention) rows.push(patchcordSuggestion("site-a-patch", 1,
+    `Site A: conexiune ODF ${siteA.odf}/${siteA.odfPort} → eTN ${siteA.etn}/${siteA.etnPort}. Instalare patchcord până la 5 metri, rândul 108.`));
 
   const seenActivities = new Set<string>();
   for (const activity of data.intervention?.execution?.activities ?? []) {

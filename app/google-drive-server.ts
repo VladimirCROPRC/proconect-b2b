@@ -36,6 +36,7 @@ const activityFolderMarker = "__activityFolder";
 
 export const driveActivityFolders: Record<ProjectActivityType, string> = {
   Instalare: "Instalari",
+  Deployment: "Deployment",
   "Intervenție": "Interventii",
   Survey: "Survey",
 };
@@ -52,6 +53,7 @@ export const driveSectionFolders: Record<string, string> = {
 
 const activitySectionFolders: Record<ProjectActivityType, Record<string, string>> = {
   Instalare: driveSectionFolders,
+  Deployment: Object.fromEntries(Object.entries(driveSectionFolders).map(([key, value]) => key === "client" ? ["site-a", "03_Operatiuni site A"] : [key, value])),
   "Intervenție": {
     safety: "01_Pretask_si_EIP",
     "intervention-assessment": "02_Constatare",

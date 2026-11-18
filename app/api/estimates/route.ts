@@ -1,6 +1,7 @@
 import { getRawDb } from "../../../db";
 import { getAuthorizedProject, isManagementRole } from "../../project-server";
 import { applyBudgetRules, buildBudgetSuggestions, normalizeBudget } from "../../project-budget";
+import { buildDeploymentBudget, normalizeDeploymentBudget } from "../../deployment-budget";
 import { currentSession, sameOrigin } from "../../server-auth";
 
 export const dynamic = "force-dynamic";
@@ -27,15 +28,17 @@ export async function PATCH(request: Request) {
     if (!isManagementRole(session.account)) return Response.json({ error: "Acces rezervat managementului." }, { status: 403 });
     const body = await request.json() as { projectId?: unknown; rows?: unknown; source?: unknown };
     if (typeof body.projectId !== "string") return Response.json({ error: "Proiect invalid." }, { status: 400 });
-    if (!(await getAuthorizedProject(body.projectId, session.account))) return Response.json({ error: "Proiect indisponibil." }, { status: 404 });
-    const rows = normalizeBudget(body.rows);
-    if (!rows || JSON.stringify(rows).length > 300_000) return Response.json({ error: "Completează poziția BoQ, cantitatea și justificarea pozițiilor incluse/furnizate de beneficiar." }, { status: 400 });
+    const project = await getAuthorizedProject(body.projectId, session.account);
+    if (!project) return Response.json({ error: "Proiect indisponibil." }, { status: 404 });
+    const deployment = project.activity_type === "Deployment";
+    const rows = deployment ? normalizeDeploymentBudget(body.rows) : normalizeBudget(body.rows);
+    if (!rows || JSON.stringify(rows).length > 300_000) return Response.json({ error: "Completează o poziție cu tarif, cantitatea și justificarea pozițiilor incluse. Pentru aceeași poziție ND FO folosește aceeași opțiune de noapte." }, { status: 400 });
     const sourceRow = await getRawDb().prepare("SELECT content_json FROM project_field_documentation WHERE project_id = ?").bind(body.projectId).first<{ content_json: string }>();
     const documentation = sourceRow ? JSON.parse(sourceRow.content_json) : {};
-    const expected = buildBudgetSuggestions(documentation);
+    const expected = deployment ? buildDeploymentBudget(documentation) : buildBudgetSuggestions(documentation);
     if (body.source !== JSON.stringify(expected)) return Response.json({ error: "Datele din teren s-au schimbat. Reîncarcă proiectul înainte de salvarea devizului." }, { status: 409 });
     if (expected.some(row => !rows.some(saved => saved.id === row.id))) return Response.json({ error: "Devizul trebuie să cuprindă toate acțiunile documentate." }, { status: 400 });
-    const correctedRows = applyBudgetRules(rows, expected);
+    const correctedRows = deployment ? rows : applyBudgetRules(rows, expected);
     const now = Date.now();
     await getRawDb().prepare("INSERT INTO project_estimates (project_id, content_json, updated_by, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(project_id) DO UPDATE SET content_json = excluded.content_json, updated_by = excluded.updated_by, updated_at = excluded.updated_at")
       .bind(body.projectId, JSON.stringify(correctedRows), session.account.username, now).run();

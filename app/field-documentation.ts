@@ -139,5 +139,7 @@ export type ProjectFieldDocumentation = {
   route?: RouteFieldSummary;
   splices?: SpliceFieldSummary;
   site?: SiteFieldSummary;
+  "site-a"?: SiteFieldSummary;
   intervention?: InterventionFieldSummary;
 };
+
