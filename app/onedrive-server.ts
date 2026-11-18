@@ -58,7 +58,9 @@ async function exchange(parameters: URLSearchParams) {
   return tokens;
 }
 async function graph(token: string, path: string, options: RequestInit = {}) {
-  if (!path.startsWith("/me/drive")) throw new Error("Adresă Graph nepermisă.");
+  const ownDrive = path === "/me/drive" || path.startsWith("/me/drive/");
+  const sharedFolder = /^\/shares\/u![A-Za-z0-9_-]+\/driveItem$/.test(path) && (!options.method || options.method === "GET");
+  if (!ownDrive && !sharedFolder) throw new Error("Adresă Graph nepermisă.");
   const headers = new Headers(options.headers); headers.set("Authorization", `Bearer ${token}`);
   return fetch(`https://graph.microsoft.com/v1.0${path}`, { ...options, headers, redirect: "error", signal: AbortSignal.timeout(8000) });
 }

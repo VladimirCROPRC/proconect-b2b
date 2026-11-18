@@ -95,7 +95,8 @@ test('OneDrive server with isolated SQLite, fake Microsoft responses and fake R2
       tokenCalls++;
       return Response.json({ access_token: 'fake-access', refresh_token: `fake-refresh-${tokenCalls}`, expires_in: 3600 });
     }
-    assert.ok(String(url).startsWith('https://graph.microsoft.com/v1.0/me/drive'));
+    assert.ok(String(url).startsWith('https://graph.microsoft.com/v1.0/me/drive') || String(url).startsWith('https://graph.microsoft.com/v1.0/shares/u!'));
+    if (String(url).includes('/shares/')) return Response.json({ id: 'folder', folder: {}, parentReference: { driveId }, webUrl: 'https://example.sharepoint.com/folder' });
     assert.equal(new Headers(options.headers).get('Authorization'), 'Bearer fake-access');
     if (String(url).endsWith('/me/drive')) return Response.json({ id: driveId, driveType: 'business', owner: { user: { id: 'owner', displayName: 'Test Microsoft' } } });
     if (String(url).endsWith('/content')) {
@@ -136,11 +137,22 @@ test('OneDrive server with isolated SQLite, fake Microsoft responses and fake R2
       assert.equal((await server.oneDriveStatus()).connected, true);
       assert.ok(!JSON.stringify(await server.oneDriveStatus()).includes('fake-access'));
     });
+    await t.test('configured SharePoint folder is resolved through Graph shares and does not create a default folder', async () => {
+      env.ONEDRIVE_FOLDER_URL = 'https://example-my.sharepoint.com/:f:/g/personal/test/SharedFolder?e=test';
+      const before = calls.length;
+      const url = new URL(await server.beginOneDrive('shared-session'));
+      await server.finishOneDrive('shared-session', url.searchParams.get('state'), 'code');
+      const encoded = 'u!' + Buffer.from(env.ONEDRIVE_FOLDER_URL).toString('base64url');
+      assert.ok(calls.slice(before).includes('https://graph.microsoft.com/v1.0/shares/' + encoded + '/driveItem'));
+      assert.ok(!calls.slice(before).some(url => url.includes('/me/drive/root')));
+      assert.equal(db.prepare('SELECT root_id FROM onedrive_connection').get().root_id, 'folder');
+      delete env.ONEDRIVE_FOLDER_URL;
+    });
     await t.test('expired state rejected before token exchange', async () => {
       const u = new URL(await server.beginOneDrive('session-2'));
       db.exec('UPDATE onedrive_oauth_states SET expires_at = 0');
       await assert.rejects(server.finishOneDrive('session-2', u.searchParams.get('state'), 'code'));
-      assert.equal(tokenCalls, 1);
+      assert.equal(tokenCalls, 2);
     });
     await t.test('both destinations seed backlog; concurrent drains do not duplicate upload', async () => {
       await assert.rejects(server.setBackupMode('invalid'));
@@ -178,10 +190,11 @@ test('OneDrive server with isolated SQLite, fake Microsoft responses and fake R2
       assert.equal((await server.oneDriveStatus()).errors.length, 0);
     });
     await t.test('expired tokens rotate refresh token securely', async () => {
+      const previousTokenCalls = tokenCalls;
       const before = db.prepare('SELECT refresh_token FROM onedrive_connection').get().refresh_token;
       db.exec('UPDATE onedrive_connection SET expires_at = 0');
       await server.queueOneDrive('file', 'f-1'); await server.drainOneDrive();
-      assert.equal(tokenCalls, 2);
+      assert.equal(tokenCalls, previousTokenCalls + 1);
       assert.notEqual(db.prepare('SELECT refresh_token FROM onedrive_connection').get().refresh_token, before);
     });
     await t.test('switching Microsoft drive requires explicit disconnect', async () => {
