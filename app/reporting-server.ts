@@ -3,10 +3,10 @@ import { operationPhotos, type DailyPhoto } from "./daily-technician-report";
 import type { ProjectFieldDocumentation } from "./field-documentation";
 import type { BudgetSuggestion } from "./project-budget";
 import { localDate } from "./technician-report";
-import { reportingSheets, type ReportingEntry, type ReportingTechnician } from "./reporting-workbook";
+import { reportingSheets, validReportingMonth, type ReportingEntry, type ReportingTechnician } from "./reporting-workbook";
 import { createExcelWorkbook } from "./excel-export";
 
-export async function buildReportingWorkbook() {
+async function reportingData() {
   const db = getRawDb();
   // Keep former technicians in the historical report. Inactive accounts cannot
   // sign in, but their saved work must remain attributable.
@@ -58,5 +58,17 @@ export async function buildReportingWorkbook() {
       date: ticket.work_date, code: ticket.service_package_code, name: item?.label ?? ticket.service_package_code,
       unit: item?.unit ?? "intervention", price: ticket.service_package_code === "SP2 FOA" ? 300 : null, quantity: 1 });
   }
-  return createExcelWorkbook(reportingSheets(users, entries));
+  return { users, entries };
+}
+
+export async function reportingMonths(now = Date.now()) {
+  const { entries } = await reportingData();
+  return [...new Set([localDate(now).slice(0, 7), ...entries.map(entry => entry.date.slice(0, 7))])]
+    .filter(validReportingMonth).sort();
+}
+
+export async function buildReportingWorkbook(month = localDate(Date.now()).slice(0, 7)) {
+  if (!validReportingMonth(month)) throw new Error("Lună invalidă. Folosește formatul AAAA-LL.");
+  const { users, entries } = await reportingData();
+  return createExcelWorkbook(reportingSheets(users, entries, month));
 }

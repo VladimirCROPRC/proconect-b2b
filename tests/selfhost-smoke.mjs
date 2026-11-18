@@ -68,9 +68,15 @@ try {
     { id: 'manual-2', category: 'Manoperă', catalogPosition: '16', name: 'Coordinator added operation', unit: 'buc', unitPrice: 3, quantity: 4, selected: true },
   ];
   reportingDb.prepare('INSERT INTO project_estimates(project_id,content_json,updated_by,updated_at) VALUES (?,?,?,?)').run('RID1', JSON.stringify(manualRows), 'admin', Date.now());
+  reportingDb.prepare('UPDATE project_files SET captured_at=?,created_at=? WHERE id=?').run(Date.parse('2026-11-03T10:00:00Z'), Date.parse('2026-11-03T10:00:00Z'), 'photo');
   reportingDb.close();
-  const workbook = await fetch(origin + '/api/reporting-workbook', { headers: headers(admin) });
+  const workbook = await fetch(origin + '/api/reporting-workbook?month=2026-11', { headers: headers(admin) });
   assert.equal(workbook.status, 200);
+  assert.ok(workbook.headers.get('Content-Disposition').includes('2026-11'));
+  assert.equal((await fetch(origin + '/api/reporting-workbook?month=2026-13', { headers: headers(admin) })).status, 400);
+  const octoberWorkbook = await fetch(origin + '/api/reporting-workbook?month=2026-10', { headers: headers(admin) });
+  const octoberFiles = unzipSync(new Uint8Array(await octoberWorkbook.arrayBuffer()));
+  assert.ok(!strFromU8(octoberFiles['xl/worksheets/sheet2.xml']).includes('Coordinator added operation'));
   const workbookBytes = new Uint8Array(await workbook.arrayBuffer());
   assert.equal(workbookBytes[0], 80); assert.equal(workbookBytes[1], 75);
   const reportingFiles = unzipSync(workbookBytes);
@@ -83,7 +89,7 @@ try {
   const changeDb = openDatabase(join(root, 'app.sqlite'));
   changeDb.prepare('UPDATE project_estimates SET content_json=? WHERE project_id=?').run(JSON.stringify(manualRows.slice(0, 1)), 'RID1');
   changeDb.close();
-  const changedWorkbook = await fetch(origin + '/api/reporting-workbook', { headers: headers(admin) });
+  const changedWorkbook = await fetch(origin + '/api/reporting-workbook?month=2026-11', { headers: headers(admin) });
   const changedFiles = unzipSync(new Uint8Array(await changedWorkbook.arrayBuffer()));
   assert.ok(!strFromU8(changedFiles['xl/worksheets/sheet2.xml']).includes('Coordinator added operation'));
 

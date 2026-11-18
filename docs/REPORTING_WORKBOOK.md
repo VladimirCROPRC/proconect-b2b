@@ -1,7 +1,9 @@
 # Centralizator tehnicieni
 
-`Reporting b2b.xlsx` este generat din datele aplicației în folderul OneDrive
-configurat. Fiecare cont cu rol Tehnician are o foaie separată. Foile păstrează
+`Reporting b2b AAAA-LL.xlsx` este generat pentru fiecare lună în folderul OneDrive
+configurat. De exemplu, `Reporting b2b 2026-11.xlsx` conține numai realizările
+cu data execuției în noiembrie 2026. Luna curentă este creată chiar dacă nu are
+încă realizări. Fiecare cont cu rol Tehnician are o foaie separată. Foile păstrează
 și realizările tehnicienilor inactivi pentru istoric. Centralizatorul însumează
 valorile Vodafone, Orange/OROC și totalul fiecărui tehnician.
 
@@ -19,19 +21,21 @@ tichetului. Fiecare pereche lucrare/dată ocupă o coloană în foaia tehnicianu
 
 Pentru activare pe Ubuntu, în `.env.selfhost` se setează
 `PROCONECT_REPORTING_ENABLED=1`. Destinația de salvare din aplicație trebuie să fie
-OneDrive sau Google Drive + OneDrive. La activare se generează fișierul cu datele
+OneDrive sau Google Drive + OneDrive. La activare se generează fișierele lunare din datele
 curente. Serverul verifică modificările la 30 de secunde și programează o refacere
 după modificarea datelor sau crearea unui utilizator. Există și o refacere zilnică
 la 23:55 Europe/Bucharest. Sarcinile eșuate rămân în coadă pentru reîncercare.
 
-Fișierul comun este înlocuit integral la fiecare sincronizare. Corecțiile se fac
+Fișierul fiecărei luni este înlocuit integral la fiecare sincronizare. Corecțiile se fac
 în aplicație, deoarece modificările manuale în Excel sunt suprascrise. Recalcularea
 completă preia și modificările devizelor vechi, fără acumularea unor copii ale
 acelorași realizări. Actualizările trec prin coada OneDrive cu blocarea existentă,
-iar fișierul are întotdeauna același nume.
+iar fișierul fiecărei luni are întotdeauna același nume.
 
 Administratorul poate descărca varianta actuală din
-`/api/reporting-workbook`, după autentificarea în aplicație.
+`/api/reporting-workbook`, după autentificarea în aplicație. Implicit se descarcă
+luna curentă. Pentru altă lună se folosește, de exemplu,
+`/api/reporting-workbook?month=2026-10`.
 
 În „OneDrive și destinații de salvare”, administratorul poate apăsa
 „Actualizează centralizatorul acum”. Acțiunea reface numai centralizatorul și
@@ -39,3 +43,8 @@ funcționează și când programarea automată este dezactivată. OneDrive trebu
 fie conectat și selectat ca destinație. Dacă o sincronizare este deja în curs,
 centralizatorul rămâne în coadă cu prioritate. Pagina confirmă salvarea numai
 după finalizarea uploadului și afișează eroarea dacă acesta eșuează.
+
+Actualizarea manuală și cea automată refac toate lunile cunoscute, astfel încât
+corectările devizelor vechi se aplică în fișierul lunii corespunzătoare. Lunile
+exportate se păstrează în registrul local chiar dacă toate înregistrările lor sunt
+șterse sau mutate în altă lună. La actualizare, totalurile acestor luni se golesc.

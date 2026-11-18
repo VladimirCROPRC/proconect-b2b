@@ -84,9 +84,9 @@ test('OneDrive server with isolated SQLite, fake Microsoft responses and fake R2
     async all() { return { results: db.prepare(sql).all(...values) }; },
     async run() { return { meta: { changes: Number(db.prepare(sql).run(...values).changes) } }; },
   }; }, async batch(statements) { db.exec('BEGIN'); try { const r = []; for (const s of statements) r.push(await s.run()); db.exec('COMMIT'); return r; } catch (e) { db.exec('ROLLBACK'); throw e; } } };
-  globalThis.__od = { env, getRawDb: () => raw, getFileRow: async id => db.prepare('SELECT * FROM project_files WHERE id = ?').get(id), bucket: () => ({ get: async () => ({ body: new Blob(['photo']).stream() }) }) };
+  globalThis.__od = { env, months: ['2026-10', '2026-11'], getRawDb: () => raw, getFileRow: async id => db.prepare('SELECT * FROM project_files WHERE id = ?').get(id), bucket: () => ({ get: async () => ({ body: new Blob(['photo']).stream() }) }) };
   let text = await source('app/onedrive-server.ts');
-  text = text.replace('await import("./reporting-server")', '({ buildReportingWorkbook: async () => new Uint8Array([80,75,3,4]) })');
+  text = text.replaceAll('await import("./reporting-server")', '({ buildReportingWorkbook: async () => new Uint8Array([80,75,3,4]), reportingMonths: async () => globalThis.__od.months })');
   text = text.replace('import { env } from "cloudflare:workers";', 'const { env } = globalThis.__od;')
     .replace('import { getRawDb } from "../db";', 'const { getRawDb } = globalThis.__od;')
     .replace('import { bucket, getFileRow } from "./project-server";', 'const { bucket, getFileRow } = globalThis.__od;')
@@ -209,8 +209,9 @@ test('OneDrive server with isolated SQLite, fake Microsoft responses and fake R2
       await assert.rejects(server.finishOneDrive('session-3', u.searchParams.get('state'), 'code'), /alt OneDrive/);
       assert.equal(db.prepare('SELECT drive_id FROM onedrive_connection').get().drive_id, 'drive-1');
     });
-    await t.test('reporting refresh queues changed inputs and daily refresh once, and replaces one fixed workbook', async () => {
+    await t.test('reporting refresh queues changed inputs and daily refresh once into separate monthly files', async () => {
       db.exec(`CREATE TABLE app_reporting_state(id TEXT PRIMARY KEY,signature TEXT,daily_date TEXT);
+        CREATE TABLE app_reporting_months(month TEXT PRIMARY KEY);
         CREATE TABLE app_users(username TEXT,name TEXT,role TEXT,active INTEGER,updated_at INTEGER);
         CREATE TABLE project_estimates(project_id TEXT,updated_at INTEGER);
         CREATE TABLE orange_oroc_tickets(id TEXT,updated_at INTEGER);
@@ -222,7 +223,7 @@ test('OneDrive server with isolated SQLite, fake Microsoft responses and fake R2
       env.PROCONECT_REPORTING_ENABLED = '1';
       const morning = Date.parse('2026-11-18T08:00:00Z');
       await server.scheduleReporting(morning);
-      const readJob = () => db.prepare("SELECT * FROM onedrive_jobs WHERE kind='reporting'").get();
+      const readJob = () => db.prepare("SELECT * FROM onedrive_jobs WHERE kind='reporting' ORDER BY item_id").get();
       assert.equal(readJob().revision, 1);
       await server.scheduleReporting(morning);
       assert.equal(readJob().revision, 1);
@@ -236,8 +237,9 @@ test('OneDrive server with isolated SQLite, fake Microsoft responses and fake R2
       assert.equal(readJob().revision, 3);
       await server.drainOneDrive();
       assert.equal(readJob().done_revision, 3);
-      assert.ok(calls.some(url => url.endsWith('/Reporting%20b2b.xlsx:/content')));
-      assert.equal(db.prepare("SELECT COUNT(*) AS n FROM onedrive_jobs WHERE kind='reporting'").get().n, 1);
+      await server.drainOneDrive();
+      assert.ok(calls.some(url => url.endsWith('/Reporting%20b2b%202026-10.xlsx:/content')));
+      assert.equal(db.prepare("SELECT COUNT(*) AS n FROM onedrive_jobs WHERE kind='reporting'").get().n, 2);
       delete env.PROCONECT_REPORTING_ENABLED;
     });
     await t.test('manual reporting refresh works without daily scheduling and waits for upload completion or exposes errors', async () => {
@@ -249,6 +251,7 @@ test('OneDrive server with isolated SQLite, fake Microsoft responses and fake R2
       assert.deepEqual(db.prepare("SELECT revision FROM onedrive_jobs WHERE kind='project'").all(), projectsBefore);
       db.exec("UPDATE onedrive_connection SET lease='',lease_until=0");
       await server.drainOneDrive();
+      await server.drainOneDrive();
       assert.deepEqual((await server.oneDriveStatus()).reporting, { pending: false, error: '' });
       failUpload = true;
       await server.refreshReportingNow();
@@ -257,7 +260,17 @@ test('OneDrive server with isolated SQLite, fake Microsoft responses and fake R2
       assert.match(failed.error, /429/);
       failUpload = false;
       await server.refreshReportingNow();
+      await server.drainOneDrive();
       assert.deepEqual((await server.oneDriveStatus()).reporting, { pending: false, error: '' });
+    });
+    await t.test('previously exported months remain queued when all their records move to another month', async () => {
+      globalThis.__od.months = ['2026-11'];
+      await server.refreshReportingNow();
+      const jobs = db.prepare("SELECT item_id FROM onedrive_jobs WHERE kind='reporting' ORDER BY item_id").all();
+      assert.deepEqual(jobs.map(job => job.item_id), ['2026-10', '2026-11']);
+      await server.drainOneDrive();
+      assert.equal((await server.oneDriveStatus()).reporting.pending, false);
+      globalThis.__od.months = ['2026-10', '2026-11'];
     });
     await t.test('Google-only stops OneDrive; disconnect keeps remote copies', async () => {
       await server.setBackupMode('google');

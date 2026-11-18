@@ -165,9 +165,36 @@ export async function oneDriveStatus() {
   const c = await connection();
   const counts = await getRawDb().prepare("SELECT SUM(CASE WHEN done_revision = revision THEN 1 ELSE 0 END) AS synced, SUM(CASE WHEN done_revision < revision THEN 1 ELSE 0 END) AS pending FROM onedrive_jobs").first<{ synced: number; pending: number }>();
   const errors = await getRawDb().prepare("SELECT kind, item_id, last_error FROM onedrive_jobs WHERE last_error != '' ORDER BY next_at LIMIT 10").all();
-  const reporting = await getRawDb().prepare("SELECT revision,done_revision,last_error FROM onedrive_jobs WHERE id='reporting:centralizator'").first<{ revision: number; done_revision: number; last_error: string }>();
+  const reports = await getRawDb().prepare("SELECT item_id,revision,done_revision,last_error FROM onedrive_jobs WHERE kind='reporting' ORDER BY item_id")
+    .all<{ item_id: string; revision: number; done_revision: number; last_error: string }>();
+  const reportingRows = reports.results ?? [];
+  const failedReport = reportingRows.find(row => row.last_error);
   return { configured, connected: Boolean(c?.refresh_token), mode: c?.mode ?? "google", account: c?.account ?? "", rootUrl: c?.root_url ?? "", synced: counts?.synced ?? 0, pending: counts?.pending ?? 0, errors: errors.results ?? [],
-    reporting: reporting ? { pending: reporting.done_revision < reporting.revision, error: reporting.last_error } : null };
+    reporting: reportingRows.length ? { pending: reportingRows.some(row => row.done_revision < row.revision),
+      error: failedReport ? `${failedReport.item_id}: ${failedReport.last_error}` : "" } : null };
+}
+
+async function queueMonthlyReporting(state?: { signature: string; dailyDate: string }, now = Date.now()) {
+  const { reportingMonths } = await import("./reporting-server");
+  const db = getRawDb();
+  const known = await db.prepare("SELECT month FROM app_reporting_months ORDER BY month").all<{ month: string }>();
+  // Remember exported months even after all their records are removed or moved
+  // to another month, so a refresh can also clear their previous totals.
+  const months = [...new Set([...(await reportingMonths(now)), ...(known.results ?? []).map(row => row.month)])]
+    .filter(month => /^\d{4}-(0[1-9]|1[0-2])$/.test(month)).sort();
+  const statements = [db.prepare("DELETE FROM onedrive_jobs WHERE id='reporting:centralizator'")];
+  for (const month of months) {
+    statements.push(db.prepare("INSERT OR IGNORE INTO app_reporting_months(month) VALUES (?)").bind(month));
+    statements.push(db.prepare(`INSERT INTO onedrive_jobs(id,kind,item_id,revision,done_revision,attempts,next_at,last_error)
+      VALUES (?,'reporting',?,1,0,0,0,'') ON CONFLICT(id) DO UPDATE SET revision=revision+1,attempts=0,next_at=0,last_error=''`)
+      .bind(`reporting:${month}`, month));
+  }
+  if (state) {
+    statements.push(db.prepare(`INSERT INTO app_reporting_state(id,signature,daily_date) VALUES ('centralizator',?,?)
+      ON CONFLICT(id) DO UPDATE SET signature=excluded.signature,daily_date=excluded.daily_date`)
+      .bind(state.signature, state.dailyDate));
+  }
+  await db.batch(statements);
 }
 
 export async function refreshReportingNow() {
@@ -175,9 +202,7 @@ export async function refreshReportingNow() {
   if (!oneDriveConfigured() || !c?.refresh_token || !usesOneDrive(c.mode)) {
     throw new Error("Conectează OneDrive și selectează-l ca destinație pentru salvare.");
   }
-  await getRawDb().prepare(`INSERT INTO onedrive_jobs(id,kind,item_id,revision,done_revision,attempts,next_at,last_error)
-    VALUES ('reporting:centralizator','reporting','Reporting b2b.xlsx',1,0,0,0,'')
-    ON CONFLICT(id) DO UPDATE SET revision=revision+1,attempts=0,next_at=0,last_error=''`).run();
+  await queueMonthlyReporting();
   await drainOneDrive();
 }
 async function tokenFor(c: Connection) {
@@ -191,13 +216,14 @@ async function tokenFor(c: Connection) {
 async function uploadJob(c: Connection, job: Job) {
   const token = await tokenFor(c);
   if (job.kind === "reporting") {
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(job.item_id)) throw new Error("Lună de raportare invalidă. Reîncearcă actualizarea centralizatorului.");
     const { buildReportingWorkbook } = await import("./reporting-server");
-    const bytes = await buildReportingWorkbook();
+    const bytes = await buildReportingWorkbook(job.item_id);
     const current = await connection();
     if (!current || current.generation !== c.generation || current.lease !== c.lease || !usesOneDrive(current.mode)) {
       throw new Error("Sincronizarea OneDrive a fost oprită.");
     }
-    const name = encodeURIComponent("Reporting b2b.xlsx");
+    const name = encodeURIComponent(`Reporting b2b ${job.item_id}.xlsx`);
     await checked(await graph(token, `/me/drive/items/${encodeURIComponent(c.root_id)}:/${name}:/content`, {
       method: "PUT", headers: { "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
       body: bytes.buffer as ArrayBuffer,
@@ -243,7 +269,7 @@ export async function scheduleReporting(now = Date.now()) {
     "SELECT id,updated_at FROM orange_oroc_tickets ORDER BY id",
   ];
   const results = await Promise.all(queries.map(query => db.prepare(query).all()));
-  const content = JSON.stringify([c.generation, ...results.map(result => result.results)]);
+  const content = JSON.stringify(["monthly-reporting-v1", c.generation, ...results.map(result => result.results)]);
   const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", encoder.encode(content)));
   const signature = Array.from(digest, value => value.toString(16).padStart(2, "0")).join("");
   const day = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Bucharest", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
@@ -253,14 +279,7 @@ export async function scheduleReporting(now = Date.now()) {
   if (previous?.signature === signature && !dailyDue) return;
   // Queue the refresh and record its input signature in one transaction. A
   // failed upload remains pending and can be retried after a server restart.
-  await db.batch([
-    db.prepare(`INSERT INTO onedrive_jobs(id,kind,item_id,revision,done_revision,attempts,next_at,last_error)
-      VALUES ('reporting:centralizator','reporting','Reporting b2b.xlsx',1,0,0,0,'')
-      ON CONFLICT(id) DO UPDATE SET revision=revision+1,attempts=0,next_at=0,last_error=''`),
-    db.prepare(`INSERT INTO app_reporting_state(id,signature,daily_date) VALUES ('centralizator',?,?)
-      ON CONFLICT(id) DO UPDATE SET signature=excluded.signature,daily_date=excluded.daily_date`)
-      .bind(signature, dailyDue ? day : previous?.daily_date ?? ""),
-  ]);
+  await queueMonthlyReporting({ signature, dailyDate: dailyDue ? day : previous?.daily_date ?? "" }, now);
 }
 export async function drainOneDrive() {
   if (!oneDriveConfigured()) return;

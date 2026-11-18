@@ -28,7 +28,20 @@ function column(index: number) {
   return name;
 }
 
-export function reportingSheets(technicians: ReportingTechnician[], entries: ReportingEntry[]): ExcelSheet[] {
+export function validReportingMonth(month: string) {
+  return /^\d{4}-(0[1-9]|1[0-2])$/.test(month);
+}
+
+export function reportingFilename(month: string) {
+  if (!validReportingMonth(month)) throw new Error("Lună invalidă. Folosește formatul AAAA-LL.");
+  return `Reporting b2b ${month}.xlsx`;
+}
+
+export function reportingSheets(technicians: ReportingTechnician[], entries: ReportingEntry[], month?: string): ExcelSheet[] {
+  if (month !== undefined) {
+    if (!validReportingMonth(month)) throw new Error("Lună invalidă. Folosește formatul AAAA-LL.");
+    entries = entries.filter(entry => entry.date.slice(0, 7) === month);
+  }
   const names = new Set(["centralizator"]);
   const technicianSheets: ExcelSheet[] = [];
   const summaries: ExcelCell[][] = [];
@@ -107,7 +120,7 @@ export function reportingSheets(technicians: ReportingTechnician[], entries: Rep
     }
     if (!works.length) headers.push("Lucrare / tichet\nData execuției");
     technicianSheets.push({
-      name: sheetName, title: `${technician.name} · @${technician.username}`, subtitle: "",
+      name: sheetName, title: `${technician.name} · @${technician.username}${month ? ` · ${month}` : ""}`, subtitle: "",
       headers, widths: [18, 17, 85, 24, 22, 22, 26, ...Array(workCount).fill(25)],
       rows, moneyColumns: [4, 6], numericColumns: [5, ...Array.from({ length: workCount }, (_, index) => index + 7)],
       dataRowCount: positions.size,
@@ -136,7 +149,7 @@ export function reportingSheets(technicians: ReportingTechnician[], entries: Rep
   }
   summaries.push(totals);
   return [{
-    name: "Centralizator", title: "Realizări tehnicieni · Vodafone și Orange/OROC", subtitle: "",
+    name: "Centralizator", title: `Realizări tehnicieni${month ? ` · ${month}` : ""} · Vodafone și Orange/OROC`, subtitle: "",
     headers: ["Tehnician", "Username", "Vodafone EUR", "Orange/OROC EUR", "Total confirmat EUR", "Poziții cu tarif lipsă", ...dates],
     widths: [27, 25, 22, 23, 25, 26, ...dates.map(() => 22)], rows: summaries,
     moneyColumns: [2, 3, 4, ...dates.map((_, index) => index + 6)], numericColumns: [5], dataRowCount: technicians.length,

@@ -7,7 +7,7 @@ const source = path => readFile(new URL('../app/' + path, import.meta.url), 'utf
 const url = code => 'data:text/javascript;base64,' + Buffer.from(stripTypeScriptTypes(code, { mode: 'transform', disableExperimentalWarning: true })).toString('base64');
 let text = await source('reporting-workbook.ts');
 for (const name of ['boq-catalog', 'orange-services']) text = text.replace('"./' + name + '"', JSON.stringify(url(await source(name + '.ts'))));
-const { reportingSheets } = await import(url(text));
+const { reportingSheets, reportingFilename } = await import(url(text));
 const { createExcelWorkbook } = await import(url(await source('excel-export.ts')));
 const tech = { name: 'Technician', username: 'tech' };
 const entry = { username: 'tech', source: 'Vodafone', workId: 'RID1', date: '2026-11-18', code: '102', name: 'Custom estimate line', unit: 'buc', price: 12.5, quantity: 2 };
@@ -44,4 +44,25 @@ test('different prices for the same operation stay distinct and unknown Orange t
   const bytes = createExcelWorkbook(sheets);
   const xml = strFromU8(unzipSync(bytes)['xl/worksheets/sheet1.xml']);
   assert.ok(!xml.includes('#REF!'));
+});
+
+
+test('monthly workbooks use execution month, keep separate totals and reflect corrections to historical months', () => {
+  const october = { ...entry, workId: 'OCT', date: '2026-10-31', quantity: 1 };
+  const november = { ...entry, workId: 'NOV', date: '2026-11-01', quantity: 2 };
+  const december = { ...entry, workId: 'DEC', date: '2026-12-01', quantity: 3 };
+  const all = [october, november, december];
+  const octSheets = reportingSheets([tech], all, '2026-10');
+  const novSheets = reportingSheets([tech], all, '2026-11');
+  assert.equal(octSheets[0].rows[0][2].value, 12.5);
+  assert.equal(novSheets[0].rows[0][2].value, 25);
+  assert.ok(novSheets[1].headers.some(header => header.includes('NOV')));
+  assert.ok(!novSheets[1].headers.some(header => header.includes('OCT') || header.includes('DEC')));
+  assert.ok(novSheets[0].title.includes('2026-11'));
+  assert.equal(reportingFilename('2026-11'), 'Reporting b2b 2026-11.xlsx');
+  assert.equal(reportingSheets([tech], [{ ...october, quantity: 4 }, november], '2026-10')[0].rows[0][2].value, 50);
+  assert.equal(reportingSheets([tech], [november], '2026-10')[0].rows[0][2].value, 0);
+  assert.equal(reportingSheets([tech], [november], '2026-12')[0].rows[0][2].value, 0);
+  assert.throws(() => reportingFilename('2026-13'), /invalidă/);
+  assert.throws(() => reportingSheets([tech], all, '../2026-11'), /invalidă/);
 });

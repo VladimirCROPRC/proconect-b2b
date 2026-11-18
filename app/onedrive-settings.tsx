@@ -30,7 +30,7 @@ export function OneDriveSettings() {
         if (!data.reporting) throw new Error("Starea centralizatorului nu este disponibilă.");
         if (data.reporting.error) throw new Error(data.reporting.error);
         setRefreshingReporting(data.reporting.pending);
-        if (!data.reporting.pending) setNotice("Centralizatorul a fost actualizat în OneDrive.");
+        if (!data.reporting.pending) setNotice("Centralizatoarele lunare au fost actualizate în OneDrive.");
       }
     } catch (e) { setError(e instanceof Error ? e.message : "Operațiunea a eșuat."); }
     finally { setBusy(false); }
@@ -53,7 +53,7 @@ export function OneDriveSettings() {
         if (data.reporting.error) throw new Error(data.reporting.error);
         if (!data.reporting.pending) {
           setRefreshingReporting(false);
-          setNotice("Centralizatorul a fost actualizat în OneDrive.");
+          setNotice("Centralizatoarele lunare au fost actualizate în OneDrive.");
           return;
         }
         timer = setTimeout(checkReporting, 2000);
@@ -107,7 +107,7 @@ export function OneDriveSettings() {
               {refreshingReporting || busy ? "Se procesează…" : "Actualizează centralizatorul acum"}
             </button>
           </div>
-          {refreshingReporting && <p role="status">Se actualizează Reporting b2b.xlsx în OneDrive…</p>}
+          {refreshingReporting && <p role="status">Se actualizează fișierele lunare în OneDrive…</p>}
           <p>{status.synced} elemente sincronizate · {status.pending} în așteptare</p>
           <div className="drive-config-actions"><button className="primary-button" disabled={busy || processing || status.mode === "google"} onClick={() => void action("retry")}>Sincronizează / reîncearcă</button>{processing && <button className="secondary-button" onClick={() => setProcessing(false)}>Oprește procesarea din acest ecran</button>}</div>
           <p>{processing ? "Se procesează pe rând. Păstrează acest ecran deschis pentru copierea întregii arhive." : "Fișierele noi intră automat în coadă. Reîncercările se fac la activitate în aplicație sau când pornești sincronizarea aici."}</p>
