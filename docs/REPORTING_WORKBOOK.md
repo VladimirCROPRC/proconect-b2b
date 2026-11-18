@@ -32,3 +32,10 @@ iar fișierul are întotdeauna același nume.
 
 Administratorul poate descărca varianta actuală din
 `/api/reporting-workbook`, după autentificarea în aplicație.
+
+În „OneDrive și destinații de salvare”, administratorul poate apăsa
+„Actualizează centralizatorul acum”. Acțiunea reface numai centralizatorul și
+funcționează și când programarea automată este dezactivată. OneDrive trebuie să
+fie conectat și selectat ca destinație. Dacă o sincronizare este deja în curs,
+centralizatorul rămâne în coadă cu prioritate. Pagina confirmă salvarea numai
+după finalizarea uploadului și afișează eroarea dacă acesta eșuează.

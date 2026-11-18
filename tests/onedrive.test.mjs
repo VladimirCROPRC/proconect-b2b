@@ -20,18 +20,20 @@ test('OneDrive API restricts actions to an authenticated Admin and matching orig
     disconnectOneDrive: async () => { operations++; },
     drainOneDrive: async () => { operations++; },
     retryOneDrive: async () => { operations++; },
+    refreshReportingNow: async () => { operations++; },
     setBackupMode: async () => { operations++; },
   };
   const code = (await source('app/api/onedrive/route.ts'))
-    .replace(/^import .*onedrive-server";$/m, 'const { beginOneDrive, disconnectOneDrive, drainOneDrive, oneDriveSameOrigin, oneDriveStatus, retryOneDrive, setBackupMode } = globalThis.__odApi;')
+    .replace(/^import .*onedrive-server";$/m, 'const { beginOneDrive, disconnectOneDrive, drainOneDrive, oneDriveSameOrigin, oneDriveStatus, refreshReportingNow, retryOneDrive, setBackupMode } = globalThis.__odApi;')
     .replace(/^import .*server-auth";$/m, 'const { currentSession } = globalThis.__odApi;');
   const api = await import(moduleUrl(code));
-  const request = (origin = 'https://example.test') => new Request('https://example.test/api/onedrive', { method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'authorize' }) });
+  const request = (origin = 'https://example.test', actionName = 'authorize') => new Request('https://example.test/api/onedrive', { method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' }, body: JSON.stringify({ action: actionName }) });
   try {
     assert.equal((await api.POST(request())).status, 401);
     for (const role of ['Tehnician', 'Manager', 'Coordonator']) {
       session = { sessionId: 'session', account: { role, passwordResetRequired: false } };
       assert.equal((await api.POST(request())).status, 403);
+      assert.equal((await api.POST(request('https://example.test', 'refresh-reporting'))).status, 403);
       assert.equal((await api.GET(new Request('https://example.test/api/onedrive'))).status, 403);
     }
     session.account = { role: 'Admin', passwordResetRequired: true };
@@ -43,6 +45,9 @@ test('OneDrive API restricts actions to an authenticated Admin and matching orig
     assert.equal(allowed.status, 200);
     assert.equal(allowed.headers.get('Cache-Control'), 'no-store');
     assert.equal(operations, 1);
+    assert.equal((await api.POST(request('https://evil.test', 'refresh-reporting'))).status, 403);
+    assert.equal((await api.POST(request('https://example.test', 'refresh-reporting'))).status, 200);
+    assert.equal(operations, 2);
   } finally { delete globalThis.__odApi; }
 });
 
@@ -235,8 +240,28 @@ test('OneDrive server with isolated SQLite, fake Microsoft responses and fake R2
       assert.equal(db.prepare("SELECT COUNT(*) AS n FROM onedrive_jobs WHERE kind='reporting'").get().n, 1);
       delete env.PROCONECT_REPORTING_ENABLED;
     });
+    await t.test('manual reporting refresh works without daily scheduling and waits for upload completion or exposes errors', async () => {
+      assert.equal(env.PROCONECT_REPORTING_ENABLED, undefined);
+      const projectsBefore = db.prepare("SELECT revision FROM onedrive_jobs WHERE kind='project'").all();
+      db.prepare("UPDATE onedrive_connection SET lease='other-worker',lease_until=?").run(Date.now() + 60000);
+      await server.refreshReportingNow();
+      assert.equal((await server.oneDriveStatus()).reporting.pending, true);
+      assert.deepEqual(db.prepare("SELECT revision FROM onedrive_jobs WHERE kind='project'").all(), projectsBefore);
+      db.exec("UPDATE onedrive_connection SET lease='',lease_until=0");
+      await server.drainOneDrive();
+      assert.deepEqual((await server.oneDriveStatus()).reporting, { pending: false, error: '' });
+      failUpload = true;
+      await server.refreshReportingNow();
+      const failed = (await server.oneDriveStatus()).reporting;
+      assert.equal(failed.pending, true);
+      assert.match(failed.error, /429/);
+      failUpload = false;
+      await server.refreshReportingNow();
+      assert.deepEqual((await server.oneDriveStatus()).reporting, { pending: false, error: '' });
+    });
     await t.test('Google-only stops OneDrive; disconnect keeps remote copies', async () => {
       await server.setBackupMode('google');
+      await assert.rejects(server.refreshReportingNow(), /selectează/);
       const before = uploads;
       await server.queueOneDrive('file', 'f-1'); await server.drainOneDrive();
       assert.equal(uploads, before);

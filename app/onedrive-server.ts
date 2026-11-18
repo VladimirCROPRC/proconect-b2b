@@ -165,7 +165,20 @@ export async function oneDriveStatus() {
   const c = await connection();
   const counts = await getRawDb().prepare("SELECT SUM(CASE WHEN done_revision = revision THEN 1 ELSE 0 END) AS synced, SUM(CASE WHEN done_revision < revision THEN 1 ELSE 0 END) AS pending FROM onedrive_jobs").first<{ synced: number; pending: number }>();
   const errors = await getRawDb().prepare("SELECT kind, item_id, last_error FROM onedrive_jobs WHERE last_error != '' ORDER BY next_at LIMIT 10").all();
-  return { configured, connected: Boolean(c?.refresh_token), mode: c?.mode ?? "google", account: c?.account ?? "", rootUrl: c?.root_url ?? "", synced: counts?.synced ?? 0, pending: counts?.pending ?? 0, errors: errors.results ?? [] };
+  const reporting = await getRawDb().prepare("SELECT revision,done_revision,last_error FROM onedrive_jobs WHERE id='reporting:centralizator'").first<{ revision: number; done_revision: number; last_error: string }>();
+  return { configured, connected: Boolean(c?.refresh_token), mode: c?.mode ?? "google", account: c?.account ?? "", rootUrl: c?.root_url ?? "", synced: counts?.synced ?? 0, pending: counts?.pending ?? 0, errors: errors.results ?? [],
+    reporting: reporting ? { pending: reporting.done_revision < reporting.revision, error: reporting.last_error } : null };
+}
+
+export async function refreshReportingNow() {
+  const c = await connection();
+  if (!oneDriveConfigured() || !c?.refresh_token || !usesOneDrive(c.mode)) {
+    throw new Error("Conectează OneDrive și selectează-l ca destinație pentru salvare.");
+  }
+  await getRawDb().prepare(`INSERT INTO onedrive_jobs(id,kind,item_id,revision,done_revision,attempts,next_at,last_error)
+    VALUES ('reporting:centralizator','reporting','Reporting b2b.xlsx',1,0,0,0,'')
+    ON CONFLICT(id) DO UPDATE SET revision=revision+1,attempts=0,next_at=0,last_error=''`).run();
+  await drainOneDrive();
 }
 async function tokenFor(c: Connection) {
   if (c.expires_at > Date.now() + 60_000) return unseal(c.access_token);

@@ -1,4 +1,4 @@
-import { beginOneDrive, disconnectOneDrive, drainOneDrive, oneDriveSameOrigin, oneDriveStatus, retryOneDrive, setBackupMode } from "../../onedrive-server";
+import { beginOneDrive, disconnectOneDrive, drainOneDrive, oneDriveSameOrigin, oneDriveStatus, refreshReportingNow, retryOneDrive, setBackupMode } from "../../onedrive-server";
 import { currentSession } from "../../server-auth";
 export const dynamic = "force-dynamic";
 async function authorized(request: Request) {
@@ -23,6 +23,7 @@ export async function POST(request: Request) {
       case "mode": await setBackupMode(body.mode); break;
       case "disconnect": await disconnectOneDrive(); break;
       case "retry": await retryOneDrive(); break;
+      case "refresh-reporting": await refreshReportingNow(); break;
       case "process": await drainOneDrive(); break;
       default: return Response.json({ error: "Operațiune invalidă." }, { status: 400 });
     }
