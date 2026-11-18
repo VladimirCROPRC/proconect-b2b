@@ -3,6 +3,7 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { generateKeyPair, exportJWK, SignJWT } from 'jose';
+import { unzipSync, strFromU8 } from 'fflate';
 import { openDatabase } from '../server/selfhost/sqlite.mjs';
 import { migrateDatabase, isolateCopy } from '../server/selfhost/migrations.mjs';
 import { localBucket } from '../server/selfhost/objects.mjs';
@@ -59,6 +60,33 @@ try {
   assert.equal((await mutateTeam({ action: 'delete', id: teamId })).status, 409);
   assert.equal((await mutateTeam({ action: 'assign', username: 'tech', teamId: null })).status, 200);
   assert.equal((await mutateTeam({ action: 'delete', id: teamId })).status, 200);
+  assert.equal((await fetch(origin + '/api/reporting-workbook')).status, 401);
+  assert.equal((await fetch(origin + '/api/reporting-workbook', { headers: headers(technician) })).status, 403);
+  const reportingDb = openDatabase(join(root, 'app.sqlite'));
+  const manualRows = [
+    { id: 'manual-1', category: 'Manoperă', catalogPosition: '15', name: 'Coordinator saved operation', unit: 'buc', unitPrice: 12.5, quantity: 2, selected: true },
+    { id: 'manual-2', category: 'Manoperă', catalogPosition: '16', name: 'Coordinator added operation', unit: 'buc', unitPrice: 3, quantity: 4, selected: true },
+  ];
+  reportingDb.prepare('INSERT INTO project_estimates(project_id,content_json,updated_by,updated_at) VALUES (?,?,?,?)').run('RID1', JSON.stringify(manualRows), 'admin', Date.now());
+  reportingDb.close();
+  const workbook = await fetch(origin + '/api/reporting-workbook', { headers: headers(admin) });
+  assert.equal(workbook.status, 200);
+  const workbookBytes = new Uint8Array(await workbook.arrayBuffer());
+  assert.equal(workbookBytes[0], 80); assert.equal(workbookBytes[1], 75);
+  const reportingFiles = unzipSync(workbookBytes);
+  const technicianXml = strFromU8(reportingFiles['xl/worksheets/sheet2.xml']);
+  assert.ok(technicianXml.includes('Coordinator added operation'));
+  assert.ok(technicianXml.includes('Coordinator saved operation'));
+  const summaryXml = strFromU8(reportingFiles['xl/worksheets/sheet1.xml']);
+  assert.ok(summaryXml.includes('<v>37</v>'));
+  assert.ok(summaryXml.includes('<v>300</v>'));
+  const changeDb = openDatabase(join(root, 'app.sqlite'));
+  changeDb.prepare('UPDATE project_estimates SET content_json=? WHERE project_id=?').run(JSON.stringify(manualRows.slice(0, 1)), 'RID1');
+  changeDb.close();
+  const changedWorkbook = await fetch(origin + '/api/reporting-workbook', { headers: headers(admin) });
+  const changedFiles = unzipSync(new Uint8Array(await changedWorkbook.arrayBuffer()));
+  assert.ok(!strFromU8(changedFiles['xl/worksheets/sheet2.xml']).includes('Coordinator added operation'));
+
   const removeAccount = (username, confirmation = username, token = admin, originHeader = 'https://b2b.proconect.online') => fetch(origin + '/api/accounts', { method: 'DELETE', headers: { ...headers(token), Origin: originHeader }, body: JSON.stringify({ username, confirmation }) });
   assert.equal((await removeAccount('tech', 'tech', technician)).status, 403);
   assert.equal((await removeAccount('tech', 'tech', admin, 'https://attacker.test')).status, 403);

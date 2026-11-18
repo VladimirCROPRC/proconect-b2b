@@ -81,6 +81,7 @@ test('OneDrive server with isolated SQLite, fake Microsoft responses and fake R2
   }; }, async batch(statements) { db.exec('BEGIN'); try { const r = []; for (const s of statements) r.push(await s.run()); db.exec('COMMIT'); return r; } catch (e) { db.exec('ROLLBACK'); throw e; } } };
   globalThis.__od = { env, getRawDb: () => raw, getFileRow: async id => db.prepare('SELECT * FROM project_files WHERE id = ?').get(id), bucket: () => ({ get: async () => ({ body: new Blob(['photo']).stream() }) }) };
   let text = await source('app/onedrive-server.ts');
+  text = text.replace('await import("./reporting-server")', '({ buildReportingWorkbook: async () => new Uint8Array([80,75,3,4]) })');
   text = text.replace('import { env } from "cloudflare:workers";', 'const { env } = globalThis.__od;')
     .replace('import { getRawDb } from "../db";', 'const { getRawDb } = globalThis.__od;')
     .replace('import { bucket, getFileRow } from "./project-server";', 'const { bucket, getFileRow } = globalThis.__od;')
@@ -202,6 +203,37 @@ test('OneDrive server with isolated SQLite, fake Microsoft responses and fake R2
       const u = new URL(await server.beginOneDrive('session-3'));
       await assert.rejects(server.finishOneDrive('session-3', u.searchParams.get('state'), 'code'), /alt OneDrive/);
       assert.equal(db.prepare('SELECT drive_id FROM onedrive_connection').get().drive_id, 'drive-1');
+    });
+    await t.test('reporting refresh queues changed inputs and daily refresh once, and replaces one fixed workbook', async () => {
+      db.exec(`CREATE TABLE app_reporting_state(id TEXT PRIMARY KEY,signature TEXT,daily_date TEXT);
+        CREATE TABLE app_users(username TEXT,name TEXT,role TEXT,active INTEGER,updated_at INTEGER);
+        CREATE TABLE project_estimates(project_id TEXT,updated_at INTEGER);
+        CREATE TABLE orange_oroc_tickets(id TEXT,updated_at INTEGER);
+        ALTER TABLE projects ADD COLUMN technician_username TEXT;
+        ALTER TABLE projects ADD COLUMN activity_type TEXT;
+        ALTER TABLE projects ADD COLUMN updated_at INTEGER;
+        ALTER TABLE project_field_documentation ADD COLUMN updated_at INTEGER;
+        ALTER TABLE project_files ADD COLUMN created_at INTEGER;`);
+      env.PROCONECT_REPORTING_ENABLED = '1';
+      const morning = Date.parse('2026-11-18T08:00:00Z');
+      await server.scheduleReporting(morning);
+      const readJob = () => db.prepare("SELECT * FROM onedrive_jobs WHERE kind='reporting'").get();
+      assert.equal(readJob().revision, 1);
+      await server.scheduleReporting(morning);
+      assert.equal(readJob().revision, 1);
+      db.exec("INSERT INTO app_users VALUES ('new','New Technician','Tehnician',1,1)");
+      await server.scheduleReporting(morning);
+      assert.equal(readJob().revision, 2);
+      const nightly = Date.parse('2026-11-18T21:55:00Z');
+      await server.scheduleReporting(nightly);
+      assert.equal(readJob().revision, 3);
+      await server.scheduleReporting(nightly + 30000);
+      assert.equal(readJob().revision, 3);
+      await server.drainOneDrive();
+      assert.equal(readJob().done_revision, 3);
+      assert.ok(calls.some(url => url.endsWith('/Reporting%20b2b.xlsx:/content')));
+      assert.equal(db.prepare("SELECT COUNT(*) AS n FROM onedrive_jobs WHERE kind='reporting'").get().n, 1);
+      delete env.PROCONECT_REPORTING_ENABLED;
     });
     await t.test('Google-only stops OneDrive; disconnect keeps remote copies', async () => {
       await server.setBackupMode('google');

@@ -3,9 +3,9 @@ import { getRawDb } from "../db";
 import { bucket, getFileRow } from "./project-server";
 import { base64url, decode64, fixedOrigin, retryDelay, safeName, usesOneDrive, validMode, type BackupMode } from "./onedrive-core";
 
-type Environment = { ONEDRIVE_FOLDER_URL?: string; PROCONECT_APP_URL?: string; ONEDRIVE_CLIENT_ID?: string; ONEDRIVE_TENANT_ID?: string; ONEDRIVE_CLIENT_SECRET?: string; ONEDRIVE_ENCRYPTION_KEY?: string };
+type Environment = { PROCONECT_REPORTING_ENABLED?: string; ONEDRIVE_FOLDER_URL?: string; PROCONECT_APP_URL?: string; ONEDRIVE_CLIENT_ID?: string; ONEDRIVE_TENANT_ID?: string; ONEDRIVE_CLIENT_SECRET?: string; ONEDRIVE_ENCRYPTION_KEY?: string };
 type Connection = { mode: BackupMode; generation: string; access_token: string; refresh_token: string; expires_at: number; drive_id: string; root_id: string; root_url: string; account: string; owner_id: string; lease: string; lease_until: number };
-type Job = { id: string; kind: "file" | "project"; item_id: string; revision: number; attempts: number };
+type Job = { id: string; kind: "file" | "project" | "reporting"; item_id: string; revision: number; attempts: number };
 type Item = { id: string; parentReference?: { driveId?: string }; webUrl?: string; folder?: object; driveType?: string; owner?: { user?: { id?: string; displayName?: string; email?: string } } };
 const encoder = new TextEncoder();
 const settingsId = "onedrive";
@@ -177,6 +177,20 @@ async function tokenFor(c: Connection) {
 }
 async function uploadJob(c: Connection, job: Job) {
   const token = await tokenFor(c);
+  if (job.kind === "reporting") {
+    const { buildReportingWorkbook } = await import("./reporting-server");
+    const bytes = await buildReportingWorkbook();
+    const current = await connection();
+    if (!current || current.generation !== c.generation || current.lease !== c.lease || !usesOneDrive(current.mode)) {
+      throw new Error("Sincronizarea OneDrive a fost oprită.");
+    }
+    const name = encodeURIComponent("Reporting b2b.xlsx");
+    await checked(await graph(token, `/me/drive/items/${encodeURIComponent(c.root_id)}:/${name}:/content`, {
+      method: "PUT", headers: { "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
+      body: bytes.buffer as ArrayBuffer,
+    }));
+    return;
+  }
   let projectId = job.item_id, filename: string, body: BodyInit, contentType = "application/json";
   if (job.kind === "file") {
     const file = await getFileRow(job.item_id);
@@ -201,6 +215,40 @@ async function uploadJob(c: Connection, job: Job) {
   if (!current || current.generation !== c.generation || current.lease !== c.lease || !usesOneDrive(current.mode)) throw new Error("Sincronizarea OneDrive a fost oprită.");
   await checked(await graph(token, `/me/drive/items/${encodeURIComponent(destination.id)}:/${encodeURIComponent(filename)}:/content`, { method: "PUT", headers: { "Content-Type": contentType }, body }));
 }
+
+export async function scheduleReporting(now = Date.now()) {
+  if (environment().PROCONECT_REPORTING_ENABLED !== "1" || !oneDriveConfigured()) return;
+  const c = await connection();
+  if (!c?.refresh_token || !usesOneDrive(c.mode)) return;
+  const db = getRawDb();
+  const queries = [
+    "SELECT username,name,role,active,updated_at FROM app_users ORDER BY username",
+    "SELECT id,technician_username,activity_type,updated_at FROM projects ORDER BY id",
+    "SELECT project_id,updated_at FROM project_estimates ORDER BY project_id",
+    "SELECT project_id,updated_at FROM project_field_documentation ORDER BY project_id",
+    "SELECT id,project_id,uploaded_by,created_at,captured_at FROM project_files ORDER BY id",
+    "SELECT id,updated_at FROM orange_oroc_tickets ORDER BY id",
+  ];
+  const results = await Promise.all(queries.map(query => db.prepare(query).all()));
+  const content = JSON.stringify([c.generation, ...results.map(result => result.results)]);
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", encoder.encode(content)));
+  const signature = Array.from(digest, value => value.toString(16).padStart(2, "0")).join("");
+  const day = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Bucharest", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+  const time = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Bucharest", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(now);
+  const previous = await db.prepare("SELECT signature,daily_date FROM app_reporting_state WHERE id='centralizator'").first<{ signature: string; daily_date: string }>();
+  const dailyDue = time >= "23:55" && previous?.daily_date !== day;
+  if (previous?.signature === signature && !dailyDue) return;
+  // Queue the refresh and record its input signature in one transaction. A
+  // failed upload remains pending and can be retried after a server restart.
+  await db.batch([
+    db.prepare(`INSERT INTO onedrive_jobs(id,kind,item_id,revision,done_revision,attempts,next_at,last_error)
+      VALUES ('reporting:centralizator','reporting','Reporting b2b.xlsx',1,0,0,0,'')
+      ON CONFLICT(id) DO UPDATE SET revision=revision+1,attempts=0,next_at=0,last_error=''`),
+    db.prepare(`INSERT INTO app_reporting_state(id,signature,daily_date) VALUES ('centralizator',?,?)
+      ON CONFLICT(id) DO UPDATE SET signature=excluded.signature,daily_date=excluded.daily_date`)
+      .bind(signature, dailyDue ? day : previous?.daily_date ?? ""),
+  ]);
+}
 export async function drainOneDrive() {
   if (!oneDriveConfigured()) return;
   const lease = crypto.randomUUID();
@@ -208,7 +256,7 @@ export async function drainOneDrive() {
     .bind(lease, Date.now() + 120_000, settingsId, Date.now()).first<Connection>();
   if (!c) return;
   try {
-    const job = await getRawDb().prepare("SELECT * FROM onedrive_jobs WHERE revision > done_revision AND next_at <= ? ORDER BY next_at, id LIMIT 1").bind(Date.now()).first<Job>();
+    const job = await getRawDb().prepare("SELECT * FROM onedrive_jobs WHERE revision > done_revision AND next_at <= ? ORDER BY CASE WHEN kind = 'reporting' THEN 0 ELSE 1 END, next_at, id LIMIT 1").bind(Date.now()).first<Job>();
     if (!job) return;
     try {
       await uploadJob(c, job);

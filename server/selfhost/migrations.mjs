@@ -24,6 +24,7 @@ export function assertCurrentSourceSchema(db, migrations = migrationFiles()) {
 }
 
 export function migrateDatabase(db, { adoptCurrent = false, migrations = migrationFiles() } = {}) {
+  db.exec('CREATE TABLE IF NOT EXISTS app_reporting_state(id TEXT PRIMARY KEY, signature TEXT NOT NULL, daily_date TEXT NOT NULL)');
   db.exec('CREATE TABLE IF NOT EXISTS selfhost_migrations(name TEXT PRIMARY KEY, hash TEXT NOT NULL)');
   if (adoptCurrent) {
     assertCurrentSourceSchema(db, migrations);
